@@ -1,0 +1,17 @@
+{
+  "name": "@chlauncher/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Licensing & billing backend: JWT auth, HWID binding, 30-day subscriptions, game distribution.",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.0.0",
+    "fastify": "^5.2.0",
+    "jsonwebtoken": "^9.0.2"
+  }
+}
