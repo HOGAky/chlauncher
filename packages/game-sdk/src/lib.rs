@@ -29,9 +29,14 @@
 //! let link = tiktok_game_sdk::init_or_exit();
 //! loop {
 //!     for msg in link.poll() {
-//!         match msg { /* LauncherMessage::Event(ev) => spawn(ev), … */ }
+//!         match msg {
+//!             tiktok_game_sdk::LauncherMessage::Event { event } => { /* spawn(event) */ }
+//!             tiktok_game_sdk::LauncherMessage::Shutdown => std::process::exit(0),
+//!             _ => {}
+//!         }
 //!     }
 //!     if !link.is_alive() { std::process::exit(0); }
+//! #    break;
 //! }
 //! ```
 
@@ -147,6 +152,15 @@ pub struct LauncherLink {
     last_heartbeat: Arc<AtomicU64>,
     /// When the link was established — used while no heartbeat arrived yet.
     established: Instant,
+}
+
+impl std::fmt::Debug for LauncherLink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LauncherLink")
+            .field("connected", &self.connected.load(Ordering::Relaxed))
+            .field("alive", &self.is_alive())
+            .finish()
+    }
 }
 
 impl LauncherLink {
