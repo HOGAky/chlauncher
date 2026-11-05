@@ -1,0 +1,10 @@
+[package]
+name = "mock-game"
+version = "0.1.0"
+edition = "2021"
+description = "Test game for chlauncher: verifies DRM handshake, launcher window flags and live event rendering."
+
+[dependencies]
+tiktok-game-sdk = { path = "../../packages/game-sdk" }
+eframe = "0.31"
+serde_json = "1"

@@ -1,0 +1,7 @@
+# Build toolchain for this repo.
+# MSVC Build Tools are unavailable on the build machine (require admin), so
+# all crates — mock-game, game-sdk, launcher backend — use the stable GNU
+# toolchain. MinGW-w64 binutils must be on PATH for crates that generate
+# import libraries via `dlltool` (e.g. on this machine: C:\Users\hoga8\tools\w64devkit\bin).
+[toolchain]
+channel = "stable-x86_64-pc-windows-gnu"
