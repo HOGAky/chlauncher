@@ -1,0 +1,45 @@
+# ============================================================
+# chlauncher .gitignore
+# Excludes build artifacts, dependencies, secrets and OS junk.
+# ============================================================
+
+# ---- Secrets (NEVER commit real keys) ----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---- Node ----
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---- Rust / Cargo ----
+target/
+**/*.rs.bk
+Cargo.lock.bak
+
+# ---- Tauri ----
+apps/launcher/src-tauri/target/
+apps/launcher/src-tauri/gen/
+
+# ---- Frontend builds ----
+dist/
+dist-ssr/
+*.local
+
+# ---- Server data ----
+apps/server/data/
+apps/server/static/games/*.zip
+
+# ---- OS / Editor ----
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -1,0 +1,2 @@
+# Packaged game artifacts (mock-game-*.zip) are placed here by the build
+# pipeline and served via GET /api/games/:slug/download.

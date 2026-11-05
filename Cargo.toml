@@ -1,0 +1,19 @@
+# Root Cargo workspace for the Rust parts of the monorepo.
+# Note: apps/launcher/src-tauri is intentionally excluded — it is a
+# standalone Tauri crate managed by `npm run tauri` tooling.
+
+[workspace]
+resolver = "2"
+members = [
+    "packages/game-sdk",
+    "apps/mock-game",
+]
+exclude = [
+    "apps/launcher/src-tauri",
+]
+
+# Shared release-profile tweaks so game builds are small and fast to ship.
+[profile.release]
+opt-level = 3
+lto = true
+strip = true
