@@ -1,0 +1,38 @@
+[package]
+name = "chlauncher"
+version = "0.1.0"
+edition = "2021"
+description = "chlauncher desktop app — TikTok Live games launcher & streamer hub"
+license = "MIT"
+
+# The launcher binary is produced by the Tauri tooling (`npm run tauri:dev` /
+# `npm run tauri:build`); the lib exists so unit tests can target modules.
+# NOTE: `cdylib` is intentionally absent — it is only needed for mobile
+# targets, and on windows-gnu it trips the DLL export-ordinal limit
+# (the dependency tree pushes 100k+ symbols).
+[lib]
+name = "chlauncher_lib"
+crate-type = ["staticlib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Async runtime shared by the game WS server, overlay HTTP server,
+# integrations and the download manager.
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.26"
+futures-util = "0.3"
+# Local HTTP + WS server for the browser overlay (TikTok Live Studio source).
+axum = { version = "0.8", features = ["ws"] }
+# Downloads game zips and talks to the licensing REST API.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+# OS-level machine GUID → the HWID bound to the subscription.
+machine-uid = "0.5"
+uuid = { version = "1", features = ["v4"] }
+dirs = "6"
+thiserror = "2"
