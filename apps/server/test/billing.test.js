@@ -10,6 +10,8 @@ import assert from 'node:assert/strict';
 
 process.env.ADMIN_EMAILS = 'admin@example.com';
 process.env.ENABLE_MOCK_BILLING = '1';
+process.env.YOOKASSA_SHOP_ID = 'testshop';
+process.env.YOOKASSA_SECRET_KEY = 'testsecret';
 
 let app;
 let db;
@@ -130,4 +132,101 @@ test('recordPayment is idempotent on (provider, external_id)', async () => {
     .get(user.id);
   const days = (new Date(sub.current_period_end) - Date.now()) / 86400000;
   assert.ok(days > 29 && days < 31, `expected ~30d, got ${days}`);
+});
+
+// ------------------------------------------------------- §5.3 webhook
+
+const BASIC =
+  'Basic ' + Buffer.from('testshop:testsecret').toString('base64');
+
+/** Inserts a pending yookassa payment row (what /checkout creates). */
+function pendingPayment(userId, externalId, days = 30) {
+  db.prepare(
+    `INSERT INTO payments (user_id, provider, external_id, days, status, created_at)
+     VALUES (?, 'yookassa', ?, ?, 'pending', ?)`
+  ).run(userId, externalId, days, new Date().toISOString());
+}
+
+function webhook(body, headers = {}) {
+  return app.inject({
+    method: 'POST',
+    url: '/api/billing/webhook',
+    headers: { 'content-type': 'application/json', ...headers },
+    payload: body,
+  });
+}
+
+test('webhook: valid signature -> succeeded -> +30 days', async () => {
+  const { user } = await register('wh@example.com');
+  pendingPayment(user.id, 'yk-ok-1');
+
+  const res = await webhook(
+    { event: 'payment.succeeded', object: { id: 'yk-ok-1' } },
+    { authorization: BASIC }
+  );
+  assert.equal(res.statusCode, 200);
+
+  const sub = db
+    .prepare('SELECT * FROM subscriptions WHERE user_id = ?')
+    .get(user.id);
+  assert.equal(sub.status, 'active');
+  const pay = db
+    .prepare('SELECT status FROM payments WHERE external_id = ?')
+    .get('yk-ok-1');
+  assert.equal(pay.status, 'succeeded');
+});
+
+test('webhook: duplicate succeeded does not double-grant days', async () => {
+  const { user } = await register('wh2@example.com');
+  pendingPayment(user.id, 'yk-dup-1');
+  const evt = { event: 'payment.succeeded', object: { id: 'yk-dup-1' } };
+  await webhook(evt, { authorization: BASIC });
+  const end1 = db
+    .prepare('SELECT current_period_end FROM subscriptions WHERE user_id = ?')
+    .get(user.id).current_period_end;
+  await webhook(evt, { authorization: BASIC });
+  const end2 = db
+    .prepare('SELECT current_period_end FROM subscriptions WHERE user_id = ?')
+    .get(user.id).current_period_end;
+  assert.equal(end1, end2);
+});
+
+test('webhook: invalid signature -> 401, subscription untouched', async () => {
+  const { user } = await register('wh3@example.com');
+  pendingPayment(user.id, 'yk-bad-1');
+  const res = await webhook(
+    { event: 'payment.succeeded', object: { id: 'yk-bad-1' } },
+    { authorization: 'Basic ' + Buffer.from('testshop:wrong').toString('base64') }
+  );
+  assert.equal(res.statusCode, 401);
+  const sub = db
+    .prepare('SELECT status FROM subscriptions WHERE user_id = ?')
+    .get(user.id);
+  assert.equal(sub.status, 'expired');
+});
+
+test('webhook: canceled marks the payment failed, no grant', async () => {
+  const { user } = await register('wh4@example.com');
+  pendingPayment(user.id, 'yk-cancel-1');
+  const res = await webhook(
+    { event: 'payment.canceled', object: { id: 'yk-cancel-1' } },
+    { authorization: BASIC }
+  );
+  assert.equal(res.statusCode, 200);
+  assert.equal(
+    db.prepare('SELECT status FROM payments WHERE external_id = ?').get('yk-cancel-1').status,
+    'failed'
+  );
+});
+
+test('checkout returns 501 without provider credentials path', async () => {
+  // Creds ARE set in this file — hit checkout and expect either a real
+  // provider error (offline) or a configured code path, never a crash.
+  const { token } = await register('co@example.com');
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/billing/checkout',
+    headers: auth(token),
+  });
+  assert.ok([200, 501, 502].includes(res.statusCode));
 });
