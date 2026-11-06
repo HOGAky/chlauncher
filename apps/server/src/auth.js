@@ -44,14 +44,17 @@ export function verifyPassword(password, stored) {
 }
 
 /**
- * Signs a JWT for a user row.
- * @param {{id:number,email:string}} user
+ * Signs a JWT for a user row. The `role` claim is informational — the server
+ * never trusts it for authorization (DB is checked on every admin request).
+ * @param {{id:number,email:string,role?:string}} user
  * @returns {string}
  */
 export function signToken(user) {
-  return jwt.sign({ sub: user.id, email: user.email }, config.jwtSecret, {
-    expiresIn: TOKEN_TTL,
-  });
+  return jwt.sign(
+    { sub: user.id, email: user.email, role: user.role || 'user' },
+    config.jwtSecret,
+    { expiresIn: TOKEN_TTL }
+  );
 }
 
 /**
@@ -72,4 +75,38 @@ export function makeAuthenticate() {
       return reply.code(401).send({ error: 'UNAUTHORIZED' });
     }
   };
+}
+
+/**
+ * Fastify preHandler factory: `authenticate` + DB-side role check.
+ * The JWT role claim is never trusted — `users.role` is read on every call.
+ * Responds 403 FORBIDDEN for non-admins.
+ * @param {import('node:sqlite').DatabaseSync} db
+ */
+export function makeRequireAdmin(db) {
+  const authenticate = makeAuthenticate();
+  const roleQuery = db.prepare('SELECT role FROM users WHERE id = ?');
+  return async function requireAdmin(request, reply) {
+    await authenticate(request, reply);
+    if (reply.sent) return;
+    const row = roleQuery.get(request.auth.userId);
+    if (!row || row.role !== 'admin') {
+      return reply.code(403).send({ error: 'FORBIDDEN' });
+    }
+  };
+}
+
+/**
+ * Syncs the admin flag from `config.adminEmails` onto a user row — runs on
+ * every register/login. Promote-only: emails removed from ADMIN_EMAILS keep
+ * whatever role they have, so `grant-admin.mjs` grants survive logins.
+ * @param {import('node:sqlite').DatabaseSync} db
+ * @param {object} user - mutable user row (role updated in place)
+ */
+export function syncAdminRole(db, user) {
+  if (user.role !== 'admin' && config.adminEmails.has(user.email.toLowerCase())) {
+    db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(user.id);
+    user.role = 'admin';
+  }
+  return user;
 }

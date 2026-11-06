@@ -40,6 +40,24 @@ const auth = (token) => ({ authorization: `Bearer ${token}` });
 
 before(async () => {
   ({ app, db } = await buildApp({ databasePath: ':memory:' }));
+  // Catalog is no longer auto-seeded (schema v2) — insert a published
+  // fixture game + build so the catalog/download tests have something.
+  const g = db
+    .prepare(
+      `INSERT INTO games (slug, title, description, version, file_name, executable_name)
+       VALUES ('mock-game', 'Mock Arena', '', '0.1.0', 'mock-game/0.1.0.zip', 'mock-game.exe')`
+    )
+    .run();
+  const b = db
+    .prepare(
+      `INSERT INTO game_builds (game_id, version, file_name, sha256, size_bytes, created_at)
+       VALUES (?, '0.1.0', 'mock-game/0.1.0.zip', '', 0, ?)`
+    )
+    .run(Number(g.lastInsertRowid), new Date().toISOString());
+  db.prepare('UPDATE games SET published_build_id = ? WHERE id = ?').run(
+    Number(b.lastInsertRowid),
+    Number(g.lastInsertRowid)
+  );
 });
 
 test('health check responds', async () => {
