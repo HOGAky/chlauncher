@@ -50,6 +50,14 @@ export const config = {
   enableMockBilling:
     process.env.ENABLE_MOCK_BILLING === '1' ||
     process.env.NODE_ENV !== 'production',
+  /** YooKassa provider credentials (§5.3) — empty when not configured. */
+  yookassaShopId: process.env.YOOKASSA_SHOP_ID || '',
+  yookassaSecretKey: process.env.YOOKASSA_SECRET_KEY || '',
+  /** Stripe signing secret — reserved for the v1.1 provider. */
+  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
+  /** Escape hatch for dev/tunnels: trust webhook sources other than the
+   *  official YooKassa subnets (Basic-auth check still applies). */
+  webhookSkipIpCheck: process.env.BILLING_WEBHOOK_SKIP_IP_CHECK === '1',
 };
 
 if (config.jwtSecret === 'dev-only-insecure-secret-change-me') {
