@@ -165,7 +165,12 @@ impl TriggerMapper {
                 mk("tiktok", "gift", "Rocket", 0, "camera_spin"),
                 // Mid tier.
                 mk("tiktok", "gift", "Rose", 0, "coin_rain"),
+                // Amount tiers for any unnamed gift (first match wins —
+                // thresholds run high → low, matching the ~coin values).
+                mk("tiktok", "gift", "", 2000, "drop_floor"),
+                mk("tiktok", "gift", "", 1000, "spawn_chaser"),
                 mk("tiktok", "gift", "", 500, "slow_field"),
+                mk("tiktok", "gift", "", 100, "coin_rain"),
                 mk("tiktok", "gift", "", 0, "fireworks"),
                 // Free interactions.
                 mk("tiktok", "like", "", 100, "speed_boost"),
@@ -176,6 +181,9 @@ impl TriggerMapper {
                 mk("tiktok", "comment", "!freeze", 0, "freeze"),
                 mk("tiktok", "comment", "!wall", 0, "wall_ahead"),
                 mk("tiktok", "comment", "!clones", 0, "decoy_clones"),
+                // Room bootstrap — the streamer appends the real room id
+                // in the UI: action becomes start_game:<id>.
+                mk("tiktok", "comment", "!start", 0, "start_game"),
                 mk("donationalerts", "donation", "", 10000, "yeet"),
                 mk("any", "any", "", 0, "log_only"),
             ],
