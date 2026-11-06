@@ -10,7 +10,7 @@
  *   POST /api/billing/mock-expire  → force the subscription into 'expired'
  */
 
-import { refreshSubscription, subscriptionView, activateOrExtend, forceExpire } from '../subscriptions.js';
+import { refreshSubscription, subscriptionView, recordPayment, forceExpire } from '../subscriptions.js';
 
 /**
  * @param {import('fastify').FastifyInstance} app
@@ -35,9 +35,14 @@ export default async function billingRoutes(app, { db, authenticate }) {
    * subscription by 30 days. Replace with a real checkout flow later.
    */
   app.post('/mock-pay', { preHandler: authenticate }, async (request) => {
-    const sub = activateOrExtend(db, request.auth.userId);
+    const { subscription } = recordPayment(db, {
+      userId: request.auth.userId,
+      provider: 'mock',
+      externalId: `mock-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      days: 30,
+    });
     request.log.info({ userId: request.auth.userId }, 'mock payment applied');
-    return { ok: true, subscription: subscriptionView(sub) };
+    return { ok: true, subscription: subscriptionView(subscription) };
   });
 
   /**
