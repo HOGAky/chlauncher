@@ -20,7 +20,7 @@ import {
   findSubscription,
   nowIso,
 } from '../db.js';
-import { subscriptionView } from '../subscriptions.js';
+import { subscriptionView, recordPayment, refreshSubscription } from '../subscriptions.js';
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const VERSION_RE = /^\d+\.\d+\.\d+(-[0-9a-z.]+)?$/i;
@@ -283,6 +283,34 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
           .all(`%${q}%`)
       : db.prepare('SELECT * FROM users ORDER BY id DESC LIMIT 50').all();
     return { users: rows.map((u) => adminUserView(db, u)) };
+  });
+
+  /**
+   * POST /api/admin/users/:id/grant-days — {days, comment?}
+   * Manual subscription extension (spec §5.2): writes a provider='manual'
+   * payment row, stacks `days` onto the subscription and audits the action.
+   * This is the working "sell by invoice" path until a provider is wired.
+   */
+  app.post('/users/:id/grant-days', async (request, reply) => {
+    const user = findUserById(db, Number(request.params.id));
+    if (!user) return reply.code(404).send({ error: 'USER_NOT_FOUND' });
+    const { days, comment } = request.body || {};
+    const n = Number(days);
+    if (!Number.isInteger(n) || n <= 0 || n > 3650) {
+      return reply.code(400).send({ error: 'INVALID_DAYS' });
+    }
+    recordPayment(db, {
+      userId: user.id,
+      provider: 'manual',
+      days: n,
+      actorId: request.auth.userId,
+    });
+    audit(request.auth.userId, 'grant_days', user.email, {
+      days: n,
+      comment: comment || null,
+    });
+    const sub = refreshSubscription(db, user.id);
+    return { ok: true, subscription: subscriptionView(sub) };
   });
 
   /** POST /api/admin/users/:id/reset-hwid — unbind HWID without cooldown. */

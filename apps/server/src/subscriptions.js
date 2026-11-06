@@ -63,21 +63,55 @@ export function subscriptionView(sub) {
 }
 
 /**
- * Activates or extends the subscription by 30 days (one billing period).
- * Stacks onto remaining time when already active.
+ * Activates or extends the subscription by `days` days (one billing period
+ * by default). Stacks onto remaining time when already active.
  * @param {import('node:sqlite').DatabaseSync} db
  * @param {number} userId
+ * @param {number} [days]
  * @returns {object} updated subscription row
  */
-export function activateOrExtend(db, userId) {
+export function activateOrExtend(db, userId, days = SUBSCRIPTION_DAYS) {
   const sub = refreshSubscription(db, userId);
   const base =
     sub && sub.status === 'active' && sub.current_period_end > nowIso()
       ? new Date(sub.current_period_end)
       : new Date();
-  const newEnd = isoInDays(SUBSCRIPTION_DAYS, base);
+  const newEnd = isoInDays(days, base);
   updateSubscription(db, userId, 'active', newEnd);
   return findSubscription(db, userId);
+}
+
+/**
+ * Records one payment/grant in the `payments` ledger and extends the
+ * subscription by `days`. Shared by provider webhooks and the admin
+ * grant-days action (spec §5.1).
+ *
+ * Idempotent on `(provider, externalId)`: a duplicate insert is ignored and
+ * NO extra days are granted — safe for webhook retries. Pass a NULL
+ * externalId for one-off manual grants (NULLs never conflict in SQLite).
+ *
+ * @param {import('node:sqlite').DatabaseSync} db
+ * @param {{userId:number, provider:string, externalId?:string|null,
+ *          days:number, actorId?:number|null}} p
+ * @returns {{applied: boolean, subscription: object}} — `applied` is false
+ *          when the payment row already existed (duplicate webhook).
+ */
+export function recordPayment(
+  db,
+  { userId, provider, externalId = null, days = SUBSCRIPTION_DAYS, actorId = null }
+) {
+  const info = db
+    .prepare(
+      `INSERT OR IGNORE INTO payments
+         (user_id, provider, external_id, days, status, actor_id, created_at)
+       VALUES (?,?,?,?, 'succeeded', ?, ?)`
+    )
+    .run(userId, provider, externalId, days, actorId, nowIso());
+  if (info.changes === 0) {
+    return { applied: false, subscription: refreshSubscription(db, userId) };
+  }
+  const subscription = activateOrExtend(db, userId, days);
+  return { applied: true, subscription };
 }
 
 /**
