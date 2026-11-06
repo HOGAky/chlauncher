@@ -7,6 +7,10 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
+  AdminBuild,
+  AdminGame,
+  AdminUser,
+  AuditEntry,
   Bootstrap,
   ForwardStatus,
   LibraryEntry,
@@ -153,3 +157,53 @@ export const onIntegrationStatus = (
 /** Subscribes to game process exits. */
 export const onGameExited = (cb: (slug: string) => void): Promise<UnlistenFn> =>
   listen<{ slug: string }>('game-exited', (e) => cb(e.payload.slug));
+
+/** Catalog snapshot changed on the backend — refresh the library badge. */
+export const onCatalogChanged = (cb: () => void): Promise<UnlistenFn> =>
+  listen('catalog-changed', () => cb());
+
+// ---------------------------------------------------------------------------
+// Admin API — thin wrappers; the server enforces role=admin (403 otherwise).
+// ---------------------------------------------------------------------------
+
+export const adminListGames = () => cmd<{ games: AdminGame[] }>('admin_list_games');
+export const adminCreateGame = (
+  slug: string,
+  title: string,
+  description: string,
+  executable_name: string
+) =>
+  cmd<{ game: AdminGame }>('admin_create_game', {
+    slug, title, description, executableName: executable_name,
+  });
+export const adminUpdateGame = (slug: string, patch: Record<string, string>) =>
+  cmd<{ game: AdminGame }>('admin_update_game', { slug, patch });
+export const adminUploadBuild = (
+  slug: string,
+  version: string,
+  changelog: string,
+  path: string
+) => cmd<{ build: AdminBuild }>('admin_upload_build', { slug, version, changelog, path });
+export const adminPublish = (slug: string, version: string) =>
+  cmd<{ game: AdminGame }>('admin_publish', { slug, version });
+export const adminUnpublish = (slug: string) =>
+  cmd<{ game: AdminGame }>('admin_unpublish', { slug });
+export const adminRollback = (slug: string) =>
+  cmd<{ game: AdminGame }>('admin_rollback', { slug });
+export const adminListUsers = (query: string) =>
+  cmd<{ users: AdminUser[] }>('admin_list_users', { query });
+export const adminGrantDays = (userId: number, days: number, comment: string) =>
+  cmd<{ ok: boolean; subscription: Subscription }>('admin_grant_days', {
+    userId, days, comment,
+  });
+export const adminResetHwid = (userId: number) =>
+  cmd<{ ok: boolean }>('admin_reset_hwid', { userId });
+export const adminAudit = () => cmd<{ entries: AuditEntry[] }>('admin_audit');
+
+/** Upload progress events emitted by adminUploadBuild. */
+export const onBuildUploadProgress = (
+  cb: (p: { slug: string; sent: number; total: number }) => void
+): Promise<UnlistenFn> =>
+  listen<{ slug: string; sent: number; total: number }>('build-upload-progress', (e) =>
+    cb(e.payload)
+  );

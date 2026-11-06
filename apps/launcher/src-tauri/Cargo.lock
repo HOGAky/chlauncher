@@ -402,6 +402,7 @@ name = "chlauncher"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "bytes",
  "dirs 6.0.0",
  "futures-util",
  "machine-uid",

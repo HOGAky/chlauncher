@@ -57,7 +57,7 @@ export interface LibraryEntry {
   description: string;
   version: string;
   executable_name: string;
-  installed: { version: string; install_dir: string; exe_path: string } | null;
+  installed: { version: string; install_dir: string; exe_path: string; sha256?: string | null } | null;
   update_available: boolean;
   running: boolean;
   connected_clients: number;
@@ -89,10 +89,69 @@ export interface ForwardStatus {
   registered_until: string | null;
 }
 
+/** One uploaded build as seen by the admin API. */
+export interface AdminBuild {
+  id: number;
+  version: string;
+  sha256: string;
+  size_bytes: number;
+  changelog: string;
+  uploaded_by: string | null;
+  created_at: string;
+}
+
+/** Game row in the admin panel (includes drafts/archived + all builds). */
+export interface AdminGame {
+  id: number;
+  slug: string;
+  title: string;
+  description: string;
+  executable_name: string;
+  cover_image: string;
+  status: 'draft' | 'published' | 'archived';
+  published_version: string | null;
+  updated_at: string | null;
+  builds: AdminBuild[];
+}
+
+/** Payment ledger row shown under an admin user. */
+export interface AdminPayment {
+  id: number;
+  provider: string;
+  external_id: string | null;
+  days: number;
+  status: string;
+  actor_id: number | null;
+  created_at: string;
+}
+
+/** User row in the admin panel. */
+export interface AdminUser {
+  id: number;
+  email: string;
+  role: 'user' | 'admin';
+  hwid: string | null;
+  created_at: string;
+  subscription: Subscription;
+  payments: AdminPayment[];
+}
+
+/** One admin_audit log entry. */
+export interface AuditEntry {
+  id: number;
+  actor_email: string;
+  action: string;
+  target: string;
+  meta: string;
+  created_at: string;
+}
+
 /** Boot snapshot returned by `get_bootstrap`. */
 export interface Bootstrap {
   authed: boolean;
   email: string | null;
+  /** 'user' | 'admin' — shows the admin tab; server never trusts it. */
+  role: string | null;
   hwid: string;
   subscription: Subscription | null;
   streamer_mode: boolean;

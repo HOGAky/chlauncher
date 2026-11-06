@@ -551,3 +551,206 @@ pub async fn regenerate_stream_key(state: State<'_, AppState>) -> Result<String,
 pub async fn get_forward_status(state: State<'_, AppState>) -> Result<Value, String> {
     Ok(serde_json::to_value(state.forwarder.snapshot().await).unwrap_or_default())
 }
+
+// ---------------------------------------------------------------------------
+// Admin API — thin JWT-authenticated wrappers; the server enforces role=admin
+// (403 FORBIDDEN) so a non-admin UI simply gets the error back (spec §7).
+// ---------------------------------------------------------------------------
+
+use reqwest::Method;
+
+#[tauri::command]
+pub async fn admin_list_games(state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .admin_json(Method::GET, "/api/admin/games", &token(&state).await?, None)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn admin_create_game(
+    slug: String,
+    title: String,
+    description: String,
+    executable_name: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    state
+        .api
+        .admin_json(
+            Method::POST,
+            "/api/admin/games",
+            &token(&state).await?,
+            Some(json!({
+                "slug": slug,
+                "title": title,
+                "description": description,
+                "executable_name": executable_name,
+            })),
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn admin_update_game(
+    slug: String,
+    patch: Value,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    state
+        .api
+        .admin_json(
+            Method::PATCH,
+            &format!("/api/admin/games/{slug}"),
+            &token(&state).await?,
+            Some(patch),
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Streams a local zip to the server as a new build; emits
+/// `build-upload-progress {slug, sent, total}` per 256 KiB chunk.
+#[tauri::command]
+pub async fn admin_upload_build(
+    app: AppHandle,
+    slug: String,
+    version: String,
+    changelog: String,
+    path: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let t = token(&state).await?;
+    let ev_slug = slug.clone();
+    state
+        .api
+        .admin_upload_build(
+            &t,
+            &slug,
+            &version,
+            &changelog,
+            std::path::Path::new(&path),
+            move |sent, total| {
+                let _ = app.emit(
+                    "build-upload-progress",
+                    json!({"slug": ev_slug, "sent": sent, "total": total}),
+                );
+            },
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn admin_publish(
+    slug: String,
+    version: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    state
+        .api
+        .admin_json(
+            Method::POST,
+            &format!("/api/admin/games/{slug}/publish"),
+            &token(&state).await?,
+            Some(json!({"version": version})),
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn admin_unpublish(slug: String, state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .admin_json(
+            Method::POST,
+            &format!("/api/admin/games/{slug}/unpublish"),
+            &token(&state).await?,
+            Some(json!({})),
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn admin_rollback(slug: String, state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .admin_json(
+            Method::POST,
+            &format!("/api/admin/games/{slug}/rollback"),
+            &token(&state).await?,
+            Some(json!({})),
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn admin_list_users(
+    query: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let enc: String = query
+        .bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
+            _ => format!("%{b:02X}"),
+        })
+        .collect();
+    state
+        .api
+        .admin_json(
+            Method::GET,
+            &format!("/api/admin/users?query={enc}"),
+            &token(&state).await?,
+            None,
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn admin_grant_days(
+    user_id: i64,
+    days: i64,
+    comment: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    state
+        .api
+        .admin_json(
+            Method::POST,
+            &format!("/api/admin/users/{user_id}/grant-days"),
+            &token(&state).await?,
+            Some(json!({"days": days, "comment": comment})),
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn admin_reset_hwid(user_id: i64, state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .admin_json(
+            Method::POST,
+            &format!("/api/admin/users/{user_id}/reset-hwid"),
+            &token(&state).await?,
+            Some(json!({})),
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn admin_audit(state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .admin_json(Method::GET, "/api/admin/audit", &token(&state).await?, None)
+        .await
+        .map_err(|e| e.to_string())
+}

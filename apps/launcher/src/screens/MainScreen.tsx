@@ -4,16 +4,18 @@
  * Pages: Library, Subscription, Integrations, Trigger mapper, Simulator.
  */
 import React, { useState } from 'react';
-import { Gamepad2, CreditCard, Radio, SlidersHorizontal, FlaskConical } from 'lucide-react';
+import { Gamepad2, CreditCard, Radio, SlidersHorizontal, FlaskConical, Wrench } from 'lucide-react';
 import { cn } from '../lib/utils';
 import Header from '../components/Header';
+import { useApp } from '../App';
 import LibraryPage from '../pages/LibraryPage';
 import SubscriptionPage from '../pages/SubscriptionPage';
 import IntegrationsPage from '../pages/IntegrationsPage';
 import MapperPage from '../pages/MapperPage';
 import SimulatorPage from '../pages/SimulatorPage';
+import AdminPage from '../pages/AdminPage';
 
-type Page = 'library' | 'subscription' | 'integrations' | 'mapper' | 'simulator';
+type Page = 'library' | 'subscription' | 'integrations' | 'mapper' | 'simulator' | 'admin';
 
 const NAV: { id: Page; label: string; icon: React.ReactNode }[] = [
   { id: 'library', label: 'Библиотека', icon: <Gamepad2 size={16} /> },
@@ -24,6 +26,8 @@ const NAV: { id: Page; label: string; icon: React.ReactNode }[] = [
 ];
 
 export default function MainScreen() {
+  const { boot } = useApp();
+  const isAdmin = boot?.role === 'admin';
   const [page, setPage] = useState<Page>('library');
 
   return (
@@ -46,6 +50,20 @@ export default function MainScreen() {
               {n.label}
             </button>
           ))}
+          {isAdmin && (
+            <button
+              onClick={() => setPage('admin')}
+              className={cn(
+                'flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors text-left mt-2 border-t border-border pt-3',
+                page === 'admin'
+                  ? 'bg-primary/15 text-primary font-medium'
+                  : 'text-muted-foreground hover:bg-secondary/60 hover:text-foreground'
+              )}
+            >
+              <Wrench size={16} />
+              Управление
+            </button>
+          )}
         </nav>
         <main className="flex-1 min-w-0 overflow-y-auto p-5">
           {page === 'library' && <LibraryPage />}
@@ -53,6 +71,7 @@ export default function MainScreen() {
           {page === 'integrations' && <IntegrationsPage />}
           {page === 'mapper' && <MapperPage />}
           {page === 'simulator' && <SimulatorPage />}
+          {page === 'admin' && isAdmin && <AdminPage />}
         </main>
       </div>
     </div>

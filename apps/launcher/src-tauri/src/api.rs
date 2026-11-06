@@ -260,4 +260,107 @@ impl ApiClient {
             .map(|b| format!("{b:02x}"))
             .collect())
     }
+
+    // ---------------------------------------------------------------
+    // Admin API (server enforces users.role='admin'; we just send the JWT)
+    // ---------------------------------------------------------------
+
+    /// Generic `/api/admin/*` JSON call — returns the raw response value.
+    pub async fn admin_json(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        token: &str,
+        body: Option<Value>,
+    ) -> Result<Value, ApiError> {
+        self.req::<Value>(method, path, Some(token), body).await
+    }
+
+    /// `POST /api/admin/games/:slug/builds?version=&changelog=` — streams the
+    /// zip file in 256 KiB chunks so large builds never sit in memory whole;
+    /// `progress(sent, total)` fires per chunk for the UI progress bar.
+    pub async fn admin_upload_build(
+        &self,
+        token: &str,
+        slug: &str,
+        version: &str,
+        changelog: &str,
+        path: &std::path::Path,
+        progress: impl Fn(u64, u64) + Send + Sync + 'static,
+    ) -> Result<Value, ApiError> {
+        use futures_util::stream;
+        use std::sync::atomic::{AtomicU64, Ordering};
+        use std::sync::Arc;
+        use tokio::io::AsyncReadExt;
+
+        let file = tokio::fs::File::open(path)
+            .await
+            .map_err(|e| ApiError::Server(400, format!("FILE_OPEN_FAILED: {e}")))?;
+        let total = file
+            .metadata()
+            .await
+            .map_err(|e| ApiError::Server(400, format!("FILE_STAT_FAILED: {e}")))?
+            .len();
+
+        let sent = Arc::new(AtomicU64::new(0));
+        let progress = Arc::new(progress);
+        let sent_c = sent.clone();
+        let progress_c = progress.clone();
+        let body_stream = stream::try_unfold(file, move |mut f| {
+            let sent_c = sent_c.clone();
+            let progress_c = progress_c.clone();
+            async move {
+                let mut buf = vec![0u8; 256 * 1024];
+                let n = f.read(&mut buf).await?;
+                if n == 0 {
+                    return Ok(None);
+                }
+                buf.truncate(n);
+                let done = sent_c.fetch_add(n as u64, Ordering::Relaxed) + n as u64;
+                progress_c(done, total);
+                Ok::<_, std::io::Error>(Some((bytes::Bytes::from(buf), f)))
+            }
+        });
+
+        let url = format!(
+            "{}/api/admin/games/{}/builds?version={}&changelog={}",
+            self.base(),
+            slug,
+            urlencode(version),
+            urlencode(changelog),
+        );
+        let res = self
+            .http
+            .post(url)
+            .bearer_auth(token)
+            .header("content-type", "application/octet-stream")
+            .body(reqwest::Body::wrap_stream(body_stream))
+            .send()
+            .await?;
+        let status = res.status();
+        if !status.is_success() {
+            let code = res
+                .json::<Value>()
+                .await
+                .ok()
+                .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(String::from))
+                .unwrap_or_else(|| "UNKNOWN".to_string());
+            return Err(ApiError::Server(status.as_u16(), code));
+        }
+        res.json::<Value>().await.map_err(|_| ApiError::Malformed)
+    }
+}
+
+/// Percent-encodes a query param value (unreserved ASCII chars pass through).
+fn urlencode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char)
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
 }
