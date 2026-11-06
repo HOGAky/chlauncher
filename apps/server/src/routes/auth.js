@@ -15,7 +15,12 @@ import {
   createUser,
   setUserHwid,
 } from '../db.js';
-import { hashPassword, verifyPassword, signToken } from '../auth.js';
+import {
+  hashPassword,
+  verifyPassword,
+  signToken,
+  syncAdminRole,
+} from '../auth.js';
 import {
   refreshSubscription,
   subscriptionView,
@@ -51,6 +56,7 @@ export default async function authRoutes(app, { db }) {
       passwordHash: hashPassword(password),
       hwid: hwid || null,
     });
+    syncAdminRole(db, user);
     const subscription = refreshSubscription(db, user.id);
     return {
       token: signToken(user),
@@ -82,6 +88,7 @@ export default async function authRoutes(app, { db }) {
       user.hwid = hwid;
     }
 
+    syncAdminRole(db, user);
     const subscription = refreshSubscription(db, user.id);
     return {
       token: signToken(user),
@@ -96,6 +103,7 @@ function publicUser(user) {
   return {
     id: user.id,
     email: user.email,
+    role: user.role || 'user',
     hwid: user.hwid,
     hwid_last_reset: user.hwid_last_reset,
     created_at: user.created_at,

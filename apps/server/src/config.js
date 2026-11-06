@@ -25,7 +25,8 @@ try {
 
 /**
  * Normalized server configuration.
- * @type {{port: number, host: string, jwtSecret: string, databasePath: string, staticDir: string}}
+ * @type {{port: number, host: string, jwtSecret: string, databasePath: string, staticDir: string,
+ *         adminEmails: Set<string>, maxBuildSize: number, enableMockBilling: boolean}}
  */
 export const config = {
   port: Number(process.env.SERVER_PORT || 8787),
@@ -34,6 +35,21 @@ export const config = {
   databasePath:
     process.env.DATABASE_PATH || path.join(SERVER_ROOT, 'data', 'chlauncher.db'),
   staticDir: path.join(SERVER_ROOT, 'static'),
+  /** Emails that receive role='admin' on every register/login (§1.1). */
+  adminEmails: new Set(
+    (process.env.ADMIN_EMAILS || '')
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean)
+  ),
+  /** Upload cap for admin build POSTs (§3). Default: 2 GiB. */
+  maxBuildSize: Number(
+    process.env.MAX_BUILD_SIZE || 2 * 1024 * 1024 * 1024
+  ),
+  /** mock-pay/mock-expire routes only exist when this is true (§5.5). */
+  enableMockBilling:
+    process.env.ENABLE_MOCK_BILLING === '1' ||
+    process.env.NODE_ENV !== 'production',
 };
 
 if (config.jwtSecret === 'dev-only-insecure-secret-change-me') {

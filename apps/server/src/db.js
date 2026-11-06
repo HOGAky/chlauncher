@@ -15,7 +15,9 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
+import { config } from './config.js';
 
 /** Current UTC time as an ISO-8601 string. */
 export function nowIso() {
@@ -28,8 +30,8 @@ export function isoInDays(days, from = new Date()) {
 }
 
 /**
- * Opens (and creates if needed) the SQLite database, applies the schema and
- * seeds the game catalog. Returns the DatabaseSync handle.
+ * Opens (and creates if needed) the SQLite database, applies the v1 baseline
+ * schema and then runs any pending linear migrations (PRAGMA user_version).
  *
  * @param {string} databasePath - File path, or ':memory:' for tests.
  * @returns {DatabaseSync}
@@ -73,30 +75,125 @@ export function openDatabase(databasePath) {
     );
   `);
 
-  seedGames(db);
+  migrate(db);
   return db;
 }
 
+// ---------------------------------------------------------------------------
+// Migrations — linear array indexed by target version-1. `PRAGMA user_version`
+// holds the applied count; every entry must be idempotent-in-context (it runs
+// exactly once per database inside a transaction).
+// ---------------------------------------------------------------------------
+
+/** @type {Array<(db: DatabaseSync) => void>} */
+const MIGRATIONS = [
+  // v1 → v2: admin roles, versioned game builds, payments ledger, audit log.
+  (db) => {
+    db.exec(`
+      ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'
+        CHECK (role IN ('user','admin'));
+
+      CREATE TABLE game_builds (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        game_id      INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+        version      TEXT NOT NULL,
+        file_name    TEXT NOT NULL,
+        sha256       TEXT NOT NULL,
+        size_bytes   INTEGER NOT NULL,
+        changelog    TEXT NOT NULL DEFAULT '',
+        uploaded_by  INTEGER REFERENCES users(id),
+        created_at   TEXT NOT NULL,
+        UNIQUE(game_id, version)
+      );
+
+      ALTER TABLE games ADD COLUMN published_build_id INTEGER
+        REFERENCES game_builds(id);
+      ALTER TABLE games ADD COLUMN status TEXT NOT NULL DEFAULT 'published'
+        CHECK (status IN ('draft','published','archived'));
+      ALTER TABLE games ADD COLUMN updated_at TEXT;
+
+      CREATE TABLE payments (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id      INTEGER NOT NULL REFERENCES users(id),
+        provider     TEXT NOT NULL,
+        external_id  TEXT,
+        days         INTEGER NOT NULL,
+        status       TEXT NOT NULL DEFAULT 'succeeded'
+                     CHECK (status IN ('pending','succeeded','failed','refunded')),
+        actor_id     INTEGER REFERENCES users(id),
+        created_at   TEXT NOT NULL,
+        UNIQUE(provider, external_id)
+      );
+
+      CREATE TABLE admin_audit (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        actor_id   INTEGER NOT NULL REFERENCES users(id),
+        action     TEXT NOT NULL,
+        target     TEXT NOT NULL,
+        meta       TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL
+      );
+    `);
+    migrateExistingGames(db);
+  },
+];
+
+/** Runs all pending migrations in order. Idempotent via user_version. */
+function migrate(db) {
+  let v = db.prepare('PRAGMA user_version').get().user_version;
+  while (v < MIGRATIONS.length) {
+    db.exec('BEGIN');
+    try {
+      MIGRATIONS[v](db);
+      v += 1;
+      db.exec(`PRAGMA user_version = ${v}`);
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+}
+
 /**
- * Ensures the catalog contains the bundled test game. Idempotent — safe to
- * run on every boot.
- * @param {DatabaseSync} db
+ * v2 data migration: every pre-existing catalog row gets a game_builds entry
+ * and becomes published. The flat zip in static/games is moved into the new
+ * `<slug>/<version>.zip` layout and hashed. Missing files are tolerated —
+ * the build row is still recorded so the catalog stays consistent.
  */
-function seedGames(db) {
-  const insert = db.prepare(`
-    INSERT INTO games (slug, title, description, version, file_name, executable_name, cover_image)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT(slug) DO NOTHING
+function migrateExistingGames(db) {
+  const games = db.prepare('SELECT * FROM games').all();
+  const insertBuild = db.prepare(`
+    INSERT INTO game_builds
+      (game_id, version, file_name, sha256, size_bytes, changelog, uploaded_by, created_at)
+    VALUES (?, ?, ?, ?, ?, '', NULL, ?)
   `);
-  insert.run(
-    'mock-game',
-    'Mock Arena',
-    'Built-in test game used to verify launcher downloads, DRM handshake and live event triggers.',
-    '0.1.0',
-    'mock-game-0.1.0.zip',
-    process.platform === 'win32' ? 'mock-game.exe' : 'mock-game',
-    ''
+  const setPublished = db.prepare(
+    'UPDATE games SET published_build_id = ? WHERE id = ?'
   );
+
+  for (const g of games) {
+    const rel = `${g.slug}/${g.version}.zip`;
+    const src = path.join(config.staticDir, 'games', g.file_name);
+    const dst = path.join(config.staticDir, 'games', rel);
+    let sha256 = '';
+    let size = 0;
+    try {
+      if (!fs.existsSync(dst) && fs.existsSync(src)) {
+        fs.mkdirSync(path.dirname(dst), { recursive: true });
+        fs.renameSync(src, dst);
+      }
+      if (fs.existsSync(dst)) {
+        const buf = fs.readFileSync(dst);
+        sha256 = crypto.createHash('sha256').update(buf).digest('hex');
+        size = buf.length;
+      }
+    } catch {
+      /* file access problems must not abort the schema migration */
+    }
+    const info = insertBuild.run(g.id, g.version, rel, sha256, size, nowIso());
+    setPublished.run(Number(info.lastInsertRowid), g.id);
+  }
 }
 
 // ---------------------------------------------------------------------------

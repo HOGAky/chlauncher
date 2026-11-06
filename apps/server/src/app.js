@@ -10,7 +10,7 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { openDatabase } from './db.js';
-import { makeAuthenticate } from './auth.js';
+import { makeAuthenticate, makeRequireAdmin } from './auth.js';
 import authRoutes from './routes/auth.js';
 import accountRoutes from './routes/account.js';
 import billingRoutes from './routes/billing.js';
@@ -30,7 +30,8 @@ export async function buildApp(opts = {}) {
   await app.register(cors, { origin: true });
 
   const authenticate = makeAuthenticate();
-  const deps = { db, authenticate };
+  const requireAdmin = makeRequireAdmin(db);
+  const deps = { db, authenticate, requireAdmin };
 
   app.get('/api/health', async () => ({ ok: true, ts: Date.now() }));
   await app.register(authRoutes, { prefix: '/api/auth', ...deps });
