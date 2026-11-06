@@ -110,6 +110,7 @@ pub fn run() {
                 forwarder: forwarder.clone(),
                 raw_tx,
                 active_game_slug: active_game_slug.clone(),
+                catalog_seen: Arc::new(Mutex::new(None)),
             };
 
             // --- mapper forwarder: raw → mapped → hub + frontend --------
@@ -125,6 +126,9 @@ pub fn run() {
 
             // --- watchdog: reap exited game processes -------------------
             tauri::async_runtime::spawn(watchdog_loop(app.handle().clone()));
+
+            // --- catalog poller: detect new versions every 10 min (§6.3) --
+            tauri::async_runtime::spawn(catalog_poller_loop(app.handle().clone()));
 
             app.manage(state);
             Ok(())
@@ -162,14 +166,61 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|app, event| {
-            if let tauri::RunEvent::Exit = event {
-                // Kill every spawned game so no licensed binary outlives
-                // the launcher.
-                if let Some(state) = app.try_state::<AppState>() {
-                    state.processes.kill_all();
+            match event {
+                tauri::RunEvent::Exit => {
+                    // Kill every spawned game so no licensed binary outlives
+                    // the launcher.
+                    if let Some(state) = app.try_state::<AppState>() {
+                        state.processes.kill_all();
+                    }
                 }
+                // Fresh catalog check when the window regains focus (§6.3).
+                tauri::RunEvent::WindowEvent {
+                    event: tauri::WindowEvent::Focused(true),
+                    ..
+                } => {
+                    let handle = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        check_catalog(&handle).await;
+                    });
+                }
+                _ => {}
             }
         });
+}
+
+/// Fetches the catalog and emits `catalog-changed` when the slug→version
+/// map differs from the last snapshot. The first fetch only sets a
+/// baseline — no event on startup.
+async fn check_catalog(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    let state = app.state::<AppState>();
+    let token = state.settings.lock().await.data.auth_token.clone();
+    let Some(token) = token else { return };
+    let Ok(games) = state.api.games(&token).await else {
+        return;
+    };
+    let map: std::collections::BTreeMap<String, String> = games
+        .iter()
+        .map(|g| (g.slug.clone(), g.version.clone()))
+        .collect();
+    let mut seen = state.catalog_seen.lock().await;
+    if let Some(prev) = seen.as_ref() {
+        if *prev != map {
+            let _ = app.emit("catalog-changed", ());
+        }
+    }
+    *seen = Some(map);
+}
+
+/// Polls the game catalog every 10 minutes (§6.3); the diff →
+/// `catalog-changed` event refreshes the library badge in the UI.
+async fn catalog_poller_loop(app: tauri::AppHandle) {
+    let mut tick = tokio::time::interval(Duration::from_secs(600));
+    loop {
+        tick.tick().await;
+        check_catalog(&app).await;
+    }
 }
 
 /// Maps raw ingest events through the active game's trigger profile and
