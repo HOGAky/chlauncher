@@ -107,6 +107,12 @@ export const setStreamerMode = (enabled: boolean) =>
 /** Broadcasts a chroma-key toggle to connected games. */
 export const setChromaKey = (enabled: boolean) => cmd<void>('set_chroma_key', { enabled });
 
+/** Backend base URL currently in use. */
+export const getServerUrl = () => cmd<string>('get_server_url');
+
+/** Points the launcher at another backend (persisted). */
+export const setServerUrl = (url: string) => cmd<void>('set_server_url', { url });
+
 // ---- events ----------------------------------------------------------------
 
 /** Subscribes to mapped stream events pushed to the UI feed. */

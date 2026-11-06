@@ -94,6 +94,7 @@ pub async fn get_bootstrap(state: State<'_, AppState>) -> Result<Value, String> 
         "running": state.processes.running_slugs(),
         "overlay_url": OVERLAY_URL,
         "game_ws_port": GAME_WS_PORT,
+        "server_url": state.api.base(),
     }))
 }
 
@@ -418,4 +419,29 @@ pub async fn set_chroma_key(enabled: bool, state: State<'_, AppState>) -> Result
 #[tauri::command]
 pub async fn get_hwid(state: State<'_, AppState>) -> Result<String, String> {
     Ok(state.hwid.clone())
+}
+
+/// Current backend base URL (shown on the auth screen).
+#[tauri::command]
+pub async fn get_server_url(state: State<'_, AppState>) -> Result<String, String> {
+    Ok(state.api.base())
+}
+
+/// Points the launcher at another backend and persists the choice.
+/// Accepts `http(s)://host[:port]`; trailing slashes are stripped.
+#[tauri::command]
+pub async fn set_server_url(url: String, state: State<'_, AppState>) -> Result<(), String> {
+    let u = url.trim().trim_end_matches('/').to_string();
+    if !(u.starts_with("http://") || u.starts_with("https://")) {
+        return Err("URL должен начинаться с http:// или https://".into());
+    }
+    state.api.set_base(u.clone());
+    let mut s = state.settings.lock().await;
+    s.data.server_url = if u == crate::api::DEFAULT_BASE_URL {
+        None
+    } else {
+        Some(u)
+    };
+    let _ = s.save();
+    Ok(())
 }

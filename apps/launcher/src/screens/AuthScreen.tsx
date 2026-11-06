@@ -3,7 +3,7 @@
  * Login / registration screen — first thing a streamer sees.
  * On success hands the session to the app context.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import * as api from '../api';
 import { useApp } from '../App';
 import { Button } from '../components/ui/button';
@@ -27,6 +27,26 @@ export default function AuthScreen() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [serverUrl, setServerUrl] = useState('');
+  const [showServer, setShowServer] = useState(false);
+  const [serverSaved, setServerSaved] = useState(false);
+
+  /** Prefills the backend URL field on mount. */
+  useEffect(() => {
+    api.getServerUrl().then(setServerUrl).catch(() => {});
+  }, []);
+
+  /** Persists a new backend URL so remote testers can connect. */
+  const saveServer = async () => {
+    setError(null);
+    try {
+      await api.setServerUrl(serverUrl.trim());
+      setServerSaved(true);
+      setTimeout(() => setServerSaved(false), 2000);
+    } catch (e) {
+      setError(String(e));
+    }
+  };
 
   /** Submits the form to register or login. */
   const submit = async (e: React.FormEvent) => {
@@ -100,6 +120,29 @@ export default function AuthScreen() {
                 : 'Уже есть аккаунт? Войти'}
             </button>
           </form>
+          <div className="mt-4 border-t border-border/40 pt-3">
+            <button
+              type="button"
+              className="text-[11px] text-muted-foreground/70 hover:text-foreground transition-colors"
+              onClick={() => setShowServer(!showServer)}
+            >
+              ⚙ Сервер: {showServer ? 'скрыть' : serverUrl || 'по умолчанию'}
+            </button>
+            {showServer && (
+              <div className="mt-2 flex gap-2">
+                <Input
+                  type="text"
+                  placeholder="http://127.0.0.1:8787"
+                  value={serverUrl}
+                  onChange={(e) => setServerUrl(e.target.value)}
+                  className="h-8 text-xs"
+                />
+                <Button type="button" size="sm" variant="outline" onClick={saveServer}>
+                  {serverSaved ? 'OK' : 'Сохранить'}
+                </Button>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>
