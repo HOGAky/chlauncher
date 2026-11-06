@@ -101,12 +101,20 @@ See [`.env.example`](.env.example):
 - `DONATIONALERTS_CLIENT_ID/SECRET` — for a full OAuth flow; the MVP
   accepts a pasted access token in the launcher's Integrations page.
 - `VITE_API_URL` — point the launcher at a non-local backend.
+- `EULERSTREAM_API_KEY` — optional TikTok signing key (see below).
 
 ## Known limitations (MVP honesty list)
 
-- **TikTok connector** is best-effort presence polling of the public live
-  page; real gift/like/comment ingestion needs TikTok's webcast signing
-  path (not available offline). The simulator covers the whole downstream
+- **TikTok connector** ingests real live events (chat, gifts, likes,
+  joins, follows/shares, subs) via a Node.js sidecar
+  (`tools/tiktok-sidecar`) running `tiktok-live-connector` — the actively
+  maintained unofficial webcast client, signed through EulerStream's
+  free tier (works keyless, rate-limited; `EULERSTREAM_API_KEY` or
+  `%APPDATA%/com.chlauncher.app/eulerstream.key` raises limits). The
+  launcher spawns `node index.js <username>` and reads NDJSON events
+  from stdout, so Node.js must be on `PATH` (or a `node.exe` next to the
+  sidecar). Requirements: no TikTok credentials, the target must be live.
+  TikTok can break this at any time; the simulator covers the downstream
   pipeline identically.
 - **DonationAlerts** implements the community Centrifugo flow; untested
   against the live service without a real token.

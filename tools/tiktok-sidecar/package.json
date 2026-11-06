@@ -1,0 +1,13 @@
+{
+  "name": "tiktok-sidecar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "chlauncher TikTok Live event sidecar (tiktok-live-connector -> NDJSON)",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "tiktok-live-connector": "^2.5.0"
+  }
+}
