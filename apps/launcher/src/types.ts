@@ -80,6 +80,15 @@ export type IntegrationStatus =
   | 'live'
   | { error: string };
 
+/** HTTP-forward runtime counters (Roblox relay). */
+export interface ForwardStatus {
+  queued: number;
+  dropped: number;
+  delivered: number;
+  last_error: string | null;
+  registered_until: string | null;
+}
+
 /** Boot snapshot returned by `get_bootstrap`. */
 export interface Bootstrap {
   authed: boolean;
@@ -98,4 +107,11 @@ export interface Bootstrap {
   overlay_url: string;
   game_ws_port: number;
   server_url: string;
+  forward: {
+    enabled: boolean;
+    forward_url: string | null;
+    stream_key: string | null;
+    has_admin_secret: boolean;
+    status: ForwardStatus;
+  } | null;
 }

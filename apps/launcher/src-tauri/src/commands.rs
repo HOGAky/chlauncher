@@ -14,6 +14,7 @@ use tokio::sync::Mutex;
 use crate::api::ApiClient;
 use crate::downloads;
 use crate::events::{EventHub, TriggerMapper};
+use crate::forwarder::Forwarder;
 use crate::game_ws::{GameServer, GAME_WS_PORT};
 use crate::integrations::IntegrationManager;
 use crate::overlay::OVERLAY_URL;
@@ -31,6 +32,8 @@ pub struct AppState {
     pub game_server: Arc<GameServer>,
     pub processes: ProcessManager,
     pub integrations: Arc<IntegrationManager>,
+    /// HTTP-forward to the cloud relay (Roblox games).
+    pub forwarder: Arc<Forwarder>,
     /// Ingest channel for raw events (integrations + simulator).
     pub raw_tx: tokio::sync::mpsc::Sender<RawStreamEvent>,
     /// Slug whose trigger profile currently maps events (last played/selected).
@@ -95,6 +98,13 @@ pub async fn get_bootstrap(state: State<'_, AppState>) -> Result<Value, String> 
         "overlay_url": OVERLAY_URL,
         "game_ws_port": GAME_WS_PORT,
         "server_url": state.api.base(),
+        "forward": {
+            "enabled": settings.forward.enabled,
+            "forward_url": settings.forward.forward_url,
+            "stream_key": settings.forward.stream_key,
+            "has_admin_secret": settings.forward.relay_admin_secret.is_some(),
+            "status": state.forwarder.snapshot().await,
+        },
     }))
 }
 
@@ -372,6 +382,23 @@ pub async fn save_triggers(
     Ok(())
 }
 
+/// Applies a named preset (e.g. `steal-the-stream`) over a game's profile.
+#[tauri::command]
+pub async fn apply_trigger_template(
+    game_slug: String,
+    template: String,
+    state: State<'_, AppState>,
+) -> Result<TriggerProfile, String> {
+    let profile = TriggerMapper::template_profile(&game_slug, &template)
+        .ok_or_else(|| format!("неизвестный шаблон: {template}"))?;
+    let mut s = state.settings.lock().await;
+    s.data
+        .trigger_profiles
+        .insert(game_slug, profile.clone());
+    let _ = s.save();
+    Ok(profile)
+}
+
 /// Injects a raw event into the mapping pipeline — the event simulator.
 /// Works even with no game running (still reaches overlay + feed).
 #[tauri::command]
@@ -444,4 +471,61 @@ pub async fn set_server_url(url: String, state: State<'_, AppState>) -> Result<(
     };
     let _ = s.save();
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// HTTP-forward (Roblox/cloud relay)
+// ---------------------------------------------------------------------------
+
+/// Saves forward settings; enabling pushes a key registration right away.
+#[tauri::command]
+pub async fn set_forward_config(
+    enabled: bool,
+    forward_url: String,
+    relay_admin_secret: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let u = forward_url.trim().trim_end_matches('/').to_string();
+    if enabled && !(u.starts_with("http://") || u.starts_with("https://")) {
+        return Err("forward_url должен начинаться с http:// или https://".into());
+    }
+    {
+        let mut s = state.settings.lock().await;
+        s.data.forward.enabled = enabled;
+        s.data.forward.forward_url = if u.is_empty() { None } else { Some(u) };
+        if !relay_admin_secret.trim().is_empty() {
+            s.data.forward.relay_admin_secret = Some(relay_admin_secret.trim().to_string());
+        }
+        if s.data.forward.stream_key.is_none() {
+            s.data.forward.stream_key =
+                Some(format!("sk_{}", uuid::Uuid::new_v4().simple()));
+        }
+        let _ = s.save();
+    }
+    if enabled {
+        state.forwarder.register_now().await;
+    }
+    Ok(())
+}
+
+/// Generates a fresh stream key (old Roblox-room binds die with it) and
+/// re-registers immediately if forwarding is on.
+#[tauri::command]
+pub async fn regenerate_stream_key(state: State<'_, AppState>) -> Result<String, String> {
+    let key = format!("sk_{}", uuid::Uuid::new_v4().simple());
+    {
+        let mut s = state.settings.lock().await;
+        s.data.forward.stream_key = Some(key.clone());
+        let _ = s.save();
+    }
+    if state.settings.lock().await.data.forward.enabled {
+        state.forwarder.register_now().await;
+    }
+    Ok(key)
+}
+
+/// Runtime forwarder counters for the UI (queue/drops/last error).
+#[tauri::command]
+pub async fn get_forward_status(state: State<'_, AppState>) -> Result<Value, String> {
+    Ok(serde_json::to_value(state.forwarder.snapshot().await).unwrap_or_default())
 }

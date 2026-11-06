@@ -5,7 +5,7 @@
  * commands. Profiles persist per-game as JSON in launcher settings.
  */
 import React, { useEffect, useState } from 'react';
-import { Plus, Save, Trash2 } from 'lucide-react';
+import { Plus, Save, Trash2, Wand2 } from 'lucide-react';
 import * as api from '../api';
 import type { TriggerProfile, TriggerRule } from '../types';
 import { Button } from '../components/ui/button';
@@ -14,8 +14,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge';
 
 const SOURCES = ['any', 'tiktok', 'donationalerts', 'simulator'];
-const KINDS = ['any', 'gift', 'like', 'comment', 'donation'];
-const ACTIONS = ['spawn_enemy', 'spawn_boss', 'heal_player', 'log_only'];
+const KINDS = ['any', 'gift', 'like', 'comment', 'donation', 'follow', 'share', 'subscribe', 'join'];
+const ACTIONS = [
+  'spawn_enemy', 'spawn_boss', 'heal_player', 'log_only',
+  // Steal the Stream whitelist (docs/roblox-integration.md §C)
+  'spawn_chaser', 'invert_controls', 'drop_floor', 'yeet', 'freeze',
+  'slow_field', 'camera_spin', 'wall_ahead', 'decoy_clones', 'shield',
+  'speed_boost', 'checkpoint', 'coin_rain', 'fireworks',
+];
 
 /** Creates a fresh editable rule row. */
 function newRule(): TriggerRule {
@@ -76,6 +82,19 @@ export default function MapperPage() {
           >
             <option value="mock-game">mock-game</option>
           </select>
+          <Button
+            size="sm"
+            variant="outline"
+            title="Загрузить пресет правил Steal the Stream (Roblox)"
+            onClick={() =>
+              api
+                .applyTriggerTemplate(slug, 'steal-the-stream')
+                .then(setProfile)
+                .catch((e) => setError(String(e)))
+            }
+          >
+            <Wand2 size={14} /> StS шаблон
+          </Button>
           <Button size="sm" variant="secondary" onClick={addRule}>
             <Plus size={14} /> Правило
           </Button>
@@ -135,15 +154,18 @@ export default function MapperPage() {
                 onChange={(e) => patchRule(r.id, { min_amount: Number(e.target.value) || 0 })}
               />
               <Badge variant="default">ТО</Badge>
-              <select
-                className="h-8 rounded-md border border-input bg-secondary/40 px-2 text-sm"
+              <Input
+                className="w-40"
+                list="action-commands"
+                placeholder="action_command"
                 value={r.action}
                 onChange={(e) => patchRule(r.id, { action: e.target.value })}
-              >
+              />
+              <datalist id="action-commands">
                 {ACTIONS.map((a) => (
-                  <option key={a}>{a}</option>
+                  <option key={a} value={a} />
                 ))}
-              </select>
+              </datalist>
               <span className="text-muted-foreground text-xs">×</span>
               <Input
                 className="w-16"
