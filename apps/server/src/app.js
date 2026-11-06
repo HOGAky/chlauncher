@@ -13,6 +13,7 @@ import { openDatabase } from './db.js';
 import { makeAuthenticate, makeRequireAdmin } from './auth.js';
 import authRoutes from './routes/auth.js';
 import accountRoutes from './routes/account.js';
+import adminRoutes from './routes/admin.js';
 import billingRoutes from './routes/billing.js';
 import gamesRoutes from './routes/games.js';
 import licenseRoutes from './routes/license.js';
@@ -34,6 +35,7 @@ export async function buildApp(opts = {}) {
   const deps = { db, authenticate, requireAdmin };
 
   app.get('/api/health', async () => ({ ok: true, ts: Date.now() }));
+  await app.register(adminRoutes, { prefix: '/api/admin', ...deps });
   await app.register(authRoutes, { prefix: '/api/auth', ...deps });
   await app.register(accountRoutes, { prefix: '/api/account', ...deps });
   await app.register(billingRoutes, { prefix: '/api/billing', ...deps });
