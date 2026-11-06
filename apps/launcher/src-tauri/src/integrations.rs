@@ -7,12 +7,13 @@
 //! edge besides the licensing API.
 //!
 //! ## TikTok
-//! Public webcast access requires TikTok's signing infrastructure which is
-//! not available offline, so the connector performs **best-effort room
-//! detection**: it polls `tiktok.com/@<user>/live` and reports
-//! Disconnected/Connecting/Live transitions. Gift/like/comment ingestion is
-//! exercised end-to-end through the built-in simulator; the seam for a real
-//! webcast client is `TikTokConnector`'s poll task.
+//! Real TikTok LIVE ingestion through a Node.js sidecar
+//! (`tools/tiktok-sidecar`) running `tiktok-live-connector` — the actively
+//! maintained unofficial webcast client, signed via EulerStream's free
+//! tier. The launcher spawns `node index.js <username>` and reads
+//! normalized NDJSON events from its stdout (gifts/likes/comments/
+//! joins/follows/shares/subs). `EULERSTREAM_API_KEY` raises signing rate
+//! limits; the free tier works without it.
 //!
 //! ## DonationAlerts
 //! Implements the community-documented Centrifugo flow:
@@ -24,6 +25,7 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
+use tokio::io::AsyncBufReadExt;
 use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
 
@@ -79,10 +81,14 @@ impl IntegrationManager {
         );
     }
 
-    /// Connects to a public TikTok Live room by username (best-effort
-    /// presence detection; see module docs for the limitation).
+    /// Connects to a public TikTok Live room by username via the
+    /// `tiktoklive` webcast client (gifts/likes/chat/joins/follows).
     pub async fn tiktok_connect(&self, username: String) -> Result<(), String> {
         self.tiktok_disconnect().await;
+        let username = username.trim().trim_start_matches('@').to_string();
+        if username.is_empty() {
+            return Err("пустой username".into());
+        }
         *self.tiktok_username.lock().await = Some(username.clone());
         self.set_status("tiktok", IntegrationStatus::Connecting).await;
 
@@ -90,66 +96,13 @@ impl IntegrationManager {
         let app = self.app.clone();
         let raw_tx = self.raw_tx.clone();
         let handle = tokio::spawn(async move {
-            let http = reqwest::Client::builder()
-                .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) chlauncher/0.1")
-                .timeout(Duration::from_secs(15))
-                .build()
-                .unwrap_or_default();
-            let url = format!("https://www.tiktok.com/@{username}/live");
-            let mut was_live = false;
-            loop {
-                match http.get(&url).send().await {
-                    Ok(res) => {
-                        let body = res.text().await.unwrap_or_default();
-                        // Heuristic markers of an active room in the live page.
-                        let live = body.contains("\"status\":2")
-                            || body.contains("roomId")
-                            || body.contains("isLiveBroadcast");
-                        let st = if live {
-                            IntegrationStatus::Live
-                        } else {
-                            IntegrationStatus::Connected
-                        };
-                        *status.lock().await = st.clone();
-                        let _ = app.emit(
-                            STATUS_EVENT,
-                            json!({"integration":"tiktok","status":st,"username":username}),
-                        );
-                        // Surface first live detection in the feed.
-                        if live && !was_live {
-                            let _ = raw_tx
-                                .send(RawStreamEvent {
-                                    source: "tiktok".into(),
-                                    event_kind: "system".into(),
-                                    user: username.clone(),
-                                    avatar_url: String::new(),
-                                    raw_name: "room_live_detected".into(),
-                                    amount: 0,
-                                })
-                                .await;
-                        }
-                        was_live = live;
-                    }
-                    Err(e) => {
-                        *status.lock().await =
-                            IntegrationStatus::Error(format!("fetch failed: {e}"));
-                        let _ = app.emit(
-                            STATUS_EVENT,
-                            json!({"integration":"tiktok",
-                                   "status":IntegrationStatus::Error(e.to_string()),
-                                   "username":username}),
-                        );
-                        break;
-                    }
-                }
-                tokio::time::sleep(Duration::from_secs(20)).await;
-            }
+            run_tiktok(username, raw_tx, status, app).await;
         });
         *self.tiktok_task.lock().await = Some(handle);
         Ok(())
     }
 
-    /// Disconnects TikTok polling.
+    /// Disconnects TikTok (kills the sidecar task).
     pub async fn tiktok_disconnect(&self) {
         if let Some(h) = self.tiktok_task.lock().await.take() {
             h.abort();
@@ -285,4 +238,202 @@ async fn run_da(
             .await;
     }
     Err("socket closed".into())
+}
+
+// ---------------------------------------------------------------------------
+// TikTok LIVE — Node sidecar running tiktok-live-connector.
+// ---------------------------------------------------------------------------
+//
+// The unofficial webcast API requires request signing, which EulerStream
+// provides (free rate-limited tier; `EULERSTREAM_API_KEY` raises limits).
+// Rather than embedding an abandoned Rust port that targets a dead sign
+// endpoint, the launcher spawns `node index.js <username>` from the
+// sidecar directory and consumes its NDJSON stdout stream.
+
+/// Locates the sidecar directory. Order: env override → alongside the exe
+/// (`resources/tiktok-sidecar`, then `tiktok-sidecar`) → the dev path
+/// (`<manifest>/../../tools/tiktok-sidecar`).
+fn sidecar_dir(app: &AppHandle) -> Option<std::path::PathBuf> {
+    let candidates: Vec<std::path::PathBuf> = {
+        let mut v = Vec::new();
+        if let Ok(p) = std::env::var("CHLAUNCHER_SIDECAR_DIR") {
+            v.push(p.into());
+        }
+        if let Ok(exe) = std::env::current_exe() {
+            if let Some(d) = exe.parent() {
+                v.push(d.join("resources").join("tiktok-sidecar"));
+                v.push(d.join("tiktok-sidecar"));
+            }
+        }
+        use tauri::Manager;
+        if let Ok(d) = app.path().app_data_dir() {
+            v.push(d.join("tiktok-sidecar"));
+        }
+        // Dev layout: <repo>/apps/launcher/src-tauri → <repo>/tools/tiktok-sidecar
+        v.push(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../../tools/tiktok-sidecar"),
+        );
+        v
+    };
+    candidates.into_iter().find(|p| p.join("index.js").is_file())
+}
+
+/// Locates a Node.js executable: `node` on PATH first, then a bundled
+/// `node.exe` inside the sidecar dir (portable distribution).
+fn node_bin(sidecar: &std::path::Path) -> Option<String> {
+    let bundled = sidecar.join("node.exe");
+    if bundled.is_file() {
+        return Some(bundled.to_string_lossy().into_owned());
+    }
+    // `Command::new("node")` resolves PATH at spawn; we just check it works
+    // implicitly — if spawn fails the caller surfaces the error.
+    Some("node".into())
+}
+
+/// Runs one TikTok sidecar session: spawn → read NDJSON lines → push
+/// events/status. Returns a human-readable error on setup/connect failure.
+async fn run_tiktok(
+    username: String,
+    raw_tx: mpsc::Sender<RawStreamEvent>,
+    status: Arc<Mutex<IntegrationStatus>>,
+    app: AppHandle,
+) {
+    let finish = |st: IntegrationStatus| {
+        let status = status.clone();
+        let app = app.clone();
+        let username = username.clone();
+        async move {
+            *status.lock().await = st.clone();
+            let _ = app.emit(
+                STATUS_EVENT,
+                json!({"integration":"tiktok","status":st,"username":username}),
+            );
+        }
+    };
+
+    let Some(dir) = sidecar_dir(&app) else {
+        finish(IntegrationStatus::Error(
+            "tiktok-sidecar не найден (ни рядом с exe, ни в tools/)".into(),
+        ))
+        .await;
+        return;
+    };
+    let Some(node) = node_bin(&dir) else {
+        finish(IntegrationStatus::Error("node.exe не найден".into())).await;
+        return;
+    };
+
+    let mut cmd = tokio::process::Command::new(node);
+    cmd.arg(dir.join("index.js"))
+        .arg(&username)
+        .current_dir(&dir)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .stdin(std::process::Stdio::null())
+        .env("EULERSTREAM_API_KEY", eulerstream_key(&app))
+        .kill_on_drop(true);
+
+    #[cfg(windows)]
+    cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW — hide console for GUI launches
+
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => {
+            finish(IntegrationStatus::Error(format!(
+                "не удалось запустить node: {e} — нужен Node.js в PATH или node.exe рядом с сайдкаром"
+            )))
+            .await;
+            return;
+        }
+    };
+    let Some(stdout) = child.stdout.take() else {
+        finish(IntegrationStatus::Error("sidecar: нет stdout".into())).await;
+        return;
+    };
+
+    let mut lines = tokio::io::BufReader::new(stdout).lines();
+    let mut last_ping = std::time::Instant::now();
+
+    // Read NDJSON until the sidecar dies or the task is aborted.
+    loop {
+        let line = match tokio::time::timeout(
+            Duration::from_secs(45),
+            lines.next_line(),
+        )
+        .await
+        {
+            Ok(Ok(Some(l))) => l,
+            Ok(Ok(None)) => break, // EOF — process exited
+            Ok(Err(e)) => {
+                finish(IntegrationStatus::Error(format!("sidecar read: {e}"))).await;
+                return;
+            }
+            Err(_) => {
+                // No output for 45s — probe aliveness.
+                if last_ping.elapsed() > Duration::from_secs(60) {
+                    let _ = child.kill().await;
+                    finish(IntegrationStatus::Error("sidecar не отвечает".into())).await;
+                    return;
+                }
+                continue;
+            }
+        };
+
+        let Ok(v) = serde_json::from_str::<Value>(&line) else { continue };
+        match v["type"].as_str().unwrap_or("") {
+            "ping" => last_ping = std::time::Instant::now(),
+            "status" => {
+                let st = match v["status"].as_str() {
+                    Some("live") => IntegrationStatus::Live,
+                    _ => IntegrationStatus::Disconnected,
+                };
+                *status.lock().await = st.clone();
+                let _ = app.emit(
+                    STATUS_EVENT,
+                    json!({"integration":"tiktok","status":st,"username":username}),
+                );
+            }
+            "event" => {
+                let ev = RawStreamEvent {
+                    source: "tiktok".into(),
+                    event_kind: v["event_kind"].as_str().unwrap_or("other").into(),
+                    user: v["user"].as_str().unwrap_or("viewer").into(),
+                    avatar_url: v["avatar_url"].as_str().unwrap_or_default().into(),
+                    raw_name: v["raw_name"].as_str().unwrap_or_default().into(),
+                    amount: v["amount"].as_i64().unwrap_or(0) as i32,
+                };
+                let _ = raw_tx.send(ev).await;
+            }
+            "error" => {
+                let msg = v["message"].as_str().unwrap_or("sidecar error");
+                finish(IntegrationStatus::Error(msg.into())).await;
+                let _ = child.kill().await;
+                return;
+            }
+            _ => {}
+        }
+    }
+
+    let _ = child.kill().await;
+    finish(IntegrationStatus::Disconnected).await;
+}
+
+/// EulerStream signing key: `EULERSTREAM_API_KEY` env var first, then an
+/// `eulerstream.key` file in the app-data dir (GUI apps rarely inherit env).
+/// Empty string = anonymous free tier of the public sign endpoint.
+fn eulerstream_key(app: &AppHandle) -> String {
+    if let Ok(k) = std::env::var("EULERSTREAM_API_KEY") {
+        let k = k.trim().to_string();
+        if !k.is_empty() {
+            return k;
+        }
+    }
+    use tauri::Manager;
+    app.path()
+        .app_data_dir()
+        .ok()
+        .and_then(|d| std::fs::read_to_string(d.join("eulerstream.key")).ok())
+        .map(|k| k.trim().to_string())
+        .unwrap_or_default()
 }
