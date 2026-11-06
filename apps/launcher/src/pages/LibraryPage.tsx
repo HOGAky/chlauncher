@@ -38,8 +38,13 @@ export default function LibraryPage() {
   useEffect(() => {
     refresh();
     let un: (() => void) | undefined;
+    let un2: (() => void) | undefined;
     api.onGameExited(() => refresh()).then((u) => (un = u));
-    return () => un?.();
+    api.onCatalogChanged(() => refresh()).then((u) => (un2 = u));
+    return () => {
+      un?.();
+      un2?.();
+    };
   }, [refresh]);
 
   /** Wraps an action with per-game busy state + error surfacing. */

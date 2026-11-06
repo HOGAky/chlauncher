@@ -162,6 +162,17 @@ pub fn run() {
             commands::set_forward_config,
             commands::regenerate_stream_key,
             commands::get_forward_status,
+            commands::admin_list_games,
+            commands::admin_create_game,
+            commands::admin_update_game,
+            commands::admin_upload_build,
+            commands::admin_publish,
+            commands::admin_unpublish,
+            commands::admin_rollback,
+            commands::admin_list_users,
+            commands::admin_grant_days,
+            commands::admin_reset_hwid,
+            commands::admin_audit,
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

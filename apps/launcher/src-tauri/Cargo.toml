@@ -41,3 +41,5 @@ thiserror = "2"
 sha2 = "0.10"
 # Catalog-vs-installed version comparison for the update badge.
 semver = "1"
+# Chunked request bodies for streaming admin build uploads.
+bytes = "1"
