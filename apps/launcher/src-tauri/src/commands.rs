@@ -39,6 +39,8 @@ pub struct AppState {
     /// Slug whose trigger profile currently maps events (last played/selected).
     /// Shared with the mapper forwarder task.
     pub active_game_slug: Arc<Mutex<Option<String>>>,
+    /// Last seen slug→version snapshot for catalog-change detection (§6.3).
+    pub catalog_seen: Arc<Mutex<Option<std::collections::BTreeMap<String, String>>>>,
 }
 
 /// One row of the library view: catalog + local + runtime merged.
@@ -88,6 +90,7 @@ pub async fn get_bootstrap(state: State<'_, AppState>) -> Result<Value, String> 
     Ok(json!({
         "authed": authed,
         "email": settings.email,
+        "role": settings.role,
         "hwid": state.hwid,
         "subscription": subscription,
         "streamer_mode": settings.streamer_mode,
@@ -124,6 +127,7 @@ pub async fn register_account(
         let mut s = state.settings.lock().await;
         s.data.auth_token = Some(res.token.clone());
         s.data.email = Some(res.user.email.clone());
+        s.data.role = res.user.role.clone();
         let _ = s.save();
     }
     Ok(json!({"user": res.user, "subscription": res.subscription}))
@@ -145,6 +149,7 @@ pub async fn login(
         let mut s = state.settings.lock().await;
         s.data.auth_token = Some(res.token.clone());
         s.data.email = Some(res.user.email.clone());
+        s.data.role = res.user.role.clone();
         let _ = s.save();
     }
     Ok(json!({"user": res.user, "subscription": res.subscription}))
@@ -156,6 +161,7 @@ pub async fn logout(state: State<'_, AppState>) -> Result<(), String> {
     let mut s = state.settings.lock().await;
     s.data.auth_token = None;
     s.data.email = None;
+    s.data.role = None;
     let _ = s.save();
     Ok(())
 }
@@ -213,7 +219,9 @@ pub async fn list_games(state: State<'_, AppState>) -> Result<Value, String> {
     let mut entries = Vec::new();
     for g in catalog {
         let inst = installed.get(&g.slug);
-        let update_available = inst.map(|i| i.version != g.version).unwrap_or(false);
+        let update_available = inst
+            .map(|i| semver_gt(&g.version, &i.version))
+            .unwrap_or(false);
         entries.push(LibraryEntry {
             connected_clients: state.game_server.client_count(&g.slug).await,
             running: running.contains(&g.slug),
@@ -229,9 +237,22 @@ pub async fn list_games(state: State<'_, AppState>) -> Result<Value, String> {
     Ok(json!({"games": entries}))
 }
 
+/// Whether catalog version `a` is strictly newer than installed `b`
+/// (semver when parseable; falls back to plain inequality for odd tags).
+fn semver_gt(a: &str, b: &str) -> bool {
+    match (semver::Version::parse(a), semver::Version::parse(b)) {
+        (Ok(va), Ok(vb)) => va > vb,
+        _ => a != b,
+    }
+}
+
 /// Downloads + extracts a game (subscription-gated server-side).
 #[tauri::command]
 pub async fn download_game(slug: String, state: State<'_, AppState>) -> Result<Value, String> {
+    if state.processes.running_slugs().contains(&slug) {
+        // A running game holds file locks — the UI must stop it first.
+        return Err("GAME_RUNNING".to_string());
+    }
     let token = token(&state).await?;
     let catalog = state.api.games(&token).await.map_err(|e| e.to_string())?;
     let game = catalog
@@ -244,6 +265,7 @@ pub async fn download_game(slug: String, state: State<'_, AppState>) -> Result<V
         &game.slug,
         &game.version,
         &game.executable_name,
+        game.sha256.as_deref(),
         &state.data_dir,
     )
     .await

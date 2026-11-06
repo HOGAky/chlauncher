@@ -53,6 +53,10 @@ pub struct AuthUser {
     pub id: i64,
     pub email: String,
     pub hwid: Option<String>,
+    /// 'user' | 'admin' — drives the admin tab in the UI; the server never
+    /// trusts it for authorization (DB-checked per request).
+    #[serde(default)]
+    pub role: Option<String>,
 }
 
 /// Response of `/api/auth/{register,login}`.
@@ -216,15 +220,17 @@ impl ApiClient {
         serde_json::from_value(v["games"].clone()).map_err(|_| ApiError::Malformed)
     }
 
-    /// Downloads a game zip to `dest`. The caller must have checked the
-    /// subscription server-side (the endpoint enforces it anyway).
+    /// Downloads a game zip to `dest`, streaming chunks while computing the
+    /// SHA-256 of what actually arrived. Returns the hex digest — the caller
+    /// compares it against the catalog `sha256` before extracting (spec §6.1).
     pub async fn download_game_zip(
         &self,
         token: &str,
         slug: &str,
         dest: &std::path::Path,
-    ) -> Result<(), ApiError> {
-        let res = self
+    ) -> Result<String, ApiError> {
+        use sha2::{Digest, Sha256};
+        let mut res = self
             .http
             .get(format!("{}/api/games/{}/download", self.base(), slug))
             .bearer_auth(token)
@@ -239,10 +245,19 @@ impl ApiClient {
                 "DOWNLOAD_FAILED".into(),
             ));
         }
-        let bytes = res.bytes().await?;
-        std::fs::write(dest, &bytes).map_err(|e| {
-            ApiError::Server(500, format!("WRITE_FAILED: {e}"))
-        })?;
-        Ok(())
+        let mut out = std::fs::File::create(dest)
+            .map_err(|e| ApiError::Server(500, format!("WRITE_FAILED: {e}")))?;
+        let mut hasher = Sha256::new();
+        use std::io::Write;
+        while let Some(chunk) = res.chunk().await? {
+            out.write_all(&chunk)
+                .map_err(|e| ApiError::Server(500, format!("WRITE_FAILED: {e}")))?;
+            hasher.update(&chunk);
+        }
+        Ok(hasher
+            .finalize()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect())
     }
 }

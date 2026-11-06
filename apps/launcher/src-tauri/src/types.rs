@@ -79,6 +79,13 @@ pub struct CatalogGame {
     pub version: String,
     pub executable_name: String,
     pub cover_image: String,
+    /// SHA-256 of the published build — verified after download (spec §6.1).
+    #[serde(default)]
+    pub sha256: Option<String>,
+    #[serde(default)]
+    pub size_bytes: Option<i64>,
+    #[serde(default)]
+    pub changelog: Option<String>,
 }
 
 /// Locally installed game state.
@@ -87,6 +94,9 @@ pub struct InstalledGame {
     pub version: String,
     pub install_dir: String,
     pub exe_path: String,
+    /// SHA-256 the install was verified against (absent for pre-v2 installs).
+    #[serde(default)]
+    pub sha256: Option<String>,
 }
 
 /// Subscription view returned by the backend.

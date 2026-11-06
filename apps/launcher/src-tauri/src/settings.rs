@@ -21,6 +21,9 @@ pub struct Settings {
     pub auth_token: Option<String>,
     /// Account email (for the dashboard; masked in streamer mode).
     pub email: Option<String>,
+    /// 'user' | 'admin' — drives the admin tab; the server never trusts it.
+    #[serde(default)]
+    pub role: Option<String>,
     /// TikTok username the streamer connects to.
     pub tiktok_username: Option<String>,
     /// DonationAlerts access token pasted by the streamer.

@@ -49,40 +49,88 @@ pub fn all_installed(data_dir: &Path) -> Vec<(String, InstalledGame)> {
     out
 }
 
-/// Downloads and installs a game.
+/// Downloads and installs a game (spec §6.1: verified + atomic).
 ///
-/// 1. Streams the zip to `<dir>/pkg.zip`
-/// 2. Extracts into `<dir>/`
-/// 3. Writes `installed.json` with version + resolved exe path
+/// 1. Streams the zip to `games/.dl-<slug>.zip`, computing SHA-256 on the
+///    fly — a digest that differs from the catalog's `sha256` aborts with
+///    `HASH_MISMATCH` and deletes the file (integrity gate: without HTTPS
+///    this is what stops a tampered build from reaching disk).
+/// 2. Extracts into a fresh `games/<slug>.staging-<ver>/` directory.
+/// 3. Swaps atomically: current `<slug>/` → `.old`, staging → `<slug>/`,
+///    then deletes `.old`. Any failure before the swap leaves the previous
+///    working install untouched.
+/// 4. Writes `installed.json` (version, exe path, verified sha256).
 pub async fn download_and_install(
     api: &ApiClient,
     token: &str,
     slug: &str,
     version: &str,
     executable_name: &str,
+    expected_sha256: Option<&str>,
     data_dir: &Path,
 ) -> Result<InstalledGame, ApiError> {
-    let dir = game_dir(data_dir, slug);
-    fs::create_dir_all(&dir)
+    let root = games_root(data_dir);
+    fs::create_dir_all(&root)
         .map_err(|e| ApiError::Server(500, format!("MKDIR_FAILED: {e}")))?;
 
-    let zip_path = dir.join("pkg.zip");
-    api.download_game_zip(token, slug, &zip_path).await?;
+    let zip_path = root.join(format!(".dl-{slug}.zip"));
+    let sha = match api.download_game_zip(token, slug, &zip_path).await {
+        Ok(sha) => sha,
+        Err(e) => {
+            let _ = fs::remove_file(&zip_path);
+            return Err(e);
+        }
+    };
+    if let Some(expected) = expected_sha256 {
+        if !expected.is_empty() && !sha.eq_ignore_ascii_case(expected) {
+            let _ = fs::remove_file(&zip_path);
+            return Err(ApiError::Server(
+                422,
+                format!("HASH_MISMATCH: expected {expected}, got {sha}"),
+            ));
+        }
+    }
 
-    // zip extraction is blocking + CPU-bound → offload the thread pool.
-    let dir_c = dir.clone();
-    tokio::task::spawn_blocking(move || extract_zip(&zip_path, &dir_c))
-        .await
-        .map_err(|e| ApiError::Server(500, format!("JOIN_FAILED: {e}")))?
-        .map_err(|e| ApiError::Server(500, format!("UNZIP_FAILED: {e}")))?;
+    // Extract into a staging dir next to the target so the swap is a rename.
+    let dir = game_dir(data_dir, slug);
+    let staging = root.join(format!("{slug}.staging-{version}"));
+    let _ = fs::remove_dir_all(&staging);
+    let zip_c = zip_path.clone();
+    let staging_c = staging.clone();
+    let extract = tokio::task::spawn_blocking(move || {
+        fs::create_dir_all(&staging_c)?;
+        extract_zip(&zip_c, &staging_c)
+    })
+    .await
+    .map_err(|e| ApiError::Server(500, format!("JOIN_FAILED: {e}")))?;
+    let _ = fs::remove_file(&zip_path);
+    if let Err(e) = extract {
+        let _ = fs::remove_dir_all(&staging);
+        return Err(ApiError::Server(500, format!("UNZIP_FAILED: {e}")));
+    }
 
-    let _ = fs::remove_file(dir.join("pkg.zip"));
+    // Atomic swap: current → .old, staging → live. Failure mid-swap is
+    // recovered by trying to move .old back into place.
+    let old = root.join(format!("{slug}.old"));
+    let _ = fs::remove_dir_all(&old);
+    if dir.exists() {
+        fs::rename(&dir, &old)
+            .map_err(|e| ApiError::Server(500, format!("SWAP_FAILED: {e}")))?;
+    }
+    if let Err(e) = fs::rename(&staging, &dir) {
+        if old.exists() {
+            let _ = fs::rename(&old, &dir); // best-effort rollback
+        }
+        return Err(ApiError::Server(500, format!("SWAP_FAILED: {e}")));
+    }
+    let _ = fs::remove_dir_all(&old);
 
     let exe_path = dir.join(executable_name);
     let info = InstalledGame {
         version: version.to_string(),
         install_dir: dir.to_string_lossy().to_string(),
         exe_path: exe_path.to_string_lossy().to_string(),
+        sha256: Some(sha),
     };
     fs::write(marker_path(&dir), serde_json::to_string_pretty(&info).unwrap())
         .map_err(|e| ApiError::Server(500, format!("MARKER_FAILED: {e}")))?;
