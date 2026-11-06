@@ -97,4 +97,5 @@ export interface Bootstrap {
   running: string[];
   overlay_url: string;
   game_ws_port: number;
+  server_url: string;
 }

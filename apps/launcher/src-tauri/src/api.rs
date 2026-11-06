@@ -13,9 +13,17 @@ use thiserror::Error;
 
 use crate::types::{CatalogGame, Subscription};
 
-/// Default base URL; override via `VITE_API_URL` at build/dev time.
-fn base_url() -> String {
-    env::var("VITE_API_URL").unwrap_or_else(|_| "http://127.0.0.1:8787".to_string())
+/// Fallback base URL used when neither settings nor `VITE_API_URL` apply.
+pub const DEFAULT_BASE_URL: &str = "http://127.0.0.1:8787";
+
+/// Resolves the backend base URL: user-set `settings.server_url` first,
+/// then the `VITE_API_URL` env override, then the loopback default.
+pub fn resolve_base_url(server_url: Option<&str>) -> String {
+    server_url
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| s.to_string())
+        .or_else(|| env::var("VITE_API_URL").ok())
+        .unwrap_or_else(|| DEFAULT_BASE_URL.to_string())
 }
 
 /// Errors the UI can surface directly.
@@ -30,11 +38,13 @@ pub enum ApiError {
     Malformed,
 }
 
-/// Thin authenticated HTTP client.
+/// Thin authenticated HTTP client. The base URL is behind a shared
+/// `RwLock` so `set_server_url` can retarget it live (e.g. when the
+/// streamer points the launcher at a remote backend) without restarting.
 #[derive(Clone)]
 pub struct ApiClient {
     http: Client,
-    base: String,
+    base: std::sync::Arc<std::sync::RwLock<String>>,
 }
 
 /// The `user` object inside auth responses.
@@ -60,10 +70,23 @@ pub struct VerifyResponse {
 }
 
 impl ApiClient {
-    pub fn new() -> Self {
+    /// Creates a client bound to `base` (see [`resolve_base_url`]).
+    pub fn new(base: String) -> Self {
         Self {
             http: Client::new(),
-            base: base_url(),
+            base: std::sync::Arc::new(std::sync::RwLock::new(base)),
+        }
+    }
+
+    /// Current backend base URL (for the settings UI).
+    pub fn base(&self) -> String {
+        self.base.read().map(|b| b.clone()).unwrap_or_default()
+    }
+
+    /// Retargets all subsequent requests to `base`.
+    pub fn set_base(&self, base: String) {
+        if let Ok(mut b) = self.base.write() {
+            *b = base;
         }
     }
 
@@ -75,7 +98,9 @@ impl ApiClient {
         token: Option<&str>,
         body: Option<Value>,
     ) -> Result<T, ApiError> {
-        let mut r = self.http.request(method, format!("{}{}", self.base, path));
+        let mut r = self
+            .http
+            .request(method, format!("{}{}", self.base(), path));
         if let Some(t) = token {
             r = r.bearer_auth(t);
         }
@@ -201,7 +226,7 @@ impl ApiClient {
     ) -> Result<(), ApiError> {
         let res = self
             .http
-            .get(format!("{}/api/games/{}/download", self.base, slug))
+            .get(format!("{}/api/games/{}/download", self.base(), slug))
             .bearer_auth(token)
             .send()
             .await?;

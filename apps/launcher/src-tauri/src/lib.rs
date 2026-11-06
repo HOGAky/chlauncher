@@ -88,7 +88,13 @@ pub fn run() {
             let state = AppState {
                 data_dir: data_dir.clone(),
                 settings: settings.clone(),
-                api: api::ApiClient::new(),
+                api: api::ApiClient::new(api::resolve_base_url(
+                    settings
+                        .try_lock()
+                        .ok()
+                        .and_then(|s| s.data.server_url.clone())
+                        .as_deref(),
+                )),
                 hwid: hwid::hardware_id(),
                 hub: hub.clone(),
                 game_server: game_server.clone(),
@@ -138,6 +144,8 @@ pub fn run() {
             commands::set_streamer_mode,
             commands::set_chroma_key,
             commands::get_hwid,
+            commands::get_server_url,
+            commands::set_server_url,
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

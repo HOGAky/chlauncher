@@ -15,6 +15,8 @@ use crate::types::{TriggerProfile, WindowOptions};
 /// Everything the launcher persists between restarts.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Settings {
+    /// Backend base URL set from the auth screen (empty → env/default).
+    pub server_url: Option<String>,
     /// JWT from the licensing server.
     pub auth_token: Option<String>,
     /// Account email (for the dashboard; masked in streamer mode).
