@@ -1,29 +1,60 @@
 /**
  * @file routes/games.js
- * Game catalog endpoints.
+ * Public game catalog endpoints (spec §4).
  *
- *  - GET  /api/games                  — list catalog (auth required)
- *  - GET  /api/games/:slug/download   — stream the packaged zip to an
- *    authenticated subscriber. Downloads are gated by an active
+ *  - GET  /api/games                  — published games only, joined with
+ *    their published build (version, sha256, size, changelog come from the
+ *    immutable build row, not the mutable game row).
+ *  - GET  /api/games/:slug/download   — streams the published build's zip
+ *    to an authenticated subscriber. Downloads are gated by an active
  *    subscription so builds never leak to expired accounts.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { listGames, findGameBySlug } from '../db.js';
 import { hasActiveSubscription } from '../subscriptions.js';
 import { config } from '../config.js';
 
 /** Fields exposed to clients (internal file_name is intentionally hidden). */
-function gameView(g) {
+function gameView(row) {
   return {
-    slug: g.slug,
-    title: g.title,
-    description: g.description,
-    version: g.version,
-    executable_name: g.executable_name,
-    cover_image: g.cover_image,
+    slug: row.slug,
+    title: row.title,
+    description: row.description,
+    version: row.version,
+    sha256: row.sha256,
+    size_bytes: row.size_bytes,
+    executable_name: row.executable_name,
+    cover_image: row.cover_image,
+    changelog: row.changelog,
   };
+}
+
+/** Published games joined with their published build rows. */
+function listPublished(db) {
+  return db
+    .prepare(
+      `SELECT g.slug, g.title, g.description, g.executable_name, g.cover_image,
+              b.version, b.sha256, b.size_bytes, b.changelog
+       FROM games g
+       JOIN game_builds b ON b.id = g.published_build_id
+       WHERE g.status = 'published'
+       ORDER BY g.id`
+    )
+    .all();
+}
+
+/** One published game + its published build, or undefined. */
+function findPublished(db, slug) {
+  return db
+    .prepare(
+      `SELECT g.slug, g.title, g.description, g.executable_name, g.cover_image,
+              b.version, b.sha256, b.size_bytes, b.changelog, b.file_name
+       FROM games g
+       JOIN game_builds b ON b.id = g.published_build_id
+       WHERE g.slug = ? AND g.status = 'published'`
+    )
+    .get(slug);
 }
 
 /**
@@ -33,19 +64,19 @@ function gameView(g) {
 export default async function gamesRoutes(app, { db, authenticate }) {
   app.addHook('preHandler', authenticate);
 
-  /** GET /api/games — full catalog. */
-  app.get('/', async () => ({ games: listGames(db).map(gameView) }));
+  /** GET /api/games — published catalog. */
+  app.get('/', async () => ({ games: listPublished(db).map(gameView) }));
 
   /**
-   * GET /api/games/:slug/download — streams the zip artifact.
+   * GET /api/games/:slug/download — streams the published build's zip.
    * 403 SUBSCRIPTION_REQUIRED when the period has lapsed;
-   * 404 when the catalog entry or its file is missing.
+   * 404 when the game isn't published or its file is missing.
    */
   app.get('/:slug/download', async (request, reply) => {
     if (!hasActiveSubscription(db, request.auth.userId)) {
       return reply.code(403).send({ error: 'SUBSCRIPTION_REQUIRED' });
     }
-    const game = findGameBySlug(db, request.params.slug);
+    const game = findPublished(db, request.params.slug);
     if (!game) return reply.code(404).send({ error: 'GAME_NOT_FOUND' });
 
     const filePath = path.join(config.staticDir, 'games', game.file_name);
@@ -56,7 +87,7 @@ export default async function gamesRoutes(app, { db, authenticate }) {
     reply.header('Content-Type', 'application/zip');
     reply.header(
       'Content-Disposition',
-      `attachment; filename="${game.file_name}"`
+      `attachment; filename="${game.slug}-${game.version}.zip"`
     );
     return reply.send(fs.createReadStream(filePath));
   });
