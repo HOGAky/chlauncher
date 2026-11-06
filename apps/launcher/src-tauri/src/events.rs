@@ -139,6 +139,53 @@ impl TriggerMapper {
             ],
         }
     }
+
+    /// Named presets a streamer can apply in one click. `"steal-the-stream"`
+    /// covers the whitelist from `docs/roblox-integration.md` §C /
+    /// `DESIGN.md` §5.7 in the Roblox project.
+    pub fn template_profile(game_slug: &str, name: &str) -> Option<TriggerProfile> {
+        let mk = |source: &str, kind: &str, match_value: &str, min: i32, action: &str| {
+            TriggerRule {
+                id: uuid::Uuid::new_v4().to_string(),
+                source: source.into(),
+                event_kind: kind.into(),
+                match_value: match_value.into(),
+                min_amount: min,
+                action: action.into(),
+                multiplier: 1.0,
+            }
+        };
+        let rules = match name {
+            "steal-the-stream" => vec![
+                // Sabotage tier — the expensive gifts do the mean things.
+                mk("tiktok", "gift", "Drama", 0, "drop_floor"),
+                mk("tiktok", "gift", "Whale", 0, "yeet"),
+                mk("tiktok", "gift", "Lion", 0, "spawn_chaser"),
+                mk("tiktok", "gift", "Galaxy", 0, "invert_controls"),
+                mk("tiktok", "gift", "Rocket", 0, "camera_spin"),
+                // Mid tier.
+                mk("tiktok", "gift", "Rose", 0, "coin_rain"),
+                mk("tiktok", "gift", "", 500, "slow_field"),
+                mk("tiktok", "gift", "", 0, "fireworks"),
+                // Free interactions.
+                mk("tiktok", "like", "", 100, "speed_boost"),
+                mk("tiktok", "follow", "", 0, "fireworks"),
+                mk("tiktok", "share", "", 0, "shield"),
+                mk("tiktok", "subscribe", "", 0, "checkpoint"),
+                mk("tiktok", "comment", "!chase", 0, "spawn_chaser"),
+                mk("tiktok", "comment", "!freeze", 0, "freeze"),
+                mk("tiktok", "comment", "!wall", 0, "wall_ahead"),
+                mk("tiktok", "comment", "!clones", 0, "decoy_clones"),
+                mk("donationalerts", "donation", "", 10000, "yeet"),
+                mk("any", "any", "", 0, "log_only"),
+            ],
+            _ => return None,
+        };
+        Some(TriggerProfile {
+            game_slug: game_slug.into(),
+            rules,
+        })
+    }
 }
 
 /// Serializable notification pushed to the React frontend for its live

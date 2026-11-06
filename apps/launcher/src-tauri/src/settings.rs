@@ -31,6 +31,24 @@ pub struct Settings {
     pub window_options: WindowOptions,
     /// Trigger profiles keyed by game slug.
     pub trigger_profiles: HashMap<String, TriggerProfile>,
+    /// Roblox/cloud relay: forward mapped StreamEvents over HTTP.
+    #[serde(default)]
+    pub forward: ForwardSettings,
+}
+
+/// HTTP-forward configuration for cloud games (Roblox relay).
+/// The relay is a standalone service (see `docs/roblox-integration.md`);
+/// the launcher only POSTs to it.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ForwardSettings {
+    /// Master switch for `POST {forward_url}/api/stream/ingest`.
+    pub enabled: bool,
+    /// Relay base URL, e.g. `https://relay.example.com`.
+    pub forward_url: Option<String>,
+    /// Streamer key — ingest auth + Roblox room pass (generated in the UI).
+    pub stream_key: Option<String>,
+    /// Admin secret for `POST /api/admin/register` key renewals.
+    pub relay_admin_secret: Option<String>,
 }
 
 /// File-backed settings store.

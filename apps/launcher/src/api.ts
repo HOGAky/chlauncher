@@ -8,6 +8,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
   Bootstrap,
+  ForwardStatus,
   LibraryEntry,
   RawStreamEvent,
   StreamEvent,
@@ -92,6 +93,10 @@ export const getTriggers = (gameSlug: string) =>
 export const saveTriggers = (profile: TriggerProfile) =>
   cmd<void>('save_triggers', { profile });
 
+/** Applies a named preset (e.g. 'steal-the-stream') to a game's profile. */
+export const applyTriggerTemplate = (gameSlug: string, template: string) =>
+  cmd<TriggerProfile>('apply_trigger_template', { gameSlug, template });
+
 /** Injects a raw event into the mapping pipeline (simulator). */
 export const simulateEvent = (raw: RawStreamEvent) => cmd<void>('simulate_event', { raw });
 
@@ -112,6 +117,26 @@ export const getServerUrl = () => cmd<string>('get_server_url');
 
 /** Points the launcher at another backend (persisted). */
 export const setServerUrl = (url: string) => cmd<void>('set_server_url', { url });
+
+// ---- cloud forward (Roblox relay) -------------------------------------------
+
+/** Saves forward config; enabling also registers the key on the relay. */
+export const setForwardConfig = (
+  enabled: boolean,
+  forwardUrl: string,
+  relayAdminSecret: string
+) =>
+  cmd<void>('set_forward_config', {
+    enabled,
+    forwardUrl,
+    relayAdminSecret,
+  });
+
+/** Rotates the stream key (re-registers when forwarding is on). */
+export const regenerateStreamKey = () => cmd<string>('regenerate_stream_key');
+
+/** Forwarder counters for the UI. */
+export const getForwardStatus = () => cmd<ForwardStatus>('get_forward_status');
 
 // ---- events ----------------------------------------------------------------
 

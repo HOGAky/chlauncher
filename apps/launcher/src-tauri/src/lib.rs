@@ -20,6 +20,7 @@ pub mod api;
 pub mod commands;
 pub mod downloads;
 pub mod events;
+pub mod forwarder;
 pub mod game_ws;
 pub mod hwid;
 pub mod integrations;
@@ -85,21 +86,28 @@ pub fn run() {
             // One shared cell: `play_game` writes it, the mapper reads it.
             let active_game_slug = Arc::new(Mutex::new(None));
 
+            let api = api::ApiClient::new(api::resolve_base_url(
+                settings
+                    .try_lock()
+                    .ok()
+                    .and_then(|s| s.data.server_url.clone())
+                    .as_deref(),
+            ));
+
+            // Third EventHub consumer: HTTP-forward to the cloud relay
+            // (Roblox-side games poll the relay; see docs/roblox-integration.md).
+            let forwarder = forwarder::Forwarder::start(&hub, settings.clone(), api.clone());
+
             let state = AppState {
                 data_dir: data_dir.clone(),
                 settings: settings.clone(),
-                api: api::ApiClient::new(api::resolve_base_url(
-                    settings
-                        .try_lock()
-                        .ok()
-                        .and_then(|s| s.data.server_url.clone())
-                        .as_deref(),
-                )),
+                api,
                 hwid: hwid::hardware_id(),
                 hub: hub.clone(),
                 game_server: game_server.clone(),
                 processes: process::ProcessManager::new(),
                 integrations: integrations.clone(),
+                forwarder: forwarder.clone(),
                 raw_tx,
                 active_game_slug: active_game_slug.clone(),
             };
@@ -139,6 +147,7 @@ pub fn run() {
             commands::da_disconnect,
             commands::get_triggers,
             commands::save_triggers,
+            commands::apply_trigger_template,
             commands::simulate_event,
             commands::get_event_feed,
             commands::set_streamer_mode,
@@ -146,6 +155,9 @@ pub fn run() {
             commands::get_hwid,
             commands::get_server_url,
             commands::set_server_url,
+            commands::set_forward_config,
+            commands::regenerate_stream_key,
+            commands::get_forward_status,
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

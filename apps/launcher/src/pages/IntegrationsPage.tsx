@@ -5,13 +5,14 @@
  * URL for TikTok Live Studio.
  */
 import React, { useEffect, useState } from 'react';
-import { Radio, Copy, Wallet } from 'lucide-react';
+import { Radio, Copy, Wallet, Cloud, RefreshCw } from 'lucide-react';
 import * as api from '../api';
 import { useApp } from '../App';
 import { maskSecret } from '../lib/utils';
-import type { IntegrationStatus } from '../types';
+import type { ForwardStatus, IntegrationStatus } from '../types';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { Switch } from '../components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 
@@ -32,6 +33,38 @@ export default function IntegrationsPage() {
   const [daToken, setDaToken] = useState('');
   const [statuses, setStatuses] = useState(boot?.integrations);
   const [copied, setCopied] = useState(false);
+
+  // Roblox cloud-relay forward
+  const fwd = boot?.forward;
+  const [fwdEnabled, setFwdEnabled] = useState(fwd?.enabled ?? false);
+  const [fwdUrl, setFwdUrl] = useState(fwd?.forward_url ?? '');
+  const [fwdSecret, setFwdSecret] = useState('');
+  const [streamKey, setStreamKey] = useState(fwd?.stream_key ?? '');
+  const [fwdStatus, setFwdStatus] = useState<ForwardStatus | null>(fwd?.status ?? null);
+  const [fwdErr, setFwdErr] = useState('');
+  const [keyCopied, setKeyCopied] = useState(false);
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      api.getForwardStatus().then(setFwdStatus).catch(() => {});
+    }, 5000);
+    return () => clearInterval(t);
+  }, []);
+
+  const saveForward = (enabled: boolean) => {
+    setFwdErr('');
+    api
+      .setForwardConfig(enabled, fwdUrl.trim(), fwdSecret)
+      .then(() => setFwdEnabled(enabled))
+      .catch((e) => setFwdErr(String(e)));
+  };
+
+  const copyKey = () => {
+    navigator.clipboard.writeText(streamKey).then(() => {
+      setKeyCopied(true);
+      setTimeout(() => setKeyCopied(false), 1500);
+    });
+  };
 
   useEffect(() => {
     let un: (() => void) | undefined;
@@ -146,6 +179,75 @@ export default function IntegrationsPage() {
               Токен скрыт в режиме стримера: {maskSecret('x')}
             </p>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Roblox / cloud relay forward */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Cloud size={18} /> Roblox (облачный релей)
+            </CardTitle>
+            {fwdStatus?.last_error ? (
+              <Badge variant="destructive">{fwdStatus.last_error}</Badge>
+            ) : fwdEnabled ? (
+              <Badge variant="success">Форвард включён</Badge>
+            ) : (
+              <Badge variant="outline">Выключено</Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-xs text-muted-foreground">
+            События уходят HTTP-POST'ом на облачный релей — Roblox-игра забирает
+            их поллингом. Ключ стримера = пропуск в руму (вводится в игре).
+          </p>
+          <div className="flex gap-2 items-center">
+            <code className="flex-1 text-xs bg-secondary/60 rounded-md px-3 py-2 select-all truncate">
+              {streamerMode ? maskSecret(streamKey || '…') : streamKey || 'ключ не создан'}
+            </code>
+            <Button variant="outline" size="sm" onClick={copyKey} disabled={!streamKey}>
+              <Copy size={14} /> {keyCopied ? 'OK' : 'Копия'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => api.regenerateStreamKey().then(setStreamKey).catch(() => {})}
+            >
+              <RefreshCw size={14} /> Новый
+            </Button>
+          </div>
+          <Input
+            placeholder="URL релея, напр. https://relay.example.com"
+            value={fwdUrl}
+            onChange={(e) => setFwdUrl(e.target.value)}
+          />
+          <Input
+            type={streamerMode ? 'password' : 'text'}
+            placeholder={fwd?.has_admin_secret ? 'Admin-секрет (уже сохранён)' : 'Admin-секрет релея'}
+            value={fwdSecret}
+            onChange={(e) => setFwdSecret(e.target.value)}
+          />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Switch checked={fwdEnabled} onCheckedChange={saveForward} />
+              <span className="text-xs text-muted-foreground">
+                Форвардить события + продлевать ключ
+              </span>
+            </div>
+            {fwdStatus && (
+              <span className="text-[11px] text-muted-foreground">
+                доставлено {fwdStatus.delivered} · потеряно {fwdStatus.dropped}
+              </span>
+            )}
+          </div>
+          {fwdStatus?.registered_until && (
+            <p className="text-[11px] text-muted-foreground">
+              Ключ зарегистрирован до {new Date(fwdStatus.registered_until).toLocaleString()}
+            </p>
+          )}
+          {fwdErr && <p className="text-[11px] text-destructive">{fwdErr}</p>}
         </CardContent>
       </Card>
 
