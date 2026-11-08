@@ -68,6 +68,18 @@ export default function App() {
     return () => unlisten?.();
   }, []);
 
+  // Deep-link billing return: `chlauncher://billing/return` after the hosted
+  // checkout → refresh the subscription (webhook may lag a few seconds, so
+  // the Subscription page also has a manual "check" button).
+  useEffect(() => {
+    let un: (() => void) | undefined;
+    api.getColdBillingReturn().then((hit) => {
+      if (hit) void refreshSubscription();
+    });
+    api.onBillingReturn(() => refreshSubscription()).then((u) => (un = u));
+    return () => un?.();
+  }, [refreshSubscription]);
+
   /** Called after successful login/register. */
   const setSession = useCallback((email: string, sub: Subscription | null) => {
     setAuthed(true);

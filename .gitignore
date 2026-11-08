@@ -12,6 +12,7 @@
 
 # ---- Node ----
 node_modules/
+tools/tiktok-sidecar/node.exe
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

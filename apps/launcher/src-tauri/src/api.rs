@@ -17,11 +17,15 @@ use crate::types::{CatalogGame, Subscription};
 pub const DEFAULT_BASE_URL: &str = "http://127.0.0.1:8787";
 
 /// Resolves the backend base URL: user-set `settings.server_url` first,
-/// then the `VITE_API_URL` env override, then the loopback default.
+/// then `VITE_API_URL` — baked at COMPILE time via `option_env!` (the
+/// production build ships with `VITE_API_URL=https://api.<domain>` set in
+/// the build shell), then a runtime env override for dev shells, then the
+/// loopback default.
 pub fn resolve_base_url(server_url: Option<&str>) -> String {
     server_url
         .filter(|s| !s.trim().is_empty())
         .map(|s| s.to_string())
+        .or_else(|| option_env!("VITE_API_URL").map(String::from))
         .or_else(|| env::var("VITE_API_URL").ok())
         .unwrap_or_else(|| DEFAULT_BASE_URL.to_string())
 }
@@ -168,6 +172,19 @@ impl ApiClient {
             )
             .await?;
         serde_json::from_value(v["subscription"].clone()).map_err(|_| ApiError::Malformed)
+    }
+
+    /// `POST /api/billing/checkout` — creates a pending payment and returns
+    /// the provider's hosted checkout URL (501 PROVIDER_NOT_CONFIGURED
+    /// until YOOKASSA_* is set on the server).
+    pub async fn checkout(&self, token: &str) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::POST,
+            "/api/billing/checkout",
+            Some(token),
+            Some(json!({})),
+        )
+        .await
     }
 
     /// `POST /api/billing/mock-pay` — TEST endpoint, grants 30 days.

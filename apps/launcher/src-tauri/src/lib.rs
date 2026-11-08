@@ -45,6 +45,11 @@ use types::RawStreamEvent;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // `chlauncher://` deep links (billing return_url after checkout)
+        // and opening external URLs (the hosted checkout page) in the
+        // system browser.
+        .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             // --- filesystem roots -------------------------------------
             let data_dir = app
@@ -139,6 +144,7 @@ pub fn run() {
             commands::login,
             commands::logout,
             commands::get_subscription,
+            commands::billing_checkout,
             commands::mock_pay,
             commands::mock_expire,
             commands::list_games,

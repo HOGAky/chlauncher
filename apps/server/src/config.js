@@ -65,3 +65,11 @@ if (config.jwtSecret === 'dev-only-insecure-secret-change-me') {
     '[config] WARNING: using the built-in development JWT secret. Set JWT_SECRET before deploying.'
   );
 }
+
+if (config.enableMockBilling) {
+  console.warn(
+    '[config] WARNING: mock billing endpoints are ENABLED — mock-pay grants free ' +
+      'subscriptions to any account. Deploy with NODE_ENV=production (and without ' +
+      'ENABLE_MOCK_BILLING) to disable them.'
+  );
+}

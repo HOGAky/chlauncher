@@ -180,6 +180,18 @@ pub async fn get_subscription(state: State<'_, AppState>) -> Result<Subscription
         .map_err(|e| e.to_string())
 }
 
+/// `POST /api/billing/checkout` → `{payment_id, checkout_url}` for the UI
+/// to open in the system browser. The YooKassa webhook extends the
+/// subscription; the UI refreshes on the `chlauncher://` deep-link return.
+#[tauri::command]
+pub async fn billing_checkout(state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .checkout(&token(&state).await?)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// TEST billing: grants/extends a 30-day period.
 #[tauri::command]
 pub async fn mock_pay(state: State<'_, AppState>) -> Result<Subscription, String> {

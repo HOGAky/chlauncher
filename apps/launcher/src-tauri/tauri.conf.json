@@ -24,9 +24,19 @@
       "csp": null
     }
   },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["chlauncher"]
+      }
+    }
+  },
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "resources": {
+      "../../../tools/tiktok-sidecar": "tiktok-sidecar"
+    },
     "windows": {
       "webviewInstallMode": {
         "type": "embedBootstrapper",

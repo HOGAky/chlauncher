@@ -36,6 +36,10 @@ machine-uid = "0.5"
 uuid = { version = "1", features = ["v4"] }
 dirs = "6"
 thiserror = "2"
+# `chlauncher://` scheme registration — the billing return URL lands here.
+tauri-plugin-deep-link = "2"
+# Opens the hosted checkout page in the user's system browser.
+tauri-plugin-opener = "2"
 # Download integrity: incremental SHA-256 of fetched game zips (already in
 # the dep tree transitively — pinned as a direct dep).
 sha2 = "0.10"
