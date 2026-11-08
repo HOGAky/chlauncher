@@ -7,8 +7,10 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import * as api from './api';
 import type { Bootstrap, StreamEvent, Subscription } from './types';
+import { humanError, parseError } from './errorMessages';
 import AuthScreen from './screens/AuthScreen';
 import MainScreen from './screens/MainScreen';
+import { Button } from './components/ui/button';
 
 /** Shape of the global app context. */
 interface AppCtx {
@@ -20,6 +22,9 @@ interface AppCtx {
   subscription: Subscription | null;
   overlayUrl: string;
   feed: StreamEvent[];
+  /** True while the backend is unreachable (banner in the main UI). */
+  offline: boolean;
+  clearFeed: () => void;
   refreshSubscription: () => Promise<void>;
   setStreamerMode: (v: boolean) => void;
   setSession: (email: string, sub: Subscription | null) => void;
@@ -30,8 +35,12 @@ const Ctx = createContext<AppCtx>(null!);
 /** Hook to consume the global context. */
 export const useApp = () => useContext(Ctx);
 
+/** Max stream events kept in memory (feed is additionally capped on render). */
+const FEED_CAP = 100;
+
 export default function App() {
   const [boot, setBoot] = useState<Bootstrap | null>(null);
+  const [bootError, setBootError] = useState<string | null>(null);
   const [authed, setAuthed] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
   const [hwid, setHwid] = useState('');
@@ -39,34 +48,57 @@ export default function App() {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [overlayUrl, setOverlayUrl] = useState('');
   const [feed, setFeed] = useState<StreamEvent[]>([]);
+  const [offline, setOffline] = useState(false);
 
   /** Re-reads the subscription from the backend. */
   const refreshSubscription = useCallback(async () => {
     try {
       setSubscription(await api.getSubscription());
-    } catch {
-      /* surfaced by callers where needed */
+      setOffline(false);
+    } catch (e) {
+      if (parseError(e).code === 'NETWORK_ERROR') setOffline(true);
+      /* other codes are surfaced by callers where needed */
     }
   }, []);
 
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    api
+  /** (Re)fetches the startup snapshot; errors get a retry screen. */
+  const loadBoot = useCallback(() => {
+    setBootError(null);
+    return api
       .getBootstrap()
       .then((b) => {
         setBoot(b);
         setAuthed(b.authed);
         setEmail(b.email);
-        setHwid(b.hwid);
+        setHwid(b.hwid ?? '');
         setStreamerModeState(b.streamer_mode);
         setSubscription(b.subscription);
-        setOverlayUrl(b.overlay_url);
-        return api.getEventFeed().then(setFeed);
+        setOverlayUrl(b.overlay_url ?? '');
+        return api.getEventFeed().then((evs) =>
+          setFeed(evs.map((e, i) => ({ ...e, fid: `s${i}` })))
+        );
       })
-      .catch((e) => console.error('bootstrap failed', e));
-    api.onStreamEvent((ev) => setFeed((f) => [...f.slice(-99), ev])).then((u) => (unlisten = u));
-    return () => unlisten?.();
+      .catch((e) => setBootError(humanError(e, { withRequestId: true })));
   }, []);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let seq = 0;
+    void loadBoot();
+    api
+      .onStreamEvent((ev) =>
+        setFeed((f) => [...f.slice(-(FEED_CAP - 1)), { ...ev, fid: `e${seq++}` }])
+      )
+      .then((u) => (unlisten = u));
+    return () => unlisten?.();
+  }, [loadBoot]);
+
+  // Periodic connectivity probe — drives the "Нет соединения" banner.
+  useEffect(() => {
+    if (!authed) return;
+    const id = setInterval(refreshSubscription, 30_000);
+    return () => clearInterval(id);
+  }, [authed, refreshSubscription]);
 
   // Deep-link billing return: `chlauncher://billing/return` after the hosted
   // checkout → refresh the subscription (webhook may lag a few seconds, so
@@ -85,6 +117,7 @@ export default function App() {
     setAuthed(true);
     setEmail(email);
     setSubscription(sub);
+    setOffline(false);
   }, []);
 
   /** Logs out and clears local session state. */
@@ -101,6 +134,9 @@ export default function App() {
     api.setStreamerMode(v).catch(() => {});
   }, []);
 
+  /** Empties the stream-event feed (render cap stays at 50). */
+  const clearFeed = useCallback(() => setFeed([]), []);
+
   const value: AppCtx = {
     boot,
     authed,
@@ -110,16 +146,32 @@ export default function App() {
     subscription,
     overlayUrl,
     feed,
+    offline,
+    clearFeed,
     refreshSubscription,
     setStreamerMode,
     setSession,
     clearSession,
   };
 
+  // Bootstrap failed → offer retry instead of a dead loading spinner.
+  if (!boot && bootError) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center gap-3 text-center">
+        <div className="text-sm text-red-400">{bootError}</div>
+        <Button variant="outline" size="sm" onClick={() => void loadBoot()}>
+          Повторить
+        </Button>
+      </div>
+    );
+  }
+
+  // Initial load — lightweight skeleton instead of a blank flash.
   if (!boot) {
     return (
-      <div className="h-full flex items-center justify-center text-muted-foreground">
-        Загрузка…
+      <div className="h-full flex flex-col items-center justify-center gap-3">
+        <div className="h-10 w-10 animate-pulse rounded-xl bg-muted" />
+        <div className="h-3 w-24 animate-pulse rounded bg-muted" />
       </div>
     );
   }

@@ -18,6 +18,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { config } from './config.js';
+import { hwidHash } from './hwid.js';
 
 /** Current UTC time as an ISO-8601 string. */
 export function nowIso() {
@@ -136,6 +137,29 @@ const MIGRATIONS = [
     `);
     migrateExistingGames(db);
   },
+  // v2 → v3: session invalidation (token_version), device-events journal,
+  // and HMAC'd HWIDs — plaintext hwid values are re-hashed in place.
+  (db) => {
+    db.exec(`
+      ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0;
+
+      CREATE TABLE device_events (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id    INTEGER REFERENCES users(id),
+        event_type TEXT NOT NULL,
+        hwid_hash  TEXT,
+        ip_hash    TEXT,
+        created_at TEXT NOT NULL
+      );
+    `);
+    // Existing plaintext bindings become HMAC hashes. Same column — the
+    // value was always opaque to the server, so callers just compare equal.
+    const rows = db
+      .prepare('SELECT id, hwid FROM users WHERE hwid IS NOT NULL')
+      .all();
+    const upd = db.prepare('UPDATE users SET hwid = ? WHERE id = ?');
+    for (const r of rows) upd.run(hwidHash(r.hwid), r.id);
+  },
 ];
 
 /** Runs all pending migrations in order. Idempotent via user_version. */
@@ -242,6 +266,30 @@ export function markHwidReset(db, userId) {
     nowIso(),
     userId
   );
+}
+
+/**
+ * Appends to the device-events journal (Task 5): bound / login_denied /
+ * reset / reset_requested with HMAC'd hwid+ip — never raw values.
+ */
+export function recordDeviceEvent(
+  db,
+  userId,
+  eventType,
+  hwidHashVal = null,
+  ipHashVal = null
+) {
+  db.prepare(
+    `INSERT INTO device_events (user_id, event_type, hwid_hash, ip_hash, created_at)
+     VALUES (?, ?, ?, ?, ?)`
+  ).run(userId, eventType, hwidHashVal, ipHashVal, nowIso());
+}
+
+/** Bumps token_version — invalidates every JWT issued so far (logout). */
+export function bumpTokenVersion(db, userId) {
+  db.prepare(
+    'UPDATE users SET token_version = token_version + 1 WHERE id = ?'
+  ).run(userId);
 }
 
 /** Fetches the subscription row for a user. @returns {object|undefined} */

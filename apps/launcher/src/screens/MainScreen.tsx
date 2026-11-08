@@ -26,13 +26,18 @@ const NAV: { id: Page; label: string; icon: React.ReactNode }[] = [
 ];
 
 export default function MainScreen() {
-  const { boot } = useApp();
+  const { boot, offline } = useApp();
   const isAdmin = boot?.role === 'admin';
   const [page, setPage] = useState<Page>('library');
 
   return (
     <div className="h-full flex flex-col">
       <Header />
+      {offline && (
+        <div className="shrink-0 bg-amber-500/15 text-amber-300 border-b border-amber-500/30 px-4 py-1.5 text-xs">
+          Нет соединения с сервером — библиотека и настройки доступны, онлайн-функции отложены.
+        </div>
+      )}
       <div className="flex-1 flex min-h-0">
         <nav className="w-52 shrink-0 border-r border-border bg-card/40 p-3 flex flex-col gap-1">
           {NAV.map((n) => (

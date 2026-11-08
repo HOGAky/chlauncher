@@ -11,6 +11,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 
+import { humanError } from '../errorMessages';
 export default function SubscriptionPage() {
   const { subscription, refreshSubscription } = useApp();
   const [busy, setBusy] = useState(false);
@@ -25,7 +26,7 @@ export default function SubscriptionPage() {
       await fn();
       await refreshSubscription();
     } catch (e) {
-      setError(String(e));
+      setError(humanError(e));
     } finally {
       setBusy(false);
     }

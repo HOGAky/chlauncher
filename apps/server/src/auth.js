@@ -51,7 +51,14 @@ export function verifyPassword(password, stored) {
  */
 export function signToken(user) {
   return jwt.sign(
-    { sub: user.id, email: user.email, role: user.role || 'user' },
+    {
+      sub: user.id,
+      email: user.email,
+      role: user.role || 'user',
+      // Session generation — bumped by logout/reset; a stale JWT whose tv
+      // no longer matches users.token_version is rejected (Task 5).
+      tv: user.token_version || 0,
+    },
     config.jwtSecret,
     { expiresIn: TOKEN_TTL }
   );
@@ -61,19 +68,29 @@ export function signToken(user) {
  * Fastify preHandler factory: verifies `Authorization: Bearer <jwt>` and
  * attaches `{ userId, email }` to `request.auth`. Responds 401 on failure.
  */
-export function makeAuthenticate() {
+export function makeAuthenticate(db) {
+  const tvQuery = db.prepare('SELECT token_version FROM users WHERE id = ?');
   return async function authenticate(request, reply) {
     const header = request.headers.authorization || '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : null;
     if (!token) {
       return reply.code(401).send({ error: 'UNAUTHORIZED' });
     }
+    let payload;
     try {
-      const payload = jwt.verify(token, config.jwtSecret);
-      request.auth = { userId: payload.sub, email: payload.email };
-    } catch {
-      return reply.code(401).send({ error: 'UNAUTHORIZED' });
+      payload = jwt.verify(token, config.jwtSecret);
+    } catch (err) {
+      const expired = err && err.name === 'TokenExpiredError';
+      return reply
+        .code(401)
+        .send({ error: expired ? 'SESSION_EXPIRED' : 'UNAUTHORIZED' });
     }
+    // Session invalidation: a JWT signed before logout carries an old tv.
+    const row = tvQuery.get(payload.sub);
+    if (!row || (payload.tv || 0) !== row.token_version) {
+      return reply.code(401).send({ error: 'SESSION_EXPIRED' });
+    }
+    request.auth = { userId: payload.sub, email: payload.email };
   };
 }
 
@@ -84,7 +101,7 @@ export function makeAuthenticate() {
  * @param {import('node:sqlite').DatabaseSync} db
  */
 export function makeRequireAdmin(db) {
-  const authenticate = makeAuthenticate();
+  const authenticate = makeAuthenticate(db);
   const roleQuery = db.prepare('SELECT role FROM users WHERE id = ?');
   return async function requireAdmin(request, reply) {
     await authenticate(request, reply);

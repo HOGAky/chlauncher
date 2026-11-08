@@ -122,11 +122,7 @@ pub struct Forwarder {
 
 impl Forwarder {
     /// Spawns the ingest consumer and the key-renewal loop.
-    pub fn start(
-        hub: &EventHub,
-        settings: Arc<Mutex<SettingsStore>>,
-        api: ApiClient,
-    ) -> Arc<Self> {
+    pub fn start(hub: &EventHub, settings: Arc<Mutex<SettingsStore>>, api: ApiClient) -> Arc<Self> {
         let (register_tx, register_rx) = mpsc::channel::<()>(4);
         let status = Arc::new(Mutex::new(ForwardStatus::default()));
 
@@ -170,9 +166,7 @@ impl Forwarder {
         {
             let settings = settings.clone();
             let status = status.clone();
-            tauri::async_runtime::spawn(Self::renew_loop(
-                register_rx, settings, api, status,
-            ));
+            tauri::async_runtime::spawn(Self::renew_loop(register_rx, settings, api, status));
         }
 
         Arc::new(Self {
@@ -298,9 +292,7 @@ impl Forwarder {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs() as i64;
-        let secs = (sub.days_left.max(0) * 86400)
-            .min(VALID_WINDOW_SECS)
-            .max(3600);
+        let secs = (sub.days_left.max(0) * 86400).clamp(3600, VALID_WINDOW_SECS);
         let valid_until = rfc3339_utc(now + secs);
 
         let http = reqwest::Client::builder()
@@ -308,10 +300,7 @@ impl Forwarder {
             .build()
             .unwrap_or_default();
         let res = http
-            .post(format!(
-                "{}/api/admin/register",
-                url.trim_end_matches('/')
-            ))
+            .post(format!("{}/api/admin/register", url.trim_end_matches('/')))
             .header("X-Admin-Secret", secret)
             .json(&json!({
                 "stream_key": key,

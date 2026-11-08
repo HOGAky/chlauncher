@@ -9,7 +9,10 @@
 
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import crypto from 'node:crypto';
 import { openDatabase } from './db.js';
+import { config } from './config.js';
+import { registerErrorContract } from './errors.js';
 import { makeAuthenticate, makeRequireAdmin } from './auth.js';
 import authRoutes from './routes/auth.js';
 import accountRoutes from './routes/account.js';
@@ -26,14 +29,35 @@ import licenseRoutes from './routes/license.js';
  */
 export async function buildApp(opts = {}) {
   const db = openDatabase(opts.databasePath || ':memory:');
-  // trustProxy: behind Cloudflare (tunnel or orange-cloud proxy) the real
-  // client IP arrives via X-Forwarded-For / CF-Connecting-IP — needed for
-  // correct rate-limiting and the YooKassa webhook subnet check.
-  const app = Fastify({ logger: opts.logger ?? false, trustProxy: true });
+  // trustProxy only when explicitly enabled — behind Cloudflare/proxy the
+  // real client IP arrives via X-Forwarded-For / CF-Connecting-IP (needed
+  // for correct rate-limiting and the YooKassa webhook subnet check).
+  const app = Fastify({
+    logger: opts.logger ?? false,
+    trustProxy: opts.trustProxy ?? config.trustProxy,
+    // Correlation id per request — echoed back as `x-request-id` for
+    // support tickets ("Код обращения").
+    genReqId: () => crypto.randomUUID(),
+    requestIdHeader: 'x-request-id',
+  });
 
-  await app.register(cors, { origin: true });
+  registerErrorContract(app);
 
-  const authenticate = makeAuthenticate();
+  // CORS whitelist: only the origins in config.corsOrigins get
+  // Access-Control-Allow-Origin; anything else is answered without CORS
+  // headers (non-browser clients like the launcher don't need them).
+  const allowed = opts.corsOrigins ?? config.corsOrigins;
+  const allowedSet = new Set(allowed);
+  await app.register(cors, {
+    origin: (origin, cb) => {
+      // No Origin header → non-browser client → allow (CORS is a browser
+      // construct; withholding headers here would break nothing anyway).
+      if (!origin) return cb(null, true);
+      cb(null, allowedSet.has(origin));
+    },
+  });
+
+  const authenticate = makeAuthenticate(db);
   const requireAdmin = makeRequireAdmin(db);
   const deps = { db, authenticate, requireAdmin };
 

@@ -170,6 +170,9 @@ export const regenerateStreamKey = () => cmd<string>('regenerate_stream_key');
 /** Forwarder counters for the UI. */
 export const getForwardStatus = () => cmd<ForwardStatus>('get_forward_status');
 
+/** Sanitized diagnostics report text (no secrets) — for bug reports. */
+export const getDiagnostics = () => cmd<string>('get_diagnostics');
+
 // ---- events ----------------------------------------------------------------
 
 /** Subscribes to mapped stream events pushed to the UI feed. */

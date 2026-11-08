@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '../compone
 import { Badge } from '../components/ui/badge';
 import { Switch } from '../components/ui/switch';
 
+import { humanError } from '../errorMessages';
 const RESOLUTIONS: { label: string; w: number; h: number }[] = [
   { label: '9:16 · 540×960', w: 540, h: 960 },
   { label: '9:16 · 1080×1920', w: 1080, h: 1920 },
@@ -32,7 +33,7 @@ export default function LibraryPage() {
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
-    api.listGames().then((r) => setGames(r.games)).catch((e) => setError(String(e)));
+    api.listGames().then((r) => setGames(r.games)).catch((e) => setError(humanError(e)));
   }, []);
 
   useEffect(() => {
@@ -54,7 +55,7 @@ export default function LibraryPage() {
     try {
       await fn();
     } catch (e) {
-      setError(`${slug}: ${String(e)}`);
+      setError(`${slug}: ${humanError(e)}`);
     } finally {
       setBusy((b) => ({ ...b, [slug]: '' }));
       refresh();
@@ -175,7 +176,11 @@ export default function LibraryPage() {
                       <Button
                         size="sm"
                         variant="destructive"
-                        onClick={act(g.slug, 'kill', () => api.killGame(g.slug))}
+                        onClick={() => {
+                          if (window.confirm(`Закрыть «${g.title}»? Сначала будет отправлен graceful shutdown.`)) {
+                            void act(g.slug, 'kill', () => api.killGame(g.slug))();
+                          }
+                        }}
                       >
                         <Square size={14} /> Закрыть
                       </Button>

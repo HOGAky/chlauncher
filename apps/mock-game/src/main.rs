@@ -230,13 +230,11 @@ impl eframe::App for GameApp {
         self.spawns.retain(|s| s.born.elapsed() < SPAWN_TTL);
 
         egui::CentralPanel::default()
-            .frame(
-                egui::Frame::NONE.fill(if self.chroma_key {
-                    egui::Color32::from_rgb(0, 255, 0) // #00FF00 chroma key
-                } else {
-                    egui::Color32::from_rgb(14, 16, 22)
-                }),
-            )
+            .frame(egui::Frame::NONE.fill(if self.chroma_key {
+                egui::Color32::from_rgb(0, 255, 0) // #00FF00 chroma key
+            } else {
+                egui::Color32::from_rgb(14, 16, 22)
+            }))
             .show(ctx, |ui| {
                 let rect = ui.max_rect();
 
@@ -272,7 +270,8 @@ impl eframe::App for GameApp {
                         radius,
                         egui::Stroke::new(4.0_f32, col(color)),
                     );
-                    ui.painter().circle_filled(center, radius * 0.25, col(color));
+                    ui.painter()
+                        .circle_filled(center, radius * 0.25, col(color));
                     ui.painter().text(
                         center + egui::vec2(0.0, -radius - 14.0),
                         egui::Align2::CENTER_CENTER,

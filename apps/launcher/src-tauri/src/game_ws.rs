@@ -1,9 +1,9 @@
-//! Local WebSocket server for games — `ws://127.0.0.1:9876`.
+//! Local WebSocket server for games — `ws://127.0.0.1:<dynamic port>`.
 //!
 //! This is the runtime half of the DRM scheme:
 //!
 //! 1. At "Play" the launcher mints a one-time session token and starts the
-//!    game process with `--port 9876 --token <t>`.
+//!    game process with `--port <p>` in argv + `{token,port}` on stdin.
 //! 2. The game (via `tiktok-game-sdk`) connects and sends
 //!    `{type:"hello", token, protocol}`; the token is consumed on use so it
 //!    can't be replayed by a second process.
@@ -28,8 +28,6 @@ use tokio_tungstenite::WebSocketStream;
 use crate::events::EventHub;
 use crate::types::StreamEvent;
 
-/// Public port the games dial — keep in sync with SDK docs & overlay port.
-pub const GAME_WS_PORT: u16 = 9876;
 /// Heartbeat cadence — well under the SDK's 150 s watchdog.
 const HEARTBEAT_EVERY: Duration = Duration::from_secs(30);
 /// How long to wait for the `hello` frame before dropping the socket.
@@ -71,6 +69,13 @@ pub struct GameServer {
     tokens: Mutex<HashMap<String, String>>,
     /// Connected games: slug → (client_id → control channel).
     clients: Mutex<HashMap<String, HashMap<u64, mpsc::Sender<Control>>>>,
+    /// Notified (with the slug) every time a handshake completes — lets
+    /// `play_game` bound the launch wait to 15 s.
+    handshake_tx: broadcast::Sender<String>,
+    /// Actual OS-assigned loopback port.
+    port: u16,
+    /// The bound listener, moved into `run_accept_loop` on start.
+    listener: Mutex<Option<std::net::TcpListener>>,
     hub: Arc<EventHub>,
 }
 
@@ -85,27 +90,80 @@ async fn send_frame(tx: &mut WsSink, frame: &ServerFrame<'_>) {
 }
 
 impl GameServer {
-    /// Creates the server handle (synchronous — Tauri `setup` is sync).
-    /// Afterwards call [`run_accept_loop`](Self::run_accept_loop) inside a
-    /// spawned task to actually bind the port.
-    pub fn new(hub: Arc<EventHub>) -> Arc<Self> {
+    /// Binds `127.0.0.1:0` synchronously — the OS assigns a free port.
+    /// Fails fast (returns Err) if the loopback listener can't be opened,
+    /// so setup can surface "local service unavailable" instead of a
+    /// silent dead launcher.
+    pub fn bind(hub: Arc<EventHub>) -> std::io::Result<Arc<Self>> {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+        listener.set_nonblocking(true)?;
+        let port = listener.local_addr()?.port();
+        tracing::info!(port, "game-ws bound on 127.0.0.1");
+        let (handshake_tx, _) = broadcast::channel(64);
+        Ok(Arc::new(Self {
+            tokens: Mutex::new(HashMap::new()),
+            clients: Mutex::new(HashMap::new()),
+            handshake_tx,
+            port,
+            listener: Mutex::new(Some(listener)),
+            hub,
+        }))
+    }
+
+    /// The OS-assigned port games should dial.
+    pub fn port(&self) -> u16 {
+        self.port
+    }
+
+    /// Unbound placeholder — lets `AppState` exist when the listener bind
+    /// failed so the UI can still boot and show the service error.
+    /// `port()` returns 0; no game can ever connect.
+    pub fn bind_placeholder(hub: Arc<EventHub>) -> Arc<Self> {
+        let (handshake_tx, _) = broadcast::channel(64);
         Arc::new(Self {
             tokens: Mutex::new(HashMap::new()),
             clients: Mutex::new(HashMap::new()),
+            handshake_tx,
+            port: 0,
+            listener: Mutex::new(None),
             hub,
         })
     }
 
-    /// Binds `127.0.0.1:9876` and accepts connections forever.
+    /// `true` when the slug's WS handshake completes before `timeout`;
+    /// `false` on timeout — used by `play_game` for the 15 s launch gate.
+    pub async fn wait_for_handshake(&self, slug: &str, timeout: Duration) -> bool {
+        // Handshake may have already landed — check connected clients first.
+        if self.client_count(slug).await > 0 {
+            return true;
+        }
+        let mut rx = self.handshake_tx.subscribe();
+        let res = tokio::time::timeout(timeout, async {
+            loop {
+                match rx.recv().await {
+                    Ok(s) if s == slug => return,
+                    Ok(_) => continue,
+                    Err(_) => return,
+                }
+            }
+        })
+        .await;
+        res.is_ok()
+    }
+
+    /// Accepts connections forever on the pre-bound listener.
     /// Intended to be awaited inside `tauri::async_runtime::spawn`.
     pub async fn run_accept_loop(self: &Arc<Self>) -> std::io::Result<()> {
-        let listener = TcpListener::bind(("127.0.0.1", GAME_WS_PORT)).await?;
-        eprintln!("[game-ws] listening on 127.0.0.1:{GAME_WS_PORT}");
+        let std_listener = self.listener.lock().await.take();
+        let Some(std_listener) = std_listener else {
+            return Err(std::io::Error::other("accept loop already running"));
+        };
+        let listener = TcpListener::from_std(std_listener)?;
         while let Ok((socket, addr)) = listener.accept().await {
             let srv = self.clone();
             tokio::spawn(async move {
                 if let Err(e) = srv.handle_conn(socket, addr).await {
-                    eprintln!("[game-ws] {addr}: {e}");
+                    tracing::warn!(addr = %addr, error = %e, "game-ws connection error");
                 }
             });
         }
@@ -164,22 +222,32 @@ impl GameServer {
 
         // --- handshake: first frame must be hello{token} within 5 s ---
         let token = match tokio::time::timeout(HELLO_TIMEOUT, ws_rx.next()).await {
-            Ok(Some(Ok(Message::Text(text)))) => {
-                match serde_json::from_str::<ClientFrame>(&text) {
-                    Ok(ClientFrame::Hello { token }) => token,
-                    _ => {
-                        send_frame(&mut ws_tx, &ServerFrame::Error { reason: "bad hello" }).await;
-                        return Err("malformed hello".into());
-                    }
+            Ok(Some(Ok(Message::Text(text)))) => match serde_json::from_str::<ClientFrame>(&text) {
+                Ok(ClientFrame::Hello { token }) => token,
+                _ => {
+                    send_frame(
+                        &mut ws_tx,
+                        &ServerFrame::Error {
+                            reason: "bad hello",
+                        },
+                    )
+                    .await;
+                    return Err("malformed hello".into());
                 }
-            }
+            },
             _ => return Err("hello timeout".into()),
         };
 
         // Consume the one-time token — replay is impossible afterwards.
         let slug = self.tokens.lock().await.remove(&token);
         let Some(slug) = slug else {
-            send_frame(&mut ws_tx, &ServerFrame::Error { reason: "invalid token" }).await;
+            send_frame(
+                &mut ws_tx,
+                &ServerFrame::Error {
+                    reason: "invalid token",
+                },
+            )
+            .await;
             return Err("invalid token".into());
         };
 
@@ -194,6 +262,9 @@ impl GameServer {
             .entry(slug.clone())
             .or_default()
             .insert(client_id, ctl_tx);
+
+        // Handshake done — releases play_game's 15 s launch gate.
+        let _ = self.handshake_tx.send(slug.clone());
 
         let mut events = self.hub.tx.subscribe();
         let mut hb = interval(HEARTBEAT_EVERY);

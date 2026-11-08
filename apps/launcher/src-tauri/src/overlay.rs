@@ -1,9 +1,11 @@
-//! Browser overlay server — `http://127.0.0.1:9877`.
+//! Browser overlay server — `http://127.0.0.1:<dynamic port>`.
 //!
-//! TikTok Live Studio (or OBS) consumes `http://127.0.0.1:9877/overlay` as a
-//! Browser Source. The page connects to `ws://127.0.0.1:9877/ws`, receives a
-//! snapshot of recent events + top supporters, then live `StreamEvent`s as
-//! they are dispatched through the launcher's [`EventHub`].
+//! TikTok Live Studio (or OBS) consumes `/overlay` as a Browser Source.
+//! The page connects back over `ws://<host>/ws` (port taken from
+//! `location`), receives a snapshot of recent events + top supporters,
+//! then live `StreamEvent`s as they are dispatched through the launcher's
+//! [`EventHub`]. Binds `127.0.0.1:0` — loopback only, OS-assigned port,
+//! no collisions between launcher instances.
 //!
 //! The page is embedded as a constant so the server has zero file deps.
 
@@ -22,10 +24,10 @@ use tokio::sync::broadcast;
 use crate::events::EventHub;
 use crate::types::StreamEvent;
 
-/// Port the overlay is served on.
-pub const OVERLAY_PORT: u16 = 9877;
-/// Public URL to paste into TikTok Live Studio's Browser Source.
-pub const OVERLAY_URL: &str = "http://127.0.0.1:9877/overlay";
+/// URL the Browser Source should consume, given the bound port.
+pub fn overlay_url(port: u16) -> String {
+    format!("http://127.0.0.1:{port}/overlay")
+}
 
 /// JSON payload types sent to overlay clients.
 #[derive(Serialize)]
@@ -40,9 +42,10 @@ enum OverlayFrame<'a> {
     Event { event: &'a StreamEvent },
 }
 
-/// Starts the overlay server; call once during app setup.
-/// Binds 127.0.0.1:9877 and serves `/overlay` (HTML) + `/ws` (WebSocket).
-pub async fn start_overlay_server(hub: Arc<EventHub>) -> std::io::Result<()> {
+/// Starts the overlay server on `127.0.0.1:0` (OS-assigned loopback port)
+/// and returns the actual port so bootstrap can hand the real URL to the
+/// UI. Fails fast with an io error when the listener can't be opened.
+pub async fn start_overlay_server(hub: Arc<EventHub>) -> std::io::Result<u16> {
     let app = Router::new()
         .route("/overlay", get(|| async { Html(OVERLAY_HTML) }))
         .route("/health", get(|| async { "ok" }))
@@ -54,13 +57,15 @@ pub async fn start_overlay_server(hub: Arc<EventHub>) -> std::io::Result<()> {
             }),
         );
 
-    let listener = TcpListener::bind(("127.0.0.1", OVERLAY_PORT)).await?;
+    let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
+    let port = listener.local_addr()?.port();
+    tracing::info!(port, "overlay listening on 127.0.0.1");
     tokio::spawn(async move {
         if let Err(e) = axum::serve(listener, app).await {
-            eprintln!("[overlay] server stopped: {e}");
+            tracing::error!(error = %e, "overlay server stopped");
         }
     });
-    Ok(())
+    Ok(port)
 }
 
 /// One overlay socket: snapshot first, then forward broadcast events.
@@ -203,7 +208,7 @@ function onEvent(ev) {
 }
 
 function connect() {
-  const ws = new WebSocket(`ws://${location.hostname}:9877/ws`);
+  const ws = new WebSocket(`ws://${location.host}/ws`);
   ws.onmessage = (m) => {
     try {
       const msg = JSON.parse(m.data);

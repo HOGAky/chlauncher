@@ -78,7 +78,7 @@ powershell Compress-Archive -Force -Path target/release/mock-game.exe `
 ## Testing
 
 ```bash
-npm run test:server                      # backend: 12 e2e tests (auth, HWID, billing)
+npm run test:server                      # backend e2e tests (auth, HWID, billing, admin, prod-safety)
 cargo test -p tiktok-game-sdk            # SDK protocol tests (4)
 
 # full system e2e — needs server + vite + launcher running with
@@ -90,6 +90,63 @@ The e2e driver performs the complete streamer flow: register → play
 blocked → mock-pay (+30d) → download game → launch (real WS handshake) →
 simulator events mapped to game commands → force-kill → mock-expire →
 play blocked again.
+
+## Production readiness
+
+The server **refuses to start** in production on insecure settings
+(`apps/server/src/config.js::validateProductionConfig`).
+
+Required env vars for `NODE_ENV=production` (see [`.env.example`](.env.example)):
+
+| Variable | Why | Required |
+|---|---|---|
+| `NODE_ENV=production` | enables strict startup checks | yes |
+| `JWT_SECRET` | signs JWTs; `openssl rand -hex 64` | yes |
+| `HWID_HASH_SECRET` | HMAC for stored HWIDs/IPs; `openssl rand -hex 32` | yes |
+| `CORS_ORIGINS` | comma-separated browser origin whitelist; **only** these get CORS headers | yes, if browsers connect |
+| `TRUST_PROXY=true` | only behind a reverse proxy / Cloudflare (client-IP for rate limits + webhook checks) | no |
+| `SERVER_HOST` / `SERVER_PORT` | bind address; `0.0.0.0` only when intentionally public | no (default `127.0.0.1:8787`) |
+| `DATABASE_PATH` | SQLite file location | no |
+| `ENABLE_MOCK_BILLING` | **forbidden** in production — startup fails | never set to `1` |
+| `ADMIN_EMAILS` | **ignored** in production — grant roles via `node tools/grant-admin.mjs <email>` | never |
+| `YOOKASSA_*` / `STRIPE_WEBHOOK_SECRET` | real billing webhooks | when billing is live |
+| `VITE_API_URL` | launcher → backend base URL | launcher build |
+
+Production checks the startup validator enforces:
+
+- `JWT_SECRET` missing or the dev sentinel → **refuse to boot**
+- `HWID_HASH_SECRET` missing → **refuse to boot**
+- `ENABLE_MOCK_BILLING=1` → **refuse to boot**
+- `ADMIN_EMAILS` set → warning + ignored (no auto-admin promotion)
+
+### Verification commands
+
+```bash
+npm run test:server                          # server suite (uses test/test.env)
+npm run build --workspace @chlauncher/launcher   # TS + Vite frontend build
+node --test apps/launcher/src/errorMessages.test.ts  # error-contract unit tests
+cargo test -p tiktok-game-sdk                # SDK protocol tests
+cargo test -p mock-game                      # mock game unit tests
+cargo check --manifest-path apps/launcher/src-tauri/Cargo.toml
+cargo check -p tiktok-game-sdk && cargo check -p mock-game
+cargo clippy --workspace --all-targets -- -D warnings
+```
+
+### Logs & diagnostics
+
+- Launcher logs: `%APPDATA%/com.chlauncher.app/logs/chlauncher.log`
+  (size-rotated, 5 × 5 MB; `RUST_LOG=debug` for verbose).
+- In-app: Header → clipboard icon copies a secrets-free diagnostics report
+  (version, OS, ports, service errors, last 50 redacted log lines).
+- Server: Fastify structured logs carry `x-request-id`; clients show it as
+  «Код обращения» in error messages — quote it in bug reports.
+- Logs never contain tokens, passwords, HWIDs, stream keys or cookies.
+
+### Secrets policy
+
+`.env`, `*.key`, `*.pem`, `data/*.db*`, and game zips are git-ignored.
+Never commit them; rotate `JWT_SECRET`/`HWID_HASH_SECRET` on any leak
+(rotating the HWID secret re-binds all devices).
 
 ## Where the real keys go
 

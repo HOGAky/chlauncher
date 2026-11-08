@@ -21,6 +21,7 @@ import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
 import { cn } from '../lib/utils';
 
+import { humanError } from '../errorMessages';
 type Tab = 'games' | 'users' | 'audit';
 const fmtSize = (n: number) => `${(n / 1024 / 1024).toFixed(1)} МБ`;
 
@@ -62,7 +63,7 @@ function GamesTab() {
   const [nc, setNc] = useState({ slug: '', title: '', description: '', executable_name: '' });
 
   const refresh = useCallback(() => {
-    api.adminListGames().then((r) => setGames(r.games)).catch((e) => setError(String(e)));
+    api.adminListGames().then((r) => setGames(r.games)).catch((e) => setError(humanError(e)));
   }, []);
   useEffect(refresh, [refresh]);
 
@@ -71,7 +72,7 @@ function GamesTab() {
     try {
       await fn();
     } catch (e) {
-      setError(String(e));
+      setError(humanError(e));
     } finally {
       refresh();
     }
@@ -162,11 +163,29 @@ function GameCard({
           )}
           <span className="ml-auto flex gap-1">
             {g.status !== 'archived' && (
-              <Button size="sm" variant="ghost" title="Снять с публикации" onClick={act(() => api.adminUnpublish(g.slug))}>
+              <Button
+                size="sm"
+                variant="ghost"
+                title="Снять с публикации"
+                onClick={() => {
+                  if (window.confirm(`Снять «${g.slug}» с публикации? Пользователи не смогут скачать игру.`)) {
+                    void act(() => api.adminUnpublish(g.slug))();
+                  }
+                }}
+              >
                 <EyeOff size={14} />
               </Button>
             )}
-            <Button size="sm" variant="ghost" title="Откат к предыдущему build" onClick={act(() => api.adminRollback(g.slug))}>
+            <Button
+              size="sm"
+              variant="ghost"
+              title="Откат к предыдущему build"
+              onClick={() => {
+                if (window.confirm(`Откатить «${g.slug}» к предыдущему build? Будет создана новая версия.`)) {
+                  void act(() => api.adminRollback(g.slug))();
+                }
+              }}
+            >
               <RotateCcw size={14} />
             </Button>
           </span>
@@ -198,7 +217,16 @@ function BuildList({ game: g, act }: { game: AdminGame; act: (f: () => Promise<u
           {g.published_version === b.version ? (
             <Badge variant="success" className="ml-auto">live</Badge>
           ) : (
-            <Button size="sm" variant="outline" className="ml-auto h-6 px-2" onClick={act(() => api.adminPublish(g.slug, b.version))}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="ml-auto h-6 px-2"
+              onClick={() => {
+                if (window.confirm(`Опубликовать «${g.slug}» v${b.version}? Её сразу смогут скачать пользователи.`)) {
+                  void act(() => api.adminPublish(g.slug, b.version))();
+                }
+              }}
+            >
               <Check size={12} className="mr-1" /> Publish
             </Button>
           )}
@@ -275,7 +303,7 @@ function UsersTab() {
   const [grant, setGrant] = useState<Record<number, string>>({});
 
   const refresh = useCallback(() => {
-    api.adminListUsers(query).then((r) => setUsers(r.users)).catch((e) => setError(String(e)));
+    api.adminListUsers(query).then((r) => setUsers(r.users)).catch((e) => setError(humanError(e)));
   }, [query]);
   useEffect(() => {
     const t = setTimeout(refresh, 250);
@@ -287,7 +315,7 @@ function UsersTab() {
     try {
       await fn();
     } catch (e) {
-      setError(String(e));
+      setError(humanError(e));
     } finally {
       refresh();
     }
@@ -330,7 +358,15 @@ function UsersTab() {
               >
                 +{grant[u.id] || 30} дн.
               </Button>
-              <Button size="sm" variant="ghost" onClick={act(() => api.adminResetHwid(u.id))}>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  if (window.confirm(`Отвязать устройство пользователя ${u.email}?`)) {
+                    void act(() => api.adminResetHwid(u.id))();
+                  }
+                }}
+              >
                 Отвязать HWID
               </Button>
             </div>

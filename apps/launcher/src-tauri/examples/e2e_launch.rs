@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chlauncher_lib::events::EventHub;
-use chlauncher_lib::game_ws::{GameServer, GAME_WS_PORT};
+use chlauncher_lib::game_ws::GameServer;
 use chlauncher_lib::process::ProcessManager;
 use chlauncher_lib::types::{StreamEvent, WindowOptions};
 
@@ -23,12 +23,16 @@ async fn main() {
         .expect("usage: e2e_launch <path-to-mock-game.exe>");
 
     let hub = Arc::new(EventHub::new());
-    let server = GameServer::new(hub.clone());
+    let server = GameServer::bind(hub.clone()).expect("bind game ws");
     let srv = server.clone();
-    tokio::spawn(async move { let _ = srv.run_accept_loop().await; });
+    tokio::spawn(async move {
+        let _ = srv.run_accept_loop().await;
+    });
     tokio::time::sleep(Duration::from_millis(300)).await;
 
-    // Same argv as the real play_game command.
+    // Same launch path as the real play_game command: argv carries --port
+    // and window flags; the session token travels via stdin.
+    let port = server.port();
     let token = server.issue_token("mock-game").await;
     let opts = WindowOptions {
         width: 480,
@@ -37,13 +41,19 @@ async fn main() {
         always_on_top: false,
         chroma_key: false,
     };
-    let args = ProcessManager::build_args(GAME_WS_PORT, &token, &opts);
+    let args = ProcessManager::build_args(port, &opts);
+    let payload = ProcessManager::stdin_payload(port, &token);
 
-    println!("[e2e] spawning game: {} {:?}", exe, args);
-    let _child = Command::new(&exe)
+    println!("[e2e] spawning game: {} {:?} (token via stdin)", exe, args);
+    let mut child = Command::new(&exe)
         .args(&args)
+        .stdin(std::process::Stdio::piped())
         .spawn()
         .expect("spawn mock-game");
+    if let Some(mut stdin) = child.stdin.take() {
+        use std::io::Write;
+        let _ = stdin.write_all(payload.as_bytes());
+    }
 
     // Give the game a moment to connect + handshake.
     tokio::time::sleep(Duration::from_secs(2)).await;
@@ -67,5 +77,7 @@ async fn main() {
     // Orderly shutdown — game receives `shutdown` and exits itself.
     server.shutdown_slug("mock-game").await;
     tokio::time::sleep(Duration::from_secs(1)).await;
+    let _ = child.kill();
+    let _ = child.wait(); // reap — no zombie
     println!("[e2e] PASS: handshake + event delivery + shutdown verified");
 }
