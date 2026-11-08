@@ -8,6 +8,7 @@
     "core:event:default",
     "core:window:default",
     "deep-link:default",
-    "opener:default"
+    "opener:default",
+    "updater:default"
   ]
 }

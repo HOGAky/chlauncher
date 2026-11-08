@@ -109,6 +109,7 @@ export default function AuthScreen() {
                 : 'Уже есть аккаунт? Войти'}
             </button>
           </form>
+          {import.meta.env.DEV && (
           <div className="mt-4 border-t border-border/40 pt-3">
             <button
               type="button"
@@ -132,6 +133,7 @@ export default function AuthScreen() {
               </div>
             )}
           </div>
+          )}
         </CardContent>
       </Card>
     </div>

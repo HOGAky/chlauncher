@@ -85,6 +85,9 @@ export default function App() {
     let unlisten: (() => void) | undefined;
     let seq = 0;
     void loadBoot();
+    // Silent self-update: installs + relaunches when a signed update
+    // exists; ignore all failures (offline, unsigned, dev build).
+    api.checkLauncherUpdate().catch(() => {});
     api
       .onStreamEvent((ev) =>
         setFeed((f) => [...f.slice(-(FEED_CAP - 1)), { ...ev, fid: `e${seq++}` }])

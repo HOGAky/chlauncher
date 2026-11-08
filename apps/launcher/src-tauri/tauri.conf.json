@@ -29,13 +29,23 @@
       "desktop": {
         "schemes": ["chlauncher"]
       }
+    },
+    "updater": {
+      "endpoints": [
+        "https://github.com/HOGAky/chlauncher/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhBQ0YzMzIxRUFCNTg0RjYKUldUMmhMWHFJVFBQaXFtd0wxUjZUclV3ZS9FaGhJNld2d0dVQWhadXRqNDdNU2paRlh3czFaeHkK",
+      "windows": {
+        "installMode": "passive"
+      }
     }
   },
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "createUpdaterArtifacts": true,
     "resources": {
-      "../../../tools/tiktok-sidecar": "tiktok-sidecar"
+      "../../../tools/tiktok-sidecar/dist": "tiktok-sidecar"
     },
     "windows": {
       "webviewInstallMode": {

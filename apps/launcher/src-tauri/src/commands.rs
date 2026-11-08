@@ -85,10 +85,7 @@ fn valid_slug(slug: &str) -> bool {
 
 /// Helper: usable hardware id or `HWID_UNAVAILABLE` — never a sentinel.
 fn require_hwid(state: &AppState) -> Result<&str, String> {
-    state
-        .hwid
-        .as_deref()
-        .ok_or_else(|| "HWID_UNAVAILABLE".to_string())
+    state.hwid.as_deref().ok_or_else(|| "HWID_UNAVAILABLE".to_string())
 }
 
 /// Helper: current auth token or an error the UI sends back to login.
@@ -112,12 +109,8 @@ async fn token(state: &AppState) -> Result<String, String> {
 pub async fn get_bootstrap(state: State<'_, AppState>) -> Result<Value, String> {
     let settings = state.settings.lock().await.data.clone();
     let authed = settings.auth_token.is_some();
-    let subscription = if authed {
-        state
-            .api
-            .subscription(settings.auth_token.as_deref().unwrap())
-            .await
-            .ok()
+    let subscription = if let Some(t) = settings.auth_token.as_deref() {
+        state.api.subscription(t).await.ok()
     } else {
         None
     };
@@ -265,9 +258,7 @@ pub async fn list_games(state: State<'_, AppState>) -> Result<Value, String> {
         .await
         .map_err(|e| e.to_string())?;
     let installed: std::collections::HashMap<String, InstalledGame> =
-        downloads::all_installed(&state.data_dir)
-            .into_iter()
-            .collect();
+        downloads::all_installed(&state.data_dir).into_iter().collect();
     let running = state.processes.running_slugs();
 
     let mut entries = Vec::new();
@@ -365,8 +356,7 @@ fn verify_install(
         }
     }
     if let Some(expected_sha) = installed.exe_sha256.as_deref() {
-        let actual =
-            downloads::sha256_file(&canon_exe).map_err(|_| "INSTALL_FAILED".to_string())?;
+        let actual = downloads::sha256_file(&canon_exe).map_err(|_| "INSTALL_FAILED".to_string())?;
         if !actual.eq_ignore_ascii_case(expected_sha) {
             return Err("HASH_MISMATCH".into());
         }
@@ -400,11 +390,16 @@ pub async fn play_game(
         return Err("LICENSE_DENIED".into());
     }
 
-    let catalog_exe = state.api.games(&token).await.ok().and_then(|g| {
-        g.iter()
-            .find(|x| x.slug == slug)
-            .map(|x| x.executable_name.clone())
-    });
+    let catalog_exe = state
+        .api
+        .games(&token)
+        .await
+        .ok()
+        .and_then(|g| {
+            g.iter()
+                .find(|x| x.slug == slug)
+                .map(|x| x.executable_name.clone())
+        });
 
     let installed = downloads::installed_info(&state.data_dir, &slug)
         .ok_or_else(|| "NOT_INSTALLED".to_string())?;
@@ -551,7 +546,9 @@ pub async fn apply_trigger_template(
     let profile = TriggerMapper::template_profile(&game_slug, &template)
         .ok_or_else(|| format!("неизвестный шаблон: {template}"))?;
     let mut s = state.settings.lock().await;
-    s.data.trigger_profiles.insert(game_slug, profile.clone());
+    s.data
+        .trigger_profiles
+        .insert(game_slug, profile.clone());
     let _ = s.save();
     Ok(profile)
 }
@@ -559,7 +556,10 @@ pub async fn apply_trigger_template(
 /// Injects a raw event into the mapping pipeline — the event simulator.
 /// Works even with no game running (still reaches overlay + feed).
 #[tauri::command]
-pub async fn simulate_event(raw: RawStreamEvent, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn simulate_event(
+    raw: RawStreamEvent,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     state
         .raw_tx
         .send(raw)
@@ -610,21 +610,31 @@ pub async fn get_server_url(state: State<'_, AppState>) -> Result<String, String
 
 /// Points the launcher at another backend and persists the choice.
 /// Accepts `http(s)://host[:port]`; trailing slashes are stripped.
+/// Dev builds only — release binaries pin the prod endpoint at compile
+/// time so a settings-file edit can't redirect licensing to a fake server.
 #[tauri::command]
 pub async fn set_server_url(url: String, state: State<'_, AppState>) -> Result<(), String> {
-    let u = url.trim().trim_end_matches('/').to_string();
-    if !(u.starts_with("http://") || u.starts_with("https://")) {
-        return Err("URL должен начинаться с http:// или https://".into());
+    #[cfg(not(debug_assertions))]
+    {
+        let _ = (url, state);
+        return Err("Смена сервера доступна только в dev-сборке".into());
     }
-    state.api.set_base(u.clone());
-    let mut s = state.settings.lock().await;
-    s.data.server_url = if u == crate::api::DEFAULT_BASE_URL {
-        None
-    } else {
-        Some(u)
-    };
-    let _ = s.save();
-    Ok(())
+    #[cfg(debug_assertions)]
+    {
+        let u = url.trim().trim_end_matches('/').to_string();
+        if !(u.starts_with("http://") || u.starts_with("https://")) {
+            return Err("URL должен начинаться с http:// или https://".into());
+        }
+        state.api.set_base(u.clone());
+        let mut s = state.settings.lock().await;
+        s.data.server_url = if u == crate::api::DEFAULT_BASE_URL {
+            None
+        } else {
+            Some(u)
+        };
+        let _ = s.save();
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -651,7 +661,8 @@ pub async fn set_forward_config(
             s.data.forward.relay_admin_secret = Some(relay_admin_secret.trim().to_string());
         }
         if s.data.forward.stream_key.is_none() {
-            s.data.forward.stream_key = Some(format!("sk_{}", uuid::Uuid::new_v4().simple()));
+            s.data.forward.stream_key =
+                Some(format!("sk_{}", uuid::Uuid::new_v4().simple()));
         }
         let _ = s.save();
     }
@@ -821,13 +832,14 @@ pub async fn admin_rollback(slug: String, state: State<'_, AppState>) -> Result<
 }
 
 #[tauri::command]
-pub async fn admin_list_users(query: String, state: State<'_, AppState>) -> Result<Value, String> {
+pub async fn admin_list_users(
+    query: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
     let enc: String = query
         .bytes()
         .map(|b| match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                (b as char).to_string()
-            }
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
             _ => format!("%{b:02X}"),
         })
         .collect();
@@ -902,10 +914,12 @@ pub async fn services_health(state: State<'_, AppState>) -> Result<Value, String
         false
     };
     let overlay = match *state.overlay_port.lock().await {
-        Some(p) => reqwest::get(format!("http://127.0.0.1:{p}/health"))
-            .await
-            .map(|r| r.status().is_success())
-            .unwrap_or(false),
+        Some(p) => {
+            reqwest::get(format!("http://127.0.0.1:{p}/health"))
+                .await
+                .map(|r| r.status().is_success())
+                .unwrap_or(false)
+        }
         None => false,
     };
     Ok(json!({
@@ -925,47 +939,60 @@ pub async fn get_proc_info(slug: String, state: State<'_, AppState>) -> Result<V
     serde_json::to_value(info).map_err(|e| e.to_string())
 }
 
-// ---------------------------------------------------------------------------
-// Diagnostics (Task 6)
-// ---------------------------------------------------------------------------
-
-/// "Скопировать diagnostics" payload: version/OS/services/running/log tail.
-/// Deliberately NO tokens, settings, HWID or stream keys — safe to paste
-/// into a bug report. Log lines pass through `logging::redact` as a second
-/// safety net.
+/// Copy-safe diagnostics report for bug reports: versions, OS, service
+/// health, integration state and the last ~50 redacted log lines. Never
+/// contains tokens, passwords, HWIDs, stream keys or cookies (Task 6).
 #[tauri::command]
-pub async fn get_diagnostics(state: State<'_, AppState>, app: AppHandle) -> Result<String, String> {
-    let version = app.package_info().version.to_string();
+pub async fn get_diagnostics(state: State<'_, AppState>) -> Result<String, String> {
+    let health = services_health(state.clone()).await.unwrap_or_default();
     let integrations = state.integrations.snapshot().await;
-    let service_error = state.service_error.lock().await.clone();
     let running = state.processes.running_slugs();
     let log_tail = crate::logging::tail_log(&state.data_dir, 50);
-    let report = format!(
+    Ok(format!(
         "chlauncher diagnostics\n\
          ======================\n\
-         app_version: {version}\n\
-         os: {os} {arch}\n\
-         server_url: {server}\n\
-         game_ws_port: {gport}\n\
-         overlay_port: {oport}\n\
-         service_error: {serr}\n\
-         running_games: {running:?}\n\
-         integrations: {integrations}\n\
-         \n\
-         --- last log lines (redacted) ---\n\
-         {log_tail}\n",
-        os = std::env::consts::OS,
-        arch = std::env::consts::ARCH,
-        server = state.api.base(),
-        gport = state.game_server.port(),
-        oport = state
-            .overlay_port
-            .lock()
-            .await
-            .map(|p| p.to_string())
-            .unwrap_or_else(|| "—".into()),
-        serr = service_error.as_deref().unwrap_or("—"),
-        integrations = serde_json::to_string_pretty(&integrations).unwrap_or_default(),
-    );
-    Ok(report)
+         app: {} ({})\n\
+         os: {} {}\n\
+         services: {}\n\
+         integrations: {}\n\
+         running games: {}\n\
+         ---- last log lines (redacted) ----\n{}",
+        env!("CARGO_PKG_NAME"),
+        env!("CARGO_PKG_VERSION"),
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+        serde_json::to_string_pretty(&health).unwrap_or_default(),
+        serde_json::to_string_pretty(&integrations).unwrap_or_default(),
+        running.join(", "),
+        if log_tail.is_empty() {
+            "(log file empty)"
+        } else {
+            &log_tail
+        }
+    ))
+}
+
+// ---------------------------------------------------------------------------
+// Launcher self-update
+// ---------------------------------------------------------------------------
+
+/// Checks the signed updater endpoint (GitHub Releases `latest.json`).
+/// If a newer version exists it is downloaded, signature-verified and
+/// installed, then the app relaunches — on success this command never
+/// resolves. `null` means already up to date; errors surface as strings.
+#[tauri::command]
+pub async fn check_launcher_update(app: AppHandle) -> Result<Option<String>, String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    let Some(update) = updater.check().await.map_err(|e| e.to_string())? else {
+        return Ok(None);
+    };
+    let version = update.version.clone();
+    tracing::info!(version = %version, "launcher update available, installing");
+    update
+        .download_and_install(|_, _| {}, || {})
+        .await
+        .map_err(|e| e.to_string())?;
+    // NSIS passive install applies on the next start — relaunch now.
+    app.restart();
 }

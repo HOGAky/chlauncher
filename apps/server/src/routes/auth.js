@@ -47,6 +47,18 @@ export default async function authRoutes(app, { db, authenticate }) {
   // Per-process credential-failure journal: key `ip|email` → {count, resetAt}.
   const loginFails = new Map();
 
+  // Sweep expired entries every 10 min — without it the Map grows forever
+  // on failed attempts that never repeat (random-email spraying = memory
+  // leak). unref() so the timer never keeps the process alive.
+  const sweep = setInterval(() => {
+    const now = Date.now();
+    for (const [k, e] of loginFails) {
+      if (e.resetAt <= now) loginFails.delete(k);
+    }
+  }, 10 * 60 * 1000);
+  sweep.unref();
+  app.addHook('onClose', async () => clearInterval(sweep));
+
   const failCount = (key) => {
     const e = loginFails.get(key);
     if (!e || e.resetAt <= Date.now()) return null;
