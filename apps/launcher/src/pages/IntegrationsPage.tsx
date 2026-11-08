@@ -16,6 +16,7 @@ import { Switch } from '../components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 
+import { humanError } from '../errorMessages';
 /** Maps serde's IntegrationStatus union to badge + label. */
 function statusBadge(st: IntegrationStatus | undefined) {
   if (!st || st === 'disconnected') return <Badge variant="outline">Отключено</Badge>;
@@ -56,7 +57,7 @@ export default function IntegrationsPage() {
     api
       .setForwardConfig(enabled, fwdUrl.trim(), fwdSecret)
       .then(() => setFwdEnabled(enabled))
-      .catch((e) => setFwdErr(String(e)));
+      .catch((e) => setFwdErr(humanError(e)));
   };
 
   const copyKey = () => {

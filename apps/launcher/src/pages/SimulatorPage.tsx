@@ -34,7 +34,7 @@ export default function SimulatorPage() {
   const [donation, setDonation] = useState(100);
   const [donor, setDonor] = useState('kind_viewer');
 
-  const send = (r: RawStreamEvent) => api.simulateEvent(r).catch((e) => console.error(e));
+  const send = (r: RawStreamEvent) => api.simulateEvent(r).catch(() => {});
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

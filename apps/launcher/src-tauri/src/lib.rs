@@ -24,6 +24,7 @@ pub mod forwarder;
 pub mod game_ws;
 pub mod hwid;
 pub mod integrations;
+pub mod logging;
 pub mod overlay;
 pub mod process;
 pub mod settings;
@@ -44,7 +45,7 @@ use types::RawStreamEvent;
 /// Builds and runs the Tauri app.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         // `chlauncher://` deep links (billing return_url after checkout)
         // and opening external URLs (the hosted checkout page) in the
         // system browser.
@@ -52,41 +53,72 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             // --- filesystem roots -------------------------------------
-            let data_dir = app
-                .path()
-                .app_data_dir()
-                .unwrap_or_else(|_| {
-                    dirs::data_dir()
-                        .unwrap_or_else(|| std::path::PathBuf::from("."))
-                        .join("com.chlauncher.app")
-                });
+            let data_dir = app.path().app_data_dir().unwrap_or_else(|_| {
+                dirs::data_dir()
+                    .unwrap_or_else(|| std::path::PathBuf::from("."))
+                    .join("com.chlauncher.app")
+            });
             std::fs::create_dir_all(&data_dir).ok();
+            logging::init(&data_dir);
+            tracing::info!(dir = %data_dir.display(), "chlauncher starting");
 
             // --- shared state ------------------------------------------
             let settings = Arc::new(Mutex::new(SettingsStore::load(&data_dir)));
             let hub = Arc::new(EventHub::new());
             let (raw_tx, raw_rx) = mpsc::channel::<RawStreamEvent>(256);
 
-            let game_server = GameServer::new(hub.clone());
+            // Local services bind 127.0.0.1:0 — the OS picks free ports.
+            // A bind failure is recorded (not fatal): the UI shows the
+            // "local service unavailable" warning from bootstrap instead
+            // of silently degrading.
+            let mut service_error: Option<String> = None;
+            let game_server = match GameServer::bind(hub.clone()) {
+                Ok(gs) => gs,
+                Err(e) => {
+                    let msg = format!(
+                        "Не удалось открыть локальный сервис (game ws): {e}. \
+                         Возможно, запущена другая копия chlauncher или порт заблокирован."
+                    );
+                    tracing::error!("{msg}");
+                    service_error = Some(msg);
+                    // Fallback: bind lazily on port 0 again — will fail the
+                    // same way, but keeps AppState constructible.
+                    GameServer::bind(hub.clone()).unwrap_or_else(|_| {
+                        // Absolute last resort so the app can still start
+                        // and show the error instead of crashing.
+                        GameServer::bind_placeholder(hub.clone())
+                    })
+                }
+            };
             {
                 let gs = game_server.clone();
                 tauri::async_runtime::spawn(async move {
                     if let Err(e) = gs.run_accept_loop().await {
-                        eprintln!("[game-ws] accept loop failed: {e}");
+                        tracing::error!(error = %e, "game-ws accept loop failed");
                     }
                 });
             }
-            {
-                let hub = hub.clone();
-                tauri::async_runtime::spawn(async move {
-                    if let Err(e) = overlay::start_overlay_server(hub).await {
-                        eprintln!("[overlay] server failed: {e}");
+            let overlay_port =
+                match tauri::async_runtime::block_on(overlay::start_overlay_server(hub.clone())) {
+                    Ok(port) => Some(port),
+                    Err(e) => {
+                        let msg = format!(
+                            "Не удалось открыть локальный сервис (overlay): {e}. \
+                             Возможно, запущена другая копия chlauncher или порт заблокирован."
+                        );
+                        tracing::error!("{msg}");
+                        service_error = Some(match service_error {
+                            Some(prev) => format!("{prev}\n{msg}"),
+                            None => msg,
+                        });
+                        None
                     }
-                });
-            }
+                };
 
-            let integrations =
-                Arc::new(IntegrationManager::new(raw_tx.clone(), app.handle().clone()));
+            let integrations = Arc::new(IntegrationManager::new(
+                raw_tx.clone(),
+                app.handle().clone(),
+            ));
 
             // One shared cell: `play_game` writes it, the mapper reads it.
             let active_game_slug = Arc::new(Mutex::new(None));
@@ -116,6 +148,8 @@ pub fn run() {
                 raw_tx,
                 active_game_slug: active_game_slug.clone(),
                 catalog_seen: Arc::new(Mutex::new(None)),
+                overlay_port: Mutex::new(overlay_port),
+                service_error: Mutex::new(service_error),
             };
 
             // --- mapper forwarder: raw → mapped → hub + frontend --------
@@ -179,31 +213,54 @@ pub fn run() {
             commands::admin_grant_days,
             commands::admin_reset_hwid,
             commands::admin_audit,
+            commands::services_health,
+            commands::get_proc_info,
+            commands::get_diagnostics,
         ])
-        .build(tauri::generate_context!())
-        .expect("error while running tauri application")
-        .run(|app, event| {
-            match event {
-                tauri::RunEvent::Exit => {
-                    // Kill every spawned game so no licensed binary outlives
-                    // the launcher.
-                    if let Some(state) = app.try_state::<AppState>() {
-                        state.processes.kill_all();
-                    }
-                }
-                // Fresh catalog check when the window regains focus (§6.3).
-                tauri::RunEvent::WindowEvent {
-                    event: tauri::WindowEvent::Focused(true),
-                    ..
-                } => {
-                    let handle = app.clone();
-                    tauri::async_runtime::spawn(async move {
-                        check_catalog(&handle).await;
+        .build(tauri::generate_context!());
+    let app = match app {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!("[fatal] failed to build tauri application: {e}");
+            std::process::exit(1);
+        }
+    };
+    app.run(|app, event| {
+        match event {
+            tauri::RunEvent::Exit => {
+                // Graceful first: WS `shutdown` to every game, up to 5 s
+                // to exit cleanly, then force-kill stragglers so no
+                // licensed binary outlives the launcher.
+                if let Some(state) = app.try_state::<AppState>() {
+                    tauri::async_runtime::block_on(async {
+                        for slug in state.processes.running_slugs() {
+                            state.game_server.shutdown_slug(&slug).await;
+                        }
+                        let deadline =
+                            std::time::Instant::now() + std::time::Duration::from_secs(5);
+                        while !state.processes.running_slugs().is_empty()
+                            && std::time::Instant::now() < deadline
+                        {
+                            state.processes.collect_exited();
+                            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        }
                     });
+                    state.processes.kill_all();
                 }
-                _ => {}
             }
-        });
+            // Fresh catalog check when the window regains focus (§6.3).
+            tauri::RunEvent::WindowEvent {
+                event: tauri::WindowEvent::Focused(true),
+                ..
+            } => {
+                let handle = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    check_catalog(&handle).await;
+                });
+            }
+            _ => {}
+        }
+    });
 }
 
 /// Fetches the catalog and emits `catalog-changed` when the slug→version
@@ -279,6 +336,7 @@ async fn watchdog_loop(app: tauri::AppHandle) {
         tick.tick().await;
         let state = app.state::<AppState>();
         for slug in state.processes.collect_exited() {
+            tracing::info!(slug = %slug, "game process exited");
             let _ = app.emit("game-exited", serde_json::json!({"slug": slug}));
         }
     }

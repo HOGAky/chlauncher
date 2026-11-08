@@ -15,6 +15,30 @@ import path from 'node:path';
 import { hasActiveSubscription } from '../subscriptions.js';
 import { config } from '../config.js';
 
+/** Game slug boundary rule — same as admin.js and the launcher. */
+const SLUG_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+
+/**
+ * Resolves a build's stored relative path and verifies it stays inside
+ * `<staticDir>/games` after canonicalization — `..`, absolute paths,
+ * backslashes and URL-encoded traversal are rejected before touching fs.
+ */
+function safeBuildPath(fileName) {
+  if (
+    !fileName ||
+    typeof fileName !== 'string' ||
+    fileName.includes('..') ||
+    fileName.includes('\\') ||
+    fileName.includes('%') ||
+    path.isAbsolute(fileName)
+  ) {
+    return null;
+  }
+  const gamesRoot = path.resolve(config.staticDir, 'games');
+  const resolved = path.resolve(gamesRoot, fileName);
+  return resolved.startsWith(gamesRoot + path.sep) ? resolved : null;
+}
+
 /** Fields exposed to clients (internal file_name is intentionally hidden). */
 function gameView(row) {
   return {
@@ -73,14 +97,17 @@ export default async function gamesRoutes(app, { db, authenticate }) {
    * 404 when the game isn't published or its file is missing.
    */
   app.get('/:slug/download', async (request, reply) => {
+    if (!SLUG_RE.test(request.params.slug || '')) {
+      return reply.code(400).send({ error: 'INVALID_SLUG' });
+    }
     if (!hasActiveSubscription(db, request.auth.userId)) {
       return reply.code(403).send({ error: 'SUBSCRIPTION_REQUIRED' });
     }
     const game = findPublished(db, request.params.slug);
     if (!game) return reply.code(404).send({ error: 'GAME_NOT_FOUND' });
 
-    const filePath = path.join(config.staticDir, 'games', game.file_name);
-    if (!fs.existsSync(filePath)) {
+    const filePath = safeBuildPath(game.file_name);
+    if (!filePath || !fs.existsSync(filePath)) {
       return reply.code(404).send({ error: 'BUILD_NOT_UPLOADED' });
     }
 

@@ -38,9 +38,12 @@ where
                     .into(),
             ))
             .unwrap();
-            ws.send(Message::Text(r#"{"type":"heartbeat","ts":9999999999}"#.into()))
+            ws.send(Message::Text(
+                r#"{"type":"heartbeat","ts":9999999999}"#.into(),
+            ))
+            .unwrap();
+            ws.send(Message::Text(r#"{"type":"shutdown"}"#.into()))
                 .unwrap();
-            ws.send(Message::Text(r#"{"type":"shutdown"}"#.into())).unwrap();
             // keep the socket open briefly so reads complete
             thread::sleep(std::time::Duration::from_millis(200));
         }

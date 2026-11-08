@@ -1,0 +1,55 @@
+# CI for the chlauncher monorepo.
+#
+# Two jobs:
+#   server — Node 22: dependency install, launcher frontend build, server tests.
+#   rust   — stable toolchain: fmt, clippy and tests for the pure-Rust
+#            workspace (game-sdk + mock-game), plus `cargo check` for the
+#            Tauri crate.
+#
+# Note on the Tauri crate: a full `cargo build` of apps/launcher/src-tauri
+# requires platform-native toolchain pieces (windres on windows-gnu,
+# WebKitGTK on Linux) that are heavier than this job justifies; `cargo check`
+# still type-checks the whole crate, and `cargo clippy` lints it.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build --workspace @chlauncher/launcher
+      - run: npm run test:server
+      - name: Launcher unit tests (error contract)
+        working-directory: apps/launcher
+        run: node --test src/errorMessages.test.ts
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --check
+      - name: Clippy — workspace crates (game-sdk, mock-game)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Clippy — Tauri launcher backend
+        working-directory: apps/launcher/src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Tests — workspace crates
+        run: cargo test --workspace
+      - name: Check — Tauri launcher backend (see header note)
+        working-directory: apps/launcher/src-tauri
+        run: cargo check

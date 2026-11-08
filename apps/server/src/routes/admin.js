@@ -18,10 +18,12 @@ import {
   findGameBySlug,
   findUserById,
   nowIso,
+  recordDeviceEvent,
 } from '../db.js';
 import { subscriptionView, recordPayment, refreshSubscription } from '../subscriptions.js';
+import { ipHash } from '../hwid.js';
 
-const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const SLUG_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const VERSION_RE = /^\d+\.\d+\.\d+(-[0-9a-z.]+)?$/i;
 
 /**
@@ -317,6 +319,7 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
     const user = findUserById(db, Number(request.params.id));
     if (!user) return reply.code(404).send({ error: 'USER_NOT_FOUND' });
     db.prepare('UPDATE users SET hwid = NULL WHERE id = ?').run(user.id);
+    recordDeviceEvent(db, user.id, 'reset', null, ipHash(request.ip));
     audit(request.auth.userId, 'reset_hwid', user.email, {});
     return { ok: true, user: adminUserView(db, findUserById(db, user.id)) };
   });

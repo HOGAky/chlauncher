@@ -90,7 +90,8 @@ impl IntegrationManager {
             return Err("пустой username".into());
         }
         *self.tiktok_username.lock().await = Some(username.clone());
-        self.set_status("tiktok", IntegrationStatus::Connecting).await;
+        self.set_status("tiktok", IntegrationStatus::Connecting)
+            .await;
 
         let status = self.tiktok_status.clone();
         let app = self.app.clone();
@@ -107,7 +108,8 @@ impl IntegrationManager {
         if let Some(h) = self.tiktok_task.lock().await.take() {
             h.abort();
         }
-        self.set_status("tiktok", IntegrationStatus::Disconnected).await;
+        self.set_status("tiktok", IntegrationStatus::Disconnected)
+            .await;
     }
 
     /// Connects DonationAlerts realtime donations via Centrifugo.
@@ -189,21 +191,30 @@ async fn run_da(
         .to_string();
 
     // 3) Open the Centrifugo socket and handshake.
-    let (ws, _) =
-        tokio_tungstenite::connect_async("wss://centrifugo.donationalerts.com/connection/websocket")
-            .await
-            .map_err(|e| format!("ws connect: {e}"))?;
+    let (ws, _) = tokio_tungstenite::connect_async(
+        "wss://centrifugo.donationalerts.com/connection/websocket",
+    )
+    .await
+    .map_err(|e| format!("ws connect: {e}"))?;
     let (mut tx, mut rx) = ws.split();
 
-    tx.send(json!({"params":{"token":socket_token,"name":"js"},"id":1}).to_string().into())
-        .await
-        .map_err(|e| e.to_string())?;
+    tx.send(
+        json!({"params":{"token":socket_token,"name":"js"},"id":1})
+            .to_string()
+            .into(),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
 
     // 4) Subscribe to the donation alerts channel.
     let channel = format!("$alerts:donation_{user_id}");
-    tx.send(json!({"params":{"channel":channel},"id":2}).to_string().into())
-        .await
-        .map_err(|e| e.to_string())?;
+    tx.send(
+        json!({"params":{"channel":channel},"id":2})
+            .to_string()
+            .into(),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
 
     *status.lock().await = IntegrationStatus::Live;
 
@@ -271,12 +282,13 @@ fn sidecar_dir(app: &AppHandle) -> Option<std::path::PathBuf> {
         }
         // Dev layout: <repo>/apps/launcher/src-tauri → <repo>/tools/tiktok-sidecar
         v.push(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../../tools/tiktok-sidecar"),
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../tools/tiktok-sidecar"),
         );
         v
     };
-    candidates.into_iter().find(|p| p.join("index.js").is_file())
+    candidates
+        .into_iter()
+        .find(|p| p.join("index.js").is_file())
 }
 
 /// Locates a Node.js executable: `node` on PATH first, then a bundled
@@ -357,12 +369,7 @@ async fn run_tiktok(
 
     // Read NDJSON until the sidecar dies or the task is aborted.
     loop {
-        let line = match tokio::time::timeout(
-            Duration::from_secs(45),
-            lines.next_line(),
-        )
-        .await
-        {
+        let line = match tokio::time::timeout(Duration::from_secs(45), lines.next_line()).await {
             Ok(Ok(Some(l))) => l,
             Ok(Ok(None)) => break, // EOF — process exited
             Ok(Err(e)) => {
@@ -380,7 +387,9 @@ async fn run_tiktok(
             }
         };
 
-        let Ok(v) = serde_json::from_str::<Value>(&line) else { continue };
+        let Ok(v) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
         match v["type"].as_str().unwrap_or("") {
             "ping" => last_ping = std::time::Instant::now(),
             "status" => {

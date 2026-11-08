@@ -97,6 +97,9 @@ pub struct InstalledGame {
     /// SHA-256 the install was verified against (absent for pre-v2 installs).
     #[serde(default)]
     pub sha256: Option<String>,
+    /// SHA-256 of the executable itself — re-verified before launch.
+    #[serde(default)]
+    pub exe_sha256: Option<String>,
 }
 
 /// Subscription view returned by the backend.
@@ -109,21 +112,16 @@ pub struct Subscription {
 }
 
 /// Connection status of an external integration.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum IntegrationStatus {
+    #[default]
     Disconnected,
     Connecting,
     Connected,
     /// Connected to a live room / realtime feed.
     Live,
     Error(String),
-}
-
-impl Default for IntegrationStatus {
-    fn default() -> Self {
-        IntegrationStatus::Disconnected
-    }
 }
 
 /// Window-shaping options for game launch (TikTok Live Studio capture).

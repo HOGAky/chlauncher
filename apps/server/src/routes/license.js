@@ -10,6 +10,7 @@
  */
 
 import { findUserById } from '../db.js';
+import { isUsableHwid, hwidHash } from '../hwid.js';
 import {
   refreshSubscription,
   subscriptionView,
@@ -31,8 +32,13 @@ export default async function licenseRoutes(app, { db, authenticate }) {
     const user = findUserById(db, request.auth.userId);
     if (!user) return reply.code(401).send({ allowed: false, error: 'UNKNOWN_USER' });
 
-    if (user.hwid && hwid && user.hwid !== hwid) {
+    if (user.hwid && hwid && user.hwid !== hwidHash(hwid)) {
       return reply.code(403).send({ allowed: false, error: 'HWID_MISMATCH' });
+    }
+    if (hwid != null && !isUsableHwid(hwid)) {
+      return reply
+        .code(400)
+        .send({ allowed: false, error: 'HWID_UNAVAILABLE' });
     }
 
     const sub = refreshSubscription(db, user.id);

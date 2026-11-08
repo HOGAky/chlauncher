@@ -15,19 +15,28 @@ use crate::api::ApiClient;
 use crate::downloads;
 use crate::events::{EventHub, TriggerMapper};
 use crate::forwarder::Forwarder;
-use crate::game_ws::{GameServer, GAME_WS_PORT};
+use crate::game_ws::GameServer;
 use crate::integrations::IntegrationManager;
-use crate::overlay::OVERLAY_URL;
+use crate::overlay::overlay_url;
 use crate::process::ProcessManager;
 use crate::settings::SettingsStore;
 use crate::types::*;
+
+/// How long `play_game` waits for the game to complete the WS handshake
+/// before declaring the launch failed.
+const HANDSHAKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15);
+/// Grace period for a graceful shutdown (WS `shutdown` frame) before the
+/// process is force-killed.
+const SHUTDOWN_GRACE: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// Shared application state managed by Tauri.
 pub struct AppState {
     pub data_dir: std::path::PathBuf,
     pub settings: Arc<Mutex<SettingsStore>>,
     pub api: ApiClient,
-    pub hwid: String,
+    /// `None` when the OS refuses a machine id — register/login then fail
+    /// with `HWID_UNAVAILABLE` instead of sending a fake sentinel.
+    pub hwid: Option<String>,
     pub hub: Arc<EventHub>,
     pub game_server: Arc<GameServer>,
     pub processes: ProcessManager,
@@ -41,6 +50,11 @@ pub struct AppState {
     pub active_game_slug: Arc<Mutex<Option<String>>>,
     /// Last seen slug→version snapshot for catalog-change detection (§6.3).
     pub catalog_seen: Arc<Mutex<Option<std::collections::BTreeMap<String, String>>>>,
+    /// Actual OS-assigned overlay port (None until bound / on bind failure).
+    pub overlay_port: Mutex<Option<u16>>,
+    /// Startup error for a local service that failed to bind — surfaced in
+    /// bootstrap so the UI can warn instead of silently degrading.
+    pub service_error: Mutex<Option<String>>,
 }
 
 /// One row of the library view: catalog + local + runtime merged.
@@ -55,6 +69,26 @@ struct LibraryEntry {
     update_available: bool,
     running: bool,
     connected_clients: usize,
+}
+
+/// Slug boundary check: `^[a-z0-9][a-z0-9_-]{0,63}$`. Rejects `..`,
+/// separators, absolute paths and encoded traversal before anything
+/// touches the filesystem or a URL path segment.
+fn valid_slug(slug: &str) -> bool {
+    let b = slug.as_bytes();
+    if b.is_empty() || b.len() > 64 || !(b[0].is_ascii_lowercase() || b[0].is_ascii_digit()) {
+        return false;
+    }
+    b.iter()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'_' || *c == b'-')
+}
+
+/// Helper: usable hardware id or `HWID_UNAVAILABLE` — never a sentinel.
+fn require_hwid(state: &AppState) -> Result<&str, String> {
+    state
+        .hwid
+        .as_deref()
+        .ok_or_else(|| "HWID_UNAVAILABLE".to_string())
 }
 
 /// Helper: current auth token or an error the UI sends back to login.
@@ -98,8 +132,9 @@ pub async fn get_bootstrap(state: State<'_, AppState>) -> Result<Value, String> 
         "tiktok_username": settings.tiktok_username,
         "integrations": state.integrations.snapshot().await,
         "running": state.processes.running_slugs(),
-        "overlay_url": OVERLAY_URL,
-        "game_ws_port": GAME_WS_PORT,
+        "overlay_url": state.overlay_port.lock().await.map(overlay_url),
+        "game_ws_port": state.game_server.port(),
+        "service_error": state.service_error.lock().await.clone(),
         "server_url": state.api.base(),
         "forward": {
             "enabled": settings.forward.enabled,
@@ -120,7 +155,7 @@ pub async fn register_account(
 ) -> Result<Value, String> {
     let res = state
         .api
-        .register(&email, &password, &state.hwid)
+        .register(&email, &password, require_hwid(&state)?)
         .await
         .map_err(|e| e.to_string())?;
     {
@@ -142,7 +177,7 @@ pub async fn login(
 ) -> Result<Value, String> {
     let res = state
         .api
-        .login(&email, &password, &state.hwid)
+        .login(&email, &password, require_hwid(&state)?)
         .await
         .map_err(|e| e.to_string())?;
     {
@@ -155,9 +190,14 @@ pub async fn login(
     Ok(json!({"user": res.user, "subscription": res.subscription}))
 }
 
-/// Clears the stored session.
+/// Clears the stored session. Best-effort server-side invalidation first —
+/// a JWT issued before this call stops authorizing on the server (Task 5).
+/// Local logout always succeeds even when the server is unreachable.
 #[tauri::command]
 pub async fn logout(state: State<'_, AppState>) -> Result<(), String> {
+    if let Some(t) = state.settings.lock().await.data.auth_token.clone() {
+        let _ = state.api.logout(&t).await; // best-effort; never blocks logout
+    }
     let mut s = state.settings.lock().await;
     s.data.auth_token = None;
     s.data.email = None;
@@ -225,7 +265,9 @@ pub async fn list_games(state: State<'_, AppState>) -> Result<Value, String> {
         .await
         .map_err(|e| e.to_string())?;
     let installed: std::collections::HashMap<String, InstalledGame> =
-        downloads::all_installed(&state.data_dir).into_iter().collect();
+        downloads::all_installed(&state.data_dir)
+            .into_iter()
+            .collect();
     let running = state.processes.running_slugs();
 
     let mut entries = Vec::new();
@@ -261,6 +303,9 @@ fn semver_gt(a: &str, b: &str) -> bool {
 /// Downloads + extracts a game (subscription-gated server-side).
 #[tauri::command]
 pub async fn download_game(slug: String, state: State<'_, AppState>) -> Result<Value, String> {
+    if !valid_slug(&slug) {
+        return Err("INVALID_SLUG".to_string());
+    }
     if state.processes.running_slugs().contains(&slug) {
         // A running game holds file locks — the UI must stop it first.
         return Err("GAME_RUNNING".to_string());
@@ -281,15 +326,60 @@ pub async fn download_game(slug: String, state: State<'_, AppState>) -> Result<V
         &state.data_dir,
     )
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| {
+        tracing::error!(slug = %slug, error = %e, "game install failed");
+        e.to_string()
+    })?;
+    tracing::info!(slug = %slug, version = %info.version, "game installed");
     Ok(json!({"installed": info}))
+}
+
+/// Verifies the on-disk install before launching: the executable must
+/// live inside its install dir (canonicalized, no symlink escape), carry
+/// the name the catalog expects, and — when the installer recorded one —
+/// match its SHA-256.
+fn verify_install(
+    installed: &InstalledGame,
+    catalog_exe: Option<&str>,
+) -> Result<std::path::PathBuf, String> {
+    let install_dir = std::path::PathBuf::from(&installed.install_dir);
+    let exe = std::path::PathBuf::from(&installed.exe_path);
+    let canon_dir = install_dir
+        .canonicalize()
+        .map_err(|_| "INSTALL_FAILED".to_string())?;
+    // Canonicalizing the exe path resolves symlinks — a link escaping the
+    // install dir is rejected here.
+    let canon_exe = exe
+        .canonicalize()
+        .map_err(|_| "EXECUTABLE_MISSING".to_string())?;
+    if !canon_exe.starts_with(&canon_dir) {
+        return Err("EXECUTABLE_OUTSIDE_INSTALL_DIR".into());
+    }
+    if let Some(expected) = catalog_exe {
+        let actual = canon_exe
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        if actual != expected {
+            return Err("EXECUTABLE_NAME_MISMATCH".into());
+        }
+    }
+    if let Some(expected_sha) = installed.exe_sha256.as_deref() {
+        let actual =
+            downloads::sha256_file(&canon_exe).map_err(|_| "INSTALL_FAILED".to_string())?;
+        if !actual.eq_ignore_ascii_case(expected_sha) {
+            return Err("HASH_MISMATCH".into());
+        }
+    }
+    Ok(exe)
 }
 
 /// Launches an installed game behind the license gate.
 ///
-/// Flow: verify license → mint one-time WS token → spawn process with
-/// `--port --token` + window flags. The game must handshake within seconds
-/// or it exits itself.
+/// Flow: verify license → verify install (path/sha256) → mint one-time
+/// WS token → spawn process (`{token,port}` via **stdin**, never argv) →
+/// wait ≤ 15 s for the WS handshake. On timeout the process is killed and
+/// marked `FailedToStart` so the user gets a clear `HANDSHAKE_TIMEOUT`.
 #[tauri::command]
 pub async fn play_game(
     slug: String,
@@ -297,22 +387,28 @@ pub async fn play_game(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
+    if !valid_slug(&slug) {
+        return Err("INVALID_SLUG".into());
+    }
     let token = token(&state).await?;
     if !state
         .api
-        .verify_license(&token, &state.hwid)
+        .verify_license(&token, require_hwid(&state)?)
         .await
         .map_err(|e| e.to_string())?
     {
         return Err("LICENSE_DENIED".into());
     }
 
+    let catalog_exe = state.api.games(&token).await.ok().and_then(|g| {
+        g.iter()
+            .find(|x| x.slug == slug)
+            .map(|x| x.executable_name.clone())
+    });
+
     let installed = downloads::installed_info(&state.data_dir, &slug)
         .ok_or_else(|| "NOT_INSTALLED".to_string())?;
-    let exe = std::path::PathBuf::from(&installed.exe_path);
-    if !exe.exists() {
-        return Err("EXECUTABLE_MISSING".into());
-    }
+    let exe = verify_install(&installed, catalog_exe.as_deref())?;
 
     let opts = match window_options {
         Some(o) => o,
@@ -325,22 +421,51 @@ pub async fn play_game(
         let _ = s.save();
     }
 
+    let port = state.game_server.port();
     let session_token = state.game_server.issue_token(&slug).await;
-    let args = ProcessManager::build_args(GAME_WS_PORT, &session_token, &opts);
+    let args = ProcessManager::build_args(port, &opts);
+    let payload = ProcessManager::stdin_payload(port, &session_token);
     state
         .processes
-        .spawn(&slug, &exe, &args)
-        .map_err(|e| e.to_string())?;
+        .spawn(&slug, &exe, &args, &payload)
+        .map_err(|e| {
+            tracing::error!(slug = %slug, error = %e, "game spawn failed");
+            e.to_string()
+        })?;
+    tracing::info!(slug = %slug, "game process spawned");
     *state.active_game_slug.lock().await = Some(slug.clone());
+
+    // Launch gate: the game must connect + hello within HANDSHAKE_TIMEOUT.
+    if !state
+        .game_server
+        .wait_for_handshake(&slug, HANDSHAKE_TIMEOUT)
+        .await
+    {
+        tracing::warn!(slug = %slug, "game handshake timed out — killing process");
+        state.processes.fail_and_kill(&slug);
+        let _ = app.emit("game-exited", json!({"slug": slug}));
+        return Err("HANDSHAKE_TIMEOUT".into());
+    }
+    state.processes.mark_handshaken(&slug);
+    tracing::info!(slug = %slug, "game handshake ok");
     let _ = app.emit("game-launched", json!({"slug": slug}));
-    Ok(json!({"launched": slug, "args": args}))
+    Ok(json!({"launched": slug}))
 }
 
-/// Sends `shutdown` to the game's WS link and hard-kills the process.
+/// Graceful stop: WS `shutdown` frame first, up to 5 s to let the game
+/// exit cleanly, then force-kill if it ignored the order.
 #[tauri::command]
 pub async fn kill_game(slug: String, state: State<'_, AppState>) -> Result<(), String> {
+    if !state.processes.is_alive(&slug) {
+        // Still try the WS path — the socket may outlive the marker.
+        state.game_server.shutdown_slug(&slug).await;
+        return Err("GAME_NOT_RUNNING".into());
+    }
     state.game_server.shutdown_slug(&slug).await;
-    state.processes.kill(&slug).map_err(|e| e.to_string())
+    if !state.processes.wait_for_exit(&slug, SHUTDOWN_GRACE).await {
+        state.processes.kill(&slug).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -426,9 +551,7 @@ pub async fn apply_trigger_template(
     let profile = TriggerMapper::template_profile(&game_slug, &template)
         .ok_or_else(|| format!("неизвестный шаблон: {template}"))?;
     let mut s = state.settings.lock().await;
-    s.data
-        .trigger_profiles
-        .insert(game_slug, profile.clone());
+    s.data.trigger_profiles.insert(game_slug, profile.clone());
     let _ = s.save();
     Ok(profile)
 }
@@ -436,10 +559,7 @@ pub async fn apply_trigger_template(
 /// Injects a raw event into the mapping pipeline — the event simulator.
 /// Works even with no game running (still reaches overlay + feed).
 #[tauri::command]
-pub async fn simulate_event(
-    raw: RawStreamEvent,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn simulate_event(raw: RawStreamEvent, state: State<'_, AppState>) -> Result<(), String> {
     state
         .raw_tx
         .send(raw)
@@ -479,7 +599,7 @@ pub async fn set_chroma_key(enabled: bool, state: State<'_, AppState>) -> Result
 /// Machine HWID (shown masked in the UI; needed for support).
 #[tauri::command]
 pub async fn get_hwid(state: State<'_, AppState>) -> Result<String, String> {
-    Ok(state.hwid.clone())
+    Ok(state.hwid.clone().unwrap_or_default())
 }
 
 /// Current backend base URL (shown on the auth screen).
@@ -531,8 +651,7 @@ pub async fn set_forward_config(
             s.data.forward.relay_admin_secret = Some(relay_admin_secret.trim().to_string());
         }
         if s.data.forward.stream_key.is_none() {
-            s.data.forward.stream_key =
-                Some(format!("sk_{}", uuid::Uuid::new_v4().simple()));
+            s.data.forward.stream_key = Some(format!("sk_{}", uuid::Uuid::new_v4().simple()));
         }
         let _ = s.save();
     }
@@ -702,14 +821,13 @@ pub async fn admin_rollback(slug: String, state: State<'_, AppState>) -> Result<
 }
 
 #[tauri::command]
-pub async fn admin_list_users(
-    query: String,
-    state: State<'_, AppState>,
-) -> Result<Value, String> {
+pub async fn admin_list_users(query: String, state: State<'_, AppState>) -> Result<Value, String> {
     let enc: String = query
         .bytes()
         .map(|b| match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
             _ => format!("%{b:02X}"),
         })
         .collect();
@@ -765,4 +883,89 @@ pub async fn admin_audit(state: State<'_, AppState>) -> Result<Value, String> {
         .admin_json(Method::GET, "/api/admin/audit", &token(&state).await?, None)
         .await
         .map_err(|e| e.to_string())
+}
+
+// ---------------------------------------------------------------------------
+// Local services health (self-test)
+// ---------------------------------------------------------------------------
+
+/// Checks that the loopback services actually answer: TCP-connect to the
+/// game WS port and GET the overlay `/health`. Returns per-service status.
+#[tauri::command]
+pub async fn services_health(state: State<'_, AppState>) -> Result<Value, String> {
+    let game_port = state.game_server.port();
+    let game_ws = if game_port > 0 {
+        tokio::net::TcpStream::connect(("127.0.0.1", game_port))
+            .await
+            .is_ok()
+    } else {
+        false
+    };
+    let overlay = match *state.overlay_port.lock().await {
+        Some(p) => reqwest::get(format!("http://127.0.0.1:{p}/health"))
+            .await
+            .map(|r| r.status().is_success())
+            .unwrap_or(false),
+        None => false,
+    };
+    Ok(json!({
+        "game_ws": { "port": game_port, "ok": game_ws },
+        "overlay": { "port": *state.overlay_port.lock().await, "ok": overlay },
+        "service_error": state.service_error.lock().await.clone(),
+    }))
+}
+
+/// Diagnostics for one running process: state, pid, exit code, log tails.
+#[tauri::command]
+pub async fn get_proc_info(slug: String, state: State<'_, AppState>) -> Result<Value, String> {
+    let info = state
+        .processes
+        .proc_info(&slug)
+        .ok_or_else(|| "GAME_NOT_RUNNING".to_string())?;
+    serde_json::to_value(info).map_err(|e| e.to_string())
+}
+
+// ---------------------------------------------------------------------------
+// Diagnostics (Task 6)
+// ---------------------------------------------------------------------------
+
+/// "Скопировать diagnostics" payload: version/OS/services/running/log tail.
+/// Deliberately NO tokens, settings, HWID or stream keys — safe to paste
+/// into a bug report. Log lines pass through `logging::redact` as a second
+/// safety net.
+#[tauri::command]
+pub async fn get_diagnostics(state: State<'_, AppState>, app: AppHandle) -> Result<String, String> {
+    let version = app.package_info().version.to_string();
+    let integrations = state.integrations.snapshot().await;
+    let service_error = state.service_error.lock().await.clone();
+    let running = state.processes.running_slugs();
+    let log_tail = crate::logging::tail_log(&state.data_dir, 50);
+    let report = format!(
+        "chlauncher diagnostics\n\
+         ======================\n\
+         app_version: {version}\n\
+         os: {os} {arch}\n\
+         server_url: {server}\n\
+         game_ws_port: {gport}\n\
+         overlay_port: {oport}\n\
+         service_error: {serr}\n\
+         running_games: {running:?}\n\
+         integrations: {integrations}\n\
+         \n\
+         --- last log lines (redacted) ---\n\
+         {log_tail}\n",
+        os = std::env::consts::OS,
+        arch = std::env::consts::ARCH,
+        server = state.api.base(),
+        gport = state.game_server.port(),
+        oport = state
+            .overlay_port
+            .lock()
+            .await
+            .map(|p| p.to_string())
+            .unwrap_or_else(|| "—".into()),
+        serr = service_error.as_deref().unwrap_or("—"),
+        integrations = serde_json::to_string_pretty(&integrations).unwrap_or_default(),
+    );
+    Ok(report)
 }

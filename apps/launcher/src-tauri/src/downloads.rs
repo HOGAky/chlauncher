@@ -71,7 +71,7 @@ pub async fn download_and_install(
 ) -> Result<InstalledGame, ApiError> {
     let root = games_root(data_dir);
     fs::create_dir_all(&root)
-        .map_err(|e| ApiError::Server(500, format!("MKDIR_FAILED: {e}")))?;
+        .map_err(|e| ApiError::server_detailed(500, "INSTALL_FAILED", e.to_string()))?;
 
     let zip_path = root.join(format!(".dl-{slug}.zip"));
     let sha = match api.download_game_zip(token, slug, &zip_path).await {
@@ -84,9 +84,10 @@ pub async fn download_and_install(
     if let Some(expected) = expected_sha256 {
         if !expected.is_empty() && !sha.eq_ignore_ascii_case(expected) {
             let _ = fs::remove_file(&zip_path);
-            return Err(ApiError::Server(
+            return Err(ApiError::server_detailed(
                 422,
-                format!("HASH_MISMATCH: expected {expected}, got {sha}"),
+                "HASH_MISMATCH",
+                format!("expected {expected}, got {sha}"),
             ));
         }
     }
@@ -102,11 +103,15 @@ pub async fn download_and_install(
         extract_zip(&zip_c, &staging_c)
     })
     .await
-    .map_err(|e| ApiError::Server(500, format!("JOIN_FAILED: {e}")))?;
+    .map_err(|e| ApiError::server_detailed(500, "INSTALL_FAILED", e.to_string()))?;
     let _ = fs::remove_file(&zip_path);
     if let Err(e) = extract {
         let _ = fs::remove_dir_all(&staging);
-        return Err(ApiError::Server(500, format!("UNZIP_FAILED: {e}")));
+        return Err(ApiError::server_detailed(
+            500,
+            "INSTALL_FAILED",
+            e.to_string(),
+        ));
     }
 
     // Atomic swap: current → .old, staging → live. Failure mid-swap is
@@ -115,26 +120,50 @@ pub async fn download_and_install(
     let _ = fs::remove_dir_all(&old);
     if dir.exists() {
         fs::rename(&dir, &old)
-            .map_err(|e| ApiError::Server(500, format!("SWAP_FAILED: {e}")))?;
+            .map_err(|e| ApiError::server_detailed(500, "INSTALL_FAILED", e.to_string()))?;
     }
     if let Err(e) = fs::rename(&staging, &dir) {
         if old.exists() {
             let _ = fs::rename(&old, &dir); // best-effort rollback
         }
-        return Err(ApiError::Server(500, format!("SWAP_FAILED: {e}")));
+        return Err(ApiError::server_detailed(
+            500,
+            "INSTALL_FAILED",
+            e.to_string(),
+        ));
     }
     let _ = fs::remove_dir_all(&old);
 
     let exe_path = dir.join(executable_name);
+    // Hash the executable itself — verified again before every launch so a
+    // tampered binary never runs (§secure-launch).
+    let exe_sha256 = if exe_path.exists() {
+        sha256_file(&exe_path).ok()
+    } else {
+        None
+    };
     let info = InstalledGame {
         version: version.to_string(),
         install_dir: dir.to_string_lossy().to_string(),
         exe_path: exe_path.to_string_lossy().to_string(),
         sha256: Some(sha),
+        exe_sha256,
     };
-    fs::write(marker_path(&dir), serde_json::to_string_pretty(&info).unwrap())
-        .map_err(|e| ApiError::Server(500, format!("MARKER_FAILED: {e}")))?;
+    let marker = serde_json::to_string_pretty(&info)
+        .map_err(|e| ApiError::server_detailed(500, "INSTALL_FAILED", e.to_string()))?;
+    fs::write(marker_path(&dir), marker)
+        .map_err(|e| ApiError::server_detailed(500, "INSTALL_FAILED", e.to_string()))?;
     Ok(info)
+}
+
+/// Incremental SHA-256 of a file — shared by install (exe hash) and the
+/// pre-launch integrity check.
+pub fn sha256_file(path: &Path) -> io::Result<String> {
+    use sha2::Digest;
+    let mut hasher = sha2::Sha256::new();
+    let mut f = fs::File::open(path)?;
+    io::copy(&mut f, &mut hasher)?;
+    Ok(format!("{:x}", hasher.finalize()))
 }
 
 /// Extracts a zip archive into `dest` (blocking — run via spawn_blocking).

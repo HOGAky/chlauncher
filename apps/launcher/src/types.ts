@@ -21,6 +21,8 @@ export interface StreamEvent {
   action_command: string;
   amount: number;
   raw_name: string;
+  /** Frontend-assigned feed key — unique per event instance. */
+  fid?: string;
 }
 
 /** A raw event fed into the trigger mapper (simulator input shape). */
@@ -152,7 +154,7 @@ export interface Bootstrap {
   email: string | null;
   /** 'user' | 'admin' — shows the admin tab; server never trusts it. */
   role: string | null;
-  hwid: string;
+  hwid: string | null;
   subscription: Subscription | null;
   streamer_mode: boolean;
   window_options: WindowOptions;
@@ -163,8 +165,12 @@ export interface Bootstrap {
     donationalerts: IntegrationStatus;
   };
   running: string[];
-  overlay_url: string;
+  /** null when the overlay failed to bind — see service_error. */
+  overlay_url: string | null;
+  /** Actual OS-assigned game WS port (0 = service failed to bind). */
   game_ws_port: number;
+  /** Startup failure of a local service, if any — shown as a banner. */
+  service_error: string | null;
   server_url: string;
   forward: {
     enabled: boolean;

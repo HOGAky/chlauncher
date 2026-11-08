@@ -29,6 +29,12 @@ pub struct EventHub {
     pub totals: Mutex<HashMap<String, i64>>,
 }
 
+impl Default for EventHub {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EventHub {
     pub fn new() -> Self {
         let (tx, _) = broadcast::channel(512);
@@ -42,14 +48,14 @@ impl EventHub {
     /// Records and broadcasts one mapped event to all consumers.
     pub fn dispatch(&self, ev: StreamEvent) {
         {
-            let mut recent = self.recent.lock().unwrap();
+            let mut recent = self.recent.lock().unwrap_or_else(|p| p.into_inner());
             if recent.len() >= RECENT_CAPACITY {
                 recent.pop_front();
             }
             recent.push_back(ev.clone());
         }
         {
-            let mut totals = self.totals.lock().unwrap();
+            let mut totals = self.totals.lock().unwrap_or_else(|p| p.into_inner());
             *totals.entry(ev.user.clone()).or_default() += ev.amount as i64;
         }
         // No receivers is fine — broadcast just drops the message.
@@ -60,7 +66,7 @@ impl EventHub {
     pub fn recent_events(&self) -> Vec<StreamEvent> {
         self.recent
             .lock()
-            .unwrap()
+            .unwrap_or_else(|p| p.into_inner())
             .iter()
             .rev()
             .cloned()
@@ -69,9 +75,9 @@ impl EventHub {
 
     /// Top contributors by cumulative amount (for the overlay leaderboard).
     pub fn top_supporters(&self, n: usize) -> Vec<(String, i64)> {
-        let totals = self.totals.lock().unwrap();
+        let totals = self.totals.lock().unwrap_or_else(|p| p.into_inner());
         let mut v: Vec<(String, i64)> = totals.clone().into_iter().collect();
-        v.sort_by(|a, b| b.1.cmp(&a.1));
+        v.sort_by_key(|a| std::cmp::Reverse(a.1));
         v.truncate(n);
         v
     }
@@ -117,8 +123,8 @@ impl TriggerMapper {
     /// The factory-default profile seeded for every game — mirrors the
     /// examples in the product spec.
     pub fn default_profile(game_slug: &str) -> TriggerProfile {
-        let mk = |source: &str, kind: &str, match_value: &str, min: i32, action: &str| {
-            TriggerRule {
+        let mk =
+            |source: &str, kind: &str, match_value: &str, min: i32, action: &str| TriggerRule {
                 id: uuid::Uuid::new_v4().to_string(),
                 source: source.into(),
                 event_kind: kind.into(),
@@ -126,8 +132,7 @@ impl TriggerMapper {
                 min_amount: min,
                 action: action.into(),
                 multiplier: 1.0,
-            }
-        };
+            };
         TriggerProfile {
             game_slug: game_slug.into(),
             rules: vec![
@@ -144,8 +149,8 @@ impl TriggerMapper {
     /// covers the whitelist from `docs/roblox-integration.md` §C /
     /// `DESIGN.md` §5.7 in the Roblox project.
     pub fn template_profile(game_slug: &str, name: &str) -> Option<TriggerProfile> {
-        let mk = |source: &str, kind: &str, match_value: &str, min: i32, action: &str| {
-            TriggerRule {
+        let mk =
+            |source: &str, kind: &str, match_value: &str, min: i32, action: &str| TriggerRule {
                 id: uuid::Uuid::new_v4().to_string(),
                 source: source.into(),
                 event_kind: kind.into(),
@@ -153,8 +158,7 @@ impl TriggerMapper {
                 min_amount: min,
                 action: action.into(),
                 multiplier: 1.0,
-            }
-        };
+            };
         let rules = match name {
             "steal-the-stream" => vec![
                 // Sabotage tier — the expensive gifts do the mean things.

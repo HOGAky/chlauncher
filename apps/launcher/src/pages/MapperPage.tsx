@@ -13,6 +13,7 @@ import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 
+import { humanError } from '../errorMessages';
 const SOURCES = ['any', 'tiktok', 'donationalerts', 'simulator'];
 const KINDS = ['any', 'gift', 'like', 'comment', 'donation', 'follow', 'share', 'subscribe', 'join'];
 const ACTIONS = [
@@ -43,7 +44,7 @@ export default function MapperPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.getTriggers(slug).then(setProfile).catch((e) => setError(String(e)));
+    api.getTriggers(slug).then(setProfile).catch((e) => setError(humanError(e)));
   }, [slug]);
 
   /** Updates one field of one rule. */
@@ -66,7 +67,7 @@ export default function MapperPage() {
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
     } catch (e) {
-      setError(String(e));
+      setError(humanError(e));
     }
   };
 
@@ -90,7 +91,7 @@ export default function MapperPage() {
               api
                 .applyTriggerTemplate(slug, 'steal-the-stream')
                 .then(setProfile)
-                .catch((e) => setError(String(e)))
+                .catch((e) => setError(humanError(e)))
             }
           >
             <Wand2 size={14} /> StS шаблон

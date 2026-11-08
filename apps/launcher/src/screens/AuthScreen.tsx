@@ -9,16 +9,7 @@ import { useApp } from '../App';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-
-/** Human-readable labels for server error codes. */
-const ERROR_LABELS: Record<string, string> = {
-  INVALID_CREDENTIALS: 'Неверный email или пароль',
-  EMAIL_TAKEN: 'Этот email уже зарегистрирован',
-  HWID_MISMATCH: 'Аккаунт привязан к другому устройству (сброс HWID — раз в 7 дней в личном кабинете)',
-  HWID_REQUIRED: 'Не удалось определить HWID устройства',
-  PASSWORD_TOO_SHORT: 'Пароль должен быть не короче 6 символов',
-  INVALID_EMAIL: 'Некорректный email',
-};
+import { humanError } from '../errorMessages';
 
 export default function AuthScreen() {
   const { setSession } = useApp();
@@ -44,7 +35,7 @@ export default function AuthScreen() {
       setServerSaved(true);
       setTimeout(() => setServerSaved(false), 2000);
     } catch (e) {
-      setError(String(e));
+      setError(humanError(e));
     }
   };
 
@@ -61,9 +52,7 @@ export default function AuthScreen() {
       const userEmail = email;
       setSession(userEmail, res.subscription);
     } catch (e) {
-      const msg = String(e);
-      const code = Object.keys(ERROR_LABELS).find((k) => msg.includes(k));
-      setError(code ? ERROR_LABELS[code] : msg);
+      setError(humanError(e));
     } finally {
       setBusy(false);
     }

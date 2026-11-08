@@ -10,6 +10,9 @@ import assert from 'node:assert/strict';
 
 delete process.env.ENABLE_MOCK_BILLING;
 process.env.NODE_ENV = 'production';
+// Production requires real secrets even in tests (config validation).
+process.env.JWT_SECRET ||= 'test-jwt-secret-for-no-mock-suite';
+process.env.HWID_HASH_SECRET ||= 'test-hwid-secret-for-no-mock-suite';
 
 let app;
 

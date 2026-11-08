@@ -9,7 +9,6 @@ use reqwest::{Client, StatusCode};
 use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
 use std::env;
-use thiserror::Error;
 
 use crate::types::{CatalogGame, Subscription};
 
@@ -31,15 +30,94 @@ pub fn resolve_base_url(server_url: Option<&str>) -> String {
 }
 
 /// Errors the UI can surface directly.
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub enum ApiError {
-    #[error("network: {0}")]
-    Network(#[from] reqwest::Error),
-    /// `(status, server error code)` — e.g. `SUBSCRIPTION_REQUIRED`.
-    #[error("{1}")]
-    Server(u16, String),
-    #[error("malformed response")]
+    /// Transport failure (DNS/connect/timeout) — retryable.
+    Network(reqwest::Error),
+    /// Server answered with an error envelope.
+    Server {
+        status: u16,
+        code: String,
+        /// `x-request-id` from the server — support ticket correlation.
+        request_id: Option<String>,
+        /// Optional local detail for logs (never a secret).
+        detail: Option<String>,
+    },
     Malformed,
+}
+
+impl std::fmt::Display for ApiError {
+    /// `CODE[|req=<id>][|<detail>]` — first `|` segment is the machine
+    /// code the UI localizes; `req=` is the support correlation id.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.to_client_string())
+    }
+}
+
+impl std::error::Error for ApiError {}
+
+impl From<reqwest::Error> for ApiError {
+    fn from(e: reqwest::Error) -> Self {
+        ApiError::Network(e)
+    }
+}
+
+impl ApiError {
+    /// Shorthand for constructing a Server error without a request id.
+    pub fn server(status: u16, code: impl Into<String>) -> Self {
+        ApiError::Server {
+            status,
+            code: code.into(),
+            request_id: None,
+            detail: None,
+        }
+    }
+
+    /// Same but with internal detail appended to the display string.
+    pub fn server_detailed(status: u16, code: impl Into<String>, detail: String) -> Self {
+        ApiError::Server {
+            status,
+            code: code.into(),
+            request_id: None,
+            detail: Some(detail),
+        }
+    }
+
+    /// Machine code for UI localization (`errorMessages.ts`).
+    pub fn code(&self) -> &str {
+        match self {
+            ApiError::Network(_) => "NETWORK_ERROR",
+            ApiError::Server { code, .. } => code.as_str(),
+            ApiError::Malformed => "INTERNAL_ERROR",
+        }
+    }
+
+    /// `CODE[|req=<id>][|<detail>]` — the frontend splits on `|`; first
+    /// segment is the machine code, `req=` carries the support reference.
+    pub fn to_client_string(&self) -> String {
+        match self {
+            ApiError::Server {
+                code,
+                request_id,
+                detail,
+                ..
+            } => {
+                let mut s = code.clone();
+                if let Some(id) = request_id {
+                    s.push_str(&format!("|req={id}"));
+                }
+                if let Some(d) = detail {
+                    s.push_str(&format!("|{d}"));
+                }
+                s
+            }
+            _ => self.code().to_string(),
+        }
+    }
+
+    fn transport_retryable(&self) -> bool {
+        matches!(self, ApiError::Network(e) if e.is_connect() || e.is_timeout() || e.is_request())
+    }
 }
 
 /// Thin authenticated HTTP client. The base URL is behind a shared
@@ -99,7 +177,40 @@ impl ApiClient {
     }
 
     /// Performs a JSON request; maps non-2xx to [`ApiError::Server`].
+    /// Idempotent GETs retry transport failures twice (500 ms, 1500 ms).
     async fn req<T: DeserializeOwned>(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        token: Option<&str>,
+        body: Option<Value>,
+    ) -> Result<T, ApiError> {
+        const RETRY_DELAYS: [u64; 2] = [500, 1500];
+        let attempts = if method == reqwest::Method::GET {
+            RETRY_DELAYS.len() + 1
+        } else {
+            1
+        };
+        let mut last_err: Option<ApiError> = None;
+        for attempt in 0..attempts {
+            if attempt > 0 {
+                tokio::time::sleep(std::time::Duration::from_millis(RETRY_DELAYS[attempt - 1]))
+                    .await;
+            }
+            match self
+                .req_once::<T>(method.clone(), path, token, body.clone())
+                .await
+            {
+                Err(e) if e.transport_retryable() => last_err = Some(e),
+                other => return other,
+            }
+        }
+        Err(last_err.unwrap_or(ApiError::Malformed))
+    }
+
+    /// Single attempt of [`req`]; extracts the error envelope's `error`
+    /// code and the `x-request-id` header for support correlation.
+    async fn req_once<T: DeserializeOwned>(
         &self,
         method: reqwest::Method,
         path: &str,
@@ -118,13 +229,23 @@ impl ApiClient {
         let res = r.send().await?;
         let status = res.status();
         if !status.is_success() {
+            let request_id = res
+                .headers()
+                .get("x-request-id")
+                .and_then(|v| v.to_str().ok())
+                .map(String::from);
             let code = res
                 .json::<Value>()
                 .await
                 .ok()
                 .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(String::from))
                 .unwrap_or_else(|| "UNKNOWN".to_string());
-            return Err(ApiError::Server(status.as_u16(), code));
+            return Err(ApiError::Server {
+                status: status.as_u16(),
+                code,
+                request_id,
+                detail: None,
+            });
         }
         res.json::<T>().await.map_err(|_| ApiError::Malformed)
     }
@@ -157,6 +278,17 @@ impl ApiClient {
             "/api/auth/login",
             None,
             Some(json!({"email": email, "password": password, "hwid": hwid})),
+        )
+        .await
+    }
+
+    /// `POST /api/auth/logout` — invalidates the token server-side.
+    pub async fn logout(&self, token: &str) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::POST,
+            "/api/auth/logout",
+            Some(token),
+            Some(json!({})),
         )
         .await
     }
@@ -254,21 +386,18 @@ impl ApiClient {
             .send()
             .await?;
         if res.status() == StatusCode::FORBIDDEN {
-            return Err(ApiError::Server(403, "SUBSCRIPTION_REQUIRED".into()));
+            return Err(ApiError::server(403, "SUBSCRIPTION_REQUIRED"));
         }
         if !res.status().is_success() {
-            return Err(ApiError::Server(
-                res.status().as_u16(),
-                "DOWNLOAD_FAILED".into(),
-            ));
+            return Err(ApiError::server(res.status().as_u16(), "DOWNLOAD_FAILED"));
         }
         let mut out = std::fs::File::create(dest)
-            .map_err(|e| ApiError::Server(500, format!("WRITE_FAILED: {e}")))?;
+            .map_err(|e| ApiError::server_detailed(500, "DOWNLOAD_FAILED", e.to_string()))?;
         let mut hasher = Sha256::new();
         use std::io::Write;
         while let Some(chunk) = res.chunk().await? {
             out.write_all(&chunk)
-                .map_err(|e| ApiError::Server(500, format!("WRITE_FAILED: {e}")))?;
+                .map_err(|e| ApiError::server_detailed(500, "DOWNLOAD_FAILED", e.to_string()))?;
             hasher.update(&chunk);
         }
         Ok(hasher
@@ -312,11 +441,11 @@ impl ApiClient {
 
         let file = tokio::fs::File::open(path)
             .await
-            .map_err(|e| ApiError::Server(400, format!("FILE_OPEN_FAILED: {e}")))?;
+            .map_err(|e| ApiError::server_detailed(400, "FILE_OPEN_FAILED", e.to_string()))?;
         let total = file
             .metadata()
             .await
-            .map_err(|e| ApiError::Server(400, format!("FILE_STAT_FAILED: {e}")))?
+            .map_err(|e| ApiError::server_detailed(400, "FILE_STAT_FAILED", e.to_string()))?
             .len();
 
         let sent = Arc::new(AtomicU64::new(0));
@@ -362,7 +491,7 @@ impl ApiClient {
                 .ok()
                 .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(String::from))
                 .unwrap_or_else(|| "UNKNOWN".to_string());
-            return Err(ApiError::Server(status.as_u16(), code));
+            return Err(ApiError::server(status.as_u16(), code));
         }
         res.json::<Value>().await.map_err(|_| ApiError::Malformed)
     }

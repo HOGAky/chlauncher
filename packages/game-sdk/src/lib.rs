@@ -4,7 +4,8 @@
 //!
 //! 1. **DRM / anti-piracy handshake** — a game binary refuses to run unless it
 //!    was spawned by the launcher with a valid one-time session token
-//!    (`game --port 9876 --token XYZ`). Without a successful handshake the
+//!    (`--port <p>` in argv + `{"token":…}` on the first stdin line).
+//!    Without a successful handshake the
 //!    game must exit immediately, so a copied `.exe` is useless.
 //! 2. **Live event feed** — the launcher aggregates TikTok Live events and
 //!    DonationAlerts donations, maps them through the streamer's trigger
@@ -127,9 +128,10 @@ pub enum SdkError {
 impl std::fmt::Display for SdkError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SdkError::MissingArgs => {
-                write!(f, "missing --port/--token (run the game via the launcher)")
-            }
+            SdkError::MissingArgs => write!(
+                f,
+                "missing --port or stdin credentials (run the game via the launcher)"
+            ),
             SdkError::Connect(e) => write!(f, "cannot reach launcher: {e}"),
             SdkError::Rejected(r) => write!(f, "launcher rejected session: {r}"),
             SdkError::Protocol(e) => write!(f, "protocol error: {e}"),
@@ -208,11 +210,10 @@ fn epoch_secs() -> u64 {
 // ---------------------------------------------------------------------------
 
 /// Parses `--key value` / `--key=value` arguments from the command line.
-/// Returns `(port, token)` or [`SdkError::MissingArgs`].
-fn parse_launch_args() -> Result<(u16, String), SdkError> {
+/// Returns the game-WS port or [`SdkError::MissingArgs`].
+fn parse_launch_args() -> Result<u16, SdkError> {
     let args: Vec<String> = std::env::args().collect();
     let mut port: Option<u16> = None;
-    let mut token: Option<String> = None;
 
     let mut i = 1;
     while i < args.len() {
@@ -221,42 +222,73 @@ fn parse_launch_args() -> Result<(u16, String), SdkError> {
             Some((k, v)) => (k, Some(v.to_string())),
             None => (arg.as_str(), None),
         };
-        let take_value = |i: &mut usize| -> Option<String> {
-            if let Some(v) = &inline {
-                Some(v.clone())
-            } else if *i + 1 < args.len() {
-                *i += 1;
-                Some(args[*i].clone())
-            } else {
-                None
-            }
-        };
-        match key {
-            "--port" => port = take_value(&mut i).and_then(|v| v.parse().ok()),
-            "--token" => token = take_value(&mut i),
-            _ => {}
+        if key == "--port" {
+            let v = inline.or_else(|| {
+                if i + 1 < args.len() {
+                    i += 1;
+                    Some(args[i].clone())
+                } else {
+                    None
+                }
+            });
+            port = v.and_then(|v| v.parse().ok());
         }
         i += 1;
     }
 
-    match (port, token) {
-        (Some(p), Some(t)) if !t.is_empty() => Ok((p, t)),
+    port.ok_or(SdkError::MissingArgs)
+}
+
+/// Reads the session token from the first stdin line.
+///
+/// The launcher writes `{"token":"…","port":…}` and closes stdin. Reading
+/// credentials this way keeps the token out of the process command line —
+/// `wmic`/Task Manager/`ps` would expose an argv token to any local user.
+///
+/// A 3 s bound guards the direct-launch path: a game started by hand has a
+/// live-but-silent stdin, so a plain `read_line` would hang forever.
+/// Plain `token\n` (non-JSON) is also accepted for launcher stubs/tests.
+fn read_token_from_stdin() -> Result<String, SdkError> {
+    let (tx, rx) = channel::<Option<String>>();
+    std::thread::spawn(move || {
+        let mut line = String::new();
+        let read = std::io::stdin().read_line(&mut line);
+        let token = match read {
+            Ok(0) | Err(_) => None,
+            Ok(_) => {
+                let line = line.trim().to_string();
+                if line.is_empty() {
+                    None
+                } else if let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) {
+                    v["token"].as_str().map(|s| s.to_string())
+                } else {
+                    Some(line)
+                }
+            }
+        };
+        let _ = tx.send(token);
+    });
+    match rx.recv_timeout(Duration::from_secs(3)) {
+        Ok(Some(t)) if !t.is_empty() => Ok(t),
         _ => Err(SdkError::MissingArgs),
     }
 }
 
 /// Performs the DRM handshake with the launcher.
 ///
-/// Expects `--port <ws port>` and `--token <session token>` in argv, opens
+/// Expects `--port <ws port>` in argv and `{token,port}` JSON on the first
+/// stdin line (the launcher writes it right after spawn). Opens
 /// `ws://127.0.0.1:<port>`, sends `hello`, and waits (≤5 s) for `welcome`.
 /// On success returns a [`LauncherLink`] backed by a reader thread.
 ///
 /// # Errors
-/// [`SdkError::MissingArgs`] when launched directly, [`SdkError::Connect`]
-/// when the launcher is unreachable, [`SdkError::Rejected`] when the token
-/// is invalid or the subscription lapsed.
+/// [`SdkError::MissingArgs`] when launched directly (no `--port`, or stdin
+/// carried no token within 3 s), [`SdkError::Connect`] when the launcher
+/// is unreachable, [`SdkError::Rejected`] when the token is invalid or the
+/// subscription lapsed.
 pub fn init_and_verify() -> Result<LauncherLink, SdkError> {
-    let (port, token) = parse_launch_args()?;
+    let port = parse_launch_args()?;
+    let token = read_token_from_stdin()?;
     verify_with(port, &token)
 }
 
@@ -264,8 +296,7 @@ pub fn init_and_verify() -> Result<LauncherLink, SdkError> {
 /// integration tests that spin up their own launcher stub.
 pub fn verify_with(port: u16, token: &str) -> Result<LauncherLink, SdkError> {
     let url = format!("ws://127.0.0.1:{port}/");
-    let (mut socket, _response) =
-        connect(&url).map_err(|e| SdkError::Connect(e.to_string()))?;
+    let (mut socket, _response) = connect(&url).map_err(|e| SdkError::Connect(e.to_string()))?;
 
     let hello = serde_json::to_string(&ClientMessage::Hello {
         token: token.to_string(),
@@ -283,16 +314,14 @@ pub fn verify_with(port: u16, token: &str) -> Result<LauncherLink, SdkError> {
     set_read_timeout(&socket, None); // back to blocking for the reader thread
 
     match reply {
-        Ok(Message::Text(text)) => {
-            match serde_json::from_str::<LauncherMessage>(&text) {
-                Ok(LauncherMessage::Welcome { .. }) => Ok(spawn_reader(socket)),
-                Ok(LauncherMessage::Error { reason }) => Err(SdkError::Rejected(reason)),
-                Ok(other) => Err(SdkError::Protocol(format!(
-                    "unexpected first frame: {other:?}"
-                ))),
-                Err(e) => Err(SdkError::Protocol(e.to_string())),
-            }
-        }
+        Ok(Message::Text(text)) => match serde_json::from_str::<LauncherMessage>(&text) {
+            Ok(LauncherMessage::Welcome { .. }) => Ok(spawn_reader(socket)),
+            Ok(LauncherMessage::Error { reason }) => Err(SdkError::Rejected(reason)),
+            Ok(other) => Err(SdkError::Protocol(format!(
+                "unexpected first frame: {other:?}"
+            ))),
+            Err(e) => Err(SdkError::Protocol(e.to_string())),
+        },
         Ok(Message::Close(_)) => Err(SdkError::Rejected("closed by launcher".into())),
         Ok(_) => Err(SdkError::Protocol("non-text handshake frame".into())),
         Err(e) => Err(SdkError::Connect(e.to_string())),
