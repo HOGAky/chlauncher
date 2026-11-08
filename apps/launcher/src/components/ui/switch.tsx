@@ -12,7 +12,9 @@ export interface SwitchProps {
   className?: string;
 }
 
-/** Accessible on/off switch. */
+/** Accessible on/off switch. `shrink-0` is load-bearing: inside flex rows a
+ *  shrinkable track gets squashed while the thumb still travels a fixed
+ *  distance — the classic "crooked toggle" look. */
 export const Switch = ({ checked, onCheckedChange, disabled, className }: SwitchProps) => (
   <button
     type="button"
@@ -21,7 +23,8 @@ export const Switch = ({ checked, onCheckedChange, disabled, className }: Switch
     disabled={disabled}
     onClick={() => onCheckedChange(!checked)}
     className={cn(
-      'relative h-5 w-9 rounded-full transition-colors',
+      'inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors',
+      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
       checked ? 'bg-primary' : 'bg-muted',
       disabled && 'opacity-40 pointer-events-none',
       className
@@ -29,8 +32,8 @@ export const Switch = ({ checked, onCheckedChange, disabled, className }: Switch
   >
     <span
       className={cn(
-        'absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform',
-        checked ? 'translate-x-[18px]' : 'translate-x-0.5'
+        'pointer-events-none ml-0.5 block h-4 w-4 rounded-full bg-white shadow transition-transform',
+        checked ? 'translate-x-4' : 'translate-x-0'
       )}
     />
   </button>

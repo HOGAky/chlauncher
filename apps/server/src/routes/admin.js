@@ -17,7 +17,6 @@ import { config } from '../config.js';
 import {
   findGameBySlug,
   findUserById,
-  findSubscription,
   nowIso,
 } from '../db.js';
 import { subscriptionView, recordPayment, refreshSubscription } from '../subscriptions.js';
@@ -400,7 +399,9 @@ function buildView(b) {
 }
 
 function adminUserView(db, u) {
-  const sub = findSubscription(db, u.id);
+  // refreshSubscription (not findSubscription) so the panel shows the
+  // lazily-expired truth, not a stale 'active' left by the last read.
+  const sub = refreshSubscription(db, u.id);
   const payments = db
     .prepare(
       'SELECT * FROM payments WHERE user_id = ? ORDER BY id DESC LIMIT 20'

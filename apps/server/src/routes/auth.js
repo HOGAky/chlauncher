@@ -77,18 +77,24 @@ export default async function authRoutes(app, { db }) {
       return reply.code(401).send({ error: 'INVALID_CREDENTIALS' });
     }
 
-    if (!hwid) {
-      return reply.code(400).send({ error: 'HWID_REQUIRED' });
-    }
-    if (user.hwid && user.hwid !== hwid) {
-      return reply.code(403).send({ error: 'HWID_MISMATCH' });
-    }
-    if (!user.hwid) {
-      setUserHwid(db, user.id, hwid);
-      user.hwid = hwid;
-    }
-
     syncAdminRole(db, user);
+
+    // HWID anti-sharing applies to regular accounts only. Admins are the
+    // operators — they legitimately log in from the launcher, the publish
+    // CLI and elsewhere, so binding them to one machine only creates
+    // lockout footguns (HWID_MISMATCH / 7-day reset cooldown).
+    if (user.role !== 'admin') {
+      if (!hwid) {
+        return reply.code(400).send({ error: 'HWID_REQUIRED' });
+      }
+      if (user.hwid && user.hwid !== hwid) {
+        return reply.code(403).send({ error: 'HWID_MISMATCH' });
+      }
+      if (!user.hwid) {
+        setUserHwid(db, user.id, hwid);
+        user.hwid = hwid;
+      }
+    }
     const subscription = refreshSubscription(db, user.id);
     return {
       token: signToken(user),

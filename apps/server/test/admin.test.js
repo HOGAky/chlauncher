@@ -66,7 +66,12 @@ before(async () => {
 });
 
 after(() => {
-  for (const p of createdZips) fs.rmSync(p, { force: true });
+  // Windows filter drivers (Defender, indexer) hold fresh files briefly —
+  // retry instead of dying on EPERM.
+  for (const p of createdZips) {
+    fs.rmSync(p, { force: true, maxRetries: 10, retryDelay: 100 });
+    fs.rmSync(path.dirname(p), { recursive: true, force: true });
+  }
 });
 
 // --------------------------------------------------------------- §1 roles
@@ -94,6 +99,33 @@ test('regular users keep role=user and get a user-role JWT', async () => {
   const { body } = await register('plain@example.com');
   assert.equal(body.user.role, 'user');
   assert.equal(jwt.decode(body.token).role, 'user');
+});
+
+test('admins bypass the HWID binding; regular users still enforced', async () => {
+  const login = (email, hwid) =>
+    app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { email, password: 'secret123', hwid },
+    });
+
+  // Admin account registered on HWID-X logs in from a different machine
+  // (the publish CLI) and with no HWID at all — both must succeed.
+  assert.equal((await login('owner@example.com', 'HWID-OTHER')).statusCode, 200);
+  const noHwid = await app.inject({
+    method: 'POST',
+    url: '/api/auth/login',
+    payload: { email: 'owner@example.com', password: 'secret123' },
+  });
+  assert.equal(noHwid.statusCode, 200);
+
+  // Regression guard: regular users keep the anti-sharing rules.
+  const missing = await login('plain@example.com', undefined);
+  assert.equal(missing.statusCode, 400);
+  assert.equal(missing.json().error, 'HWID_REQUIRED');
+  const foreign = await login('plain@example.com', 'HWID-FOREIGN');
+  assert.equal(foreign.statusCode, 403);
+  assert.equal(foreign.json().error, 'HWID_MISMATCH');
 });
 
 test('non-admin gets 403 on /api/admin/*', async () => {

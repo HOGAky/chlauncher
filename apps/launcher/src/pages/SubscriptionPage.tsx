@@ -67,22 +67,44 @@ export default function SubscriptionPage() {
             </div>
           )}
           <div className="flex flex-wrap gap-2 pt-1">
-            <Button disabled={busy} onClick={act(() => api.mockPay())}>
+            <Button disabled={busy} onClick={act(() => api.checkout())}>
               <CreditCard size={14} /> Оплатить на 1 месяц
             </Button>
             <Button
               variant="outline"
               size="sm"
               disabled={busy}
-              title="Тест: принудительно завершает подписку"
-              onClick={act(() => api.mockExpire())}
+              title="Перепроверить статус после оплаты в браузере"
+              onClick={act(() => refreshSubscription())}
             >
-              <FlaskConical size={14} /> Тест: истечь
+              Я оплатил — проверить
             </Button>
+            {import.meta.env.DEV && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  title="Тест: mock-pay (только dev)"
+                  onClick={act(() => api.mockPay())}
+                >
+                  <FlaskConical size={14} /> Тест: оплатить
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  title="Тест: принудительно завершает подписку"
+                  onClick={act(() => api.mockExpire())}
+                >
+                  <FlaskConical size={14} /> Тест: истечь
+                </Button>
+              </>
+            )}
           </div>
           <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-            <ShieldAlert size={12} /> Оплата сейчас проходит через тестовый эндпоинт
-            mock-pay; боевые провайдеры (Stripe/ЮKassa) подключаются вебхуками на сервере.
+            <ShieldAlert size={12} /> Оплата откроется в браузере (ЮKassa). После
+            оплаты лаунчер обновит статус автоматически или по кнопке проверки.
           </p>
         </CardContent>
       </Card>

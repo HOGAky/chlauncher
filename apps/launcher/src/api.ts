@@ -6,6 +6,8 @@
  */
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { onOpenUrl, getCurrent } from '@tauri-apps/plugin-deep-link';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import type {
   AdminBuild,
   AdminGame,
@@ -49,6 +51,32 @@ export const logout = () => cmd<void>('logout');
 
 /** Fresh subscription status. */
 export const getSubscription = () => cmd<Subscription>('get_subscription');
+
+/**
+ * Real billing: creates a pending payment and opens the provider's hosted
+ * checkout page in the system browser. After paying, YooKassa redirects to
+ * `chlauncher://billing/return` (the deep-link plugin reopens this app and
+ * `onBillingReturn` fires → the UI re-reads the subscription).
+ */
+export const checkout = async (): Promise<void> => {
+  const r = await cmd<{ payment_id: string; checkout_url: string | null }>(
+    'billing_checkout'
+  );
+  if (!r.checkout_url) throw new Error('NO_CHECKOUT_URL');
+  await openUrl(r.checkout_url);
+};
+
+/** Fires when the OS delivers a `chlauncher://…` deep link to this app. */
+export const onBillingReturn = (cb: () => void): Promise<UnlistenFn> =>
+  onOpenUrl((urls) => {
+    if (urls.some((u) => u.startsWith('chlauncher://billing'))) cb();
+  });
+
+/** Deep links that launched the app cold (e.g. click while closed). */
+export const getColdBillingReturn = async (): Promise<boolean> => {
+  const urls = await getCurrent().catch(() => null);
+  return !!urls?.some((u) => u.startsWith('chlauncher://billing'));
+};
 
 /** TEST: pays for 30 days. */
 export const mockPay = () => cmd<Subscription>('mock_pay');

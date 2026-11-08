@@ -26,7 +26,10 @@ import licenseRoutes from './routes/license.js';
  */
 export async function buildApp(opts = {}) {
   const db = openDatabase(opts.databasePath || ':memory:');
-  const app = Fastify({ logger: opts.logger ?? false });
+  // trustProxy: behind Cloudflare (tunnel or orange-cloud proxy) the real
+  // client IP arrives via X-Forwarded-For / CF-Connecting-IP — needed for
+  // correct rate-limiting and the YooKassa webhook subnet check.
+  const app = Fastify({ logger: opts.logger ?? false, trustProxy: true });
 
   await app.register(cors, { origin: true });
 
