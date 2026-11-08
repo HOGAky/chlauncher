@@ -91,15 +91,34 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npx tauri build
 
+      # dumpbin lives in the VS toolchain dir — setup-msbuild puts it on
+      # PATH (it's not there by default on windows-latest).
+      - uses: microsoft/setup-msbuild@v2
+
       # src-tauri is excluded from the workspace → its target dir is
       # apps/launcher/src-tauri/target (host triple, no --target flag).
-      - name: Smoke — no MinGW/non-static CRT dependencies in the exe
+      # Both shipped exes are scanned: MinGW CRT (libgcc/libstdc++/
+      # libwinpthread) and non-static MSVC CRT (vcruntime/msvcp) must not
+      # appear — WebView2Loader.dll is whitelisted (wry links it via NuGet;
+      # if it ever shows up dynamically, Tauri's NSIS bundler ships it
+      # next to the exe and it is a documented dependency).
+      - name: Smoke — no MinGW/non-static CRT dependencies in the exes
         run: |
-          $exe = "apps/launcher/src-tauri/target/release/chlauncher.exe"
-          $deps = & dumpbin /dependents $exe | Select-String '\.dll' | ForEach-Object { $_.Line.Trim() }
-          Write-Host $deps
-          if ($deps -match 'libgcc|libstdc|libwinpthread|vcruntime|msvcp') {
-            throw "Non-static dependency found — binary won't run on a clean OS"
+          $exes = @(
+            "apps/launcher/src-tauri/target/release/chlauncher.exe",
+            "target/x86_64-pc-windows-msvc/release/mock-game.exe"
+          )
+          foreach ($exe in $exes) {
+            $deps = & dumpbin /dependents $exe |
+              Select-String '\.dll' | ForEach-Object { $_.Line.Trim() }
+            Write-Host "== $exe"; Write-Host $deps
+            $bad = $deps | Where-Object {
+              $_ -match 'libgcc|libstdc|libwinpthread|vcruntime|msvcp' -and
+              $_ -notmatch 'WebView2Loader'
+            }
+            if ($bad) {
+              throw "Non-static dependency in $exe — binary won't run on a clean OS: $bad"
+            }
           }
 
       - name: Collect artifacts

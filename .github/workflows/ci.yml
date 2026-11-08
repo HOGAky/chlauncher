@@ -18,6 +18,13 @@ on:
     branches: [main]
   pull_request:
 
+# Safety net only: release-profile builds of the launcher REQUIRE a
+# compile-time backend URL (env!("VITE_API_URL") under not(debug_assertions)).
+# Debug checks don't read it, but a stray `cargo check --release` in CI or
+# a local PR experiment would fail cryptically without a default here.
+env:
+  VITE_API_URL: 'http://127.0.0.1:8787'
+
 jobs:
   server:
     runs-on: ubuntu-latest
