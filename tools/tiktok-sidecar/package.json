@@ -5,9 +5,13 @@
   "description": "chlauncher TikTok Live event sidecar (tiktok-live-connector -> NDJSON)",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "bundle": "esbuild index.js --bundle --platform=node --target=node20 --outfile=dist/sidecar.js"
   },
   "dependencies": {
     "tiktok-live-connector": "^2.5.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.2"
   }
 }

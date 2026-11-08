@@ -148,6 +148,34 @@ cargo clippy --workspace --all-targets -- -D warnings
 Never commit them; rotate `JWT_SECRET`/`HWID_HASH_SECRET` on any leak
 (rotating the HWID secret re-binds all devices).
 
+## Release pipeline
+
+`.github/workflows/release.yml` fires on `v*` tags and builds the NSIS
+installer on `windows-latest` (MSVC — the only toolchain Tauri ships for
+production). Static CRT (`.cargo/config.toml`, `+crt-static`) means no
+VC++ Redist needed on clean Windows 10/11.
+
+- `rust-toolchain.toml` pins `stable` (MSVC on Windows hosts). Local dev
+  without MSVC Build Tools: `rustup override set
+  stable-x86_64-pc-windows-gnu` — never ship a GNU binary.
+- `tools/tiktok-sidecar` ships as a single-file esbuild bundle
+  (`dist/sidecar.js`) + an official `node.exe` fetched in CI — no
+  `node_modules` in the installer. Rebuild locally with
+  `(cd tools/tiktok-sidecar && npm ci && npm run bundle)` before `tauri build`.
+- Release builds pin `VITE_API_URL` at compile time (`env!` — build fails
+  without it) and ignore `settings.server_url`/`set_server_url`; the
+  server-URL field on the auth screen is dev-only (`import.meta.env.DEV`).
+- Self-updates: `tauri-plugin-updater` verifies minisign signatures
+  against `pubkey` in `tauri.conf.json`. Private key lives at
+  `~/.tauri/chlauncher` (never in the repo) and in the
+  `TAURI_SIGNING_PRIVATE_KEY` GitHub secret; `latest.json` is served from
+  GitHub Releases.
+- Required repo config for releases: var `VITE_API_URL`, secrets
+  `TAURI_SIGNING_PRIVATE_KEY` (+ `..._PASSWORD` if set), and optional
+  `ADMIN_EMAIL`/`ADMIN_PASSWORD` for auto-publishing mock-game.
+- Server deployment on a VPS: [`docs/vps-deploy.md`](docs/vps-deploy.md)
+  (systemd unit, Cloudflare, SQLite `.backup` cron via `tools/backup-db.sh`).
+
 ## Where the real keys go
 
 See [`.env.example`](.env.example):

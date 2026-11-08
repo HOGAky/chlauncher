@@ -1,7 +1,12 @@
-# Build toolchain for this repo.
-# MSVC Build Tools are unavailable on the build machine (require admin), so
-# all crates — mock-game, game-sdk, launcher backend — use the stable GNU
-# toolchain. MinGW-w64 binutils must be on PATH for crates that generate
-# import libraries via `dlltool` (e.g. on this machine: C:\Users\hoga8\tools\w64devkit\bin).
+# Toolchain for this repo: `stable` — on Windows this resolves to MSVC,
+# which is the only toolchain Tauri/WebView2 officially supports for
+# shipping binaries.
+#
+# LOCAL DEV on machines without MSVC Build Tools: override once per clone:
+#   rustup override set stable-x86_64-pc-windows-gnu
+# (needs MinGW-w64 binutils on PATH for `windres`).
+#
+# Release builds happen in CI on windows-latest (MSVC + static CRT via
+# .cargo/config.toml) — never ship a locally built GNU binary.
 [toolchain]
-channel = "stable-x86_64-pc-windows-gnu"
+channel = "stable"

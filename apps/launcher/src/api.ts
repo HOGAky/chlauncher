@@ -173,6 +173,13 @@ export const getForwardStatus = () => cmd<ForwardStatus>('get_forward_status');
 /** Sanitized diagnostics report text (no secrets) — for bug reports. */
 export const getDiagnostics = () => cmd<string>('get_diagnostics');
 
+/**
+ * Self-update check: `null` when up to date. When an update is found it is
+ * installed and the app relaunches, so a resolving promise means "no
+ * update". Best-effort — callers should swallow failures.
+ */
+export const checkLauncherUpdate = () => cmd<string | null>('check_launcher_update');
+
 // ---- events ----------------------------------------------------------------
 
 /** Subscribes to mapped stream events pushed to the UI feed. */

@@ -288,7 +288,19 @@ fn sidecar_dir(app: &AppHandle) -> Option<std::path::PathBuf> {
     };
     candidates
         .into_iter()
-        .find(|p| p.join("index.js").is_file())
+        .find(|p| sidecar_script(p).is_some())
+}
+
+/// Resolves the entry script inside a sidecar dir. Prefer the bundled
+/// single-file build (`sidecar.js`, produced by `npm run bundle` — no
+/// node_modules required) over the dev entry `index.js`. In packaged
+/// builds the bundled file sits at the top level; in the repo it lives
+/// under `dist/`.
+fn sidecar_script(dir: &std::path::Path) -> Option<std::path::PathBuf> {
+    ["sidecar.js", "dist/sidecar.js", "index.js"]
+        .iter()
+        .map(|rel| dir.join(rel))
+        .find(|p| p.is_file())
 }
 
 /// Locates a Node.js executable: `node` on PATH first, then a bundled
@@ -335,9 +347,16 @@ async fn run_tiktok(
         finish(IntegrationStatus::Error("node.exe не найден".into())).await;
         return;
     };
+    let Some(script) = sidecar_script(&dir) else {
+        finish(IntegrationStatus::Error(
+            "tiktok-sidecar: нет entry-скрипта".into(),
+        ))
+        .await;
+        return;
+    };
 
     let mut cmd = tokio::process::Command::new(node);
-    cmd.arg(dir.join("index.js"))
+    cmd.arg(&script)
         .arg(&username)
         .current_dir(&dir)
         .stdout(std::process::Stdio::piped())

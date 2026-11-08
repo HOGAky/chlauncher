@@ -20,6 +20,11 @@ pub const DEFAULT_BASE_URL: &str = "http://127.0.0.1:8787";
 /// production build ships with `VITE_API_URL=https://api.<domain>` set in
 /// the build shell), then a runtime env override for dev shells, then the
 /// loopback default.
+///
+/// Debug/dev builds only — a user-supplied base URL is a trivial license
+/// bypass (fake server that always answers `allowed: true`), so release
+/// builds take the compile-time URL exclusively.
+#[cfg(debug_assertions)]
 pub fn resolve_base_url(server_url: Option<&str>) -> String {
     server_url
         .filter(|s| !s.trim().is_empty())
@@ -27,6 +32,14 @@ pub fn resolve_base_url(server_url: Option<&str>) -> String {
         .or_else(|| option_env!("VITE_API_URL").map(String::from))
         .or_else(|| env::var("VITE_API_URL").ok())
         .unwrap_or_else(|| DEFAULT_BASE_URL.to_string())
+}
+
+/// Release builds: the prod endpoint is fixed at compile time. `env!`
+/// fails the build if `VITE_API_URL` isn't set — a release binary without
+/// a baked server URL would be useless anyway.
+#[cfg(not(debug_assertions))]
+pub fn resolve_base_url(_server_url: Option<&str>) -> String {
+    env!("VITE_API_URL").trim_end_matches('/').to_string()
 }
 
 /// Errors the UI can surface directly.

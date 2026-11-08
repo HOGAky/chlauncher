@@ -51,6 +51,7 @@ pub fn run() {
         // system browser.
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             // --- filesystem roots -------------------------------------
             let data_dir = app.path().app_data_dir().unwrap_or_else(|_| {
@@ -216,6 +217,7 @@ pub fn run() {
             commands::services_health,
             commands::get_proc_info,
             commands::get_diagnostics,
+            commands::check_launcher_update,
         ])
         .build(tauri::generate_context!());
     let app = match app {

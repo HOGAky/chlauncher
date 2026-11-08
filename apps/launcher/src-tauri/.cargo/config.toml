@@ -1,0 +1,4 @@
+# Static CRT linkage for release binaries: embeds vcruntime140 inside the
+# .exe so clean Windows 10/11 machines don't need VC++ Redistributable.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

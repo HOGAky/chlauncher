@@ -50,3 +50,5 @@ bytes = "1"
 # Structured logging → stderr + rotated log file (Task 6).
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# In-app self-updates (signed artifacts verified against plugins.updater.pubkey).
+tauri-plugin-updater = "2"
