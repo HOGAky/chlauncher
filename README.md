@@ -176,6 +176,40 @@ VC++ Redist needed on clean Windows 10/11.
 - Server deployment on a VPS: [`docs/vps-deploy.md`](docs/vps-deploy.md)
   (systemd unit, Cloudflare, SQLite `.backup` cron via `tools/backup-db.sh`).
 
+## Publishing games
+
+Two ways a game build reaches the catalog:
+
+**Publisher self-service** (`role='publisher'`, granted via
+`POST /api/admin/users/:id/set-role` or admin panel):
+
+```bash
+node tools/publisher.mjs create --slug my-game --title "My Game" --exe game.exe ...
+node tools/publisher.mjs upload --slug my-game --version 1.0.0 --zip dist/game.zip ...
+node tools/publisher.mjs submit --slug my-game --version 1.0.0 ...   # → admin review queue
+node tools/publisher.mjs list  ...                                   # status + reject feedback
+```
+
+An admin then approves (`POST /api/admin/submissions/:id/approve` → live)
+or rejects with feedback. Publishers only see games they own
+(`games.owner_id`); `POST /api/admin/games/:slug/transfer` reassigns
+ownership. Metadata edits are locked while a submission is pending; a
+pending submission can be withdrawn with
+`POST /api/publisher/submissions/:id/cancel`.
+
+**Admin direct** (internal/first-party titles — no review step):
+
+```bash
+node tools/publish-game.mjs --slug mock-game --version 1.2.0 \
+  --zip dist.zip --publish --email admin@x --password ...
+```
+
+Both paths share the same pipeline (`src/build_store.js`): the zip is
+validated (executable at root, no traversal), SHA-256 hashed, stored
+atomically as `static/games/<slug>/<version>.zip` and recorded as an
+immutable `game_builds` row — a `(slug, version)` can never be
+overwritten; rollbacks produce a new patch version.
+
 ## Where the real keys go
 
 See [`.env.example`](.env.example):

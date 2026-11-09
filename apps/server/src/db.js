@@ -172,6 +172,40 @@ const MIGRATIONS = [
       );
     `);
   },
+  // v4 → v5: publisher self-service. `users.role` gains 'publisher' — the
+  // CHECK constraint can't be altered in place, so the column is swapped
+  // (add → copy → drop → rename) instead of rebuilding the heavily
+  // FK-referenced users table. `games.owner_id` ties a game to the
+  // publisher account that manages it (NULL = admin/system-owned);
+  // `game_submissions` is the review journal: a publisher submits a build,
+  // an admin approves (→ becomes the published build) or rejects with
+  // feedback. Builds themselves stay immutable as before.
+  (db) => {
+    db.exec(`
+      ALTER TABLE users ADD COLUMN role_new TEXT NOT NULL DEFAULT 'user'
+        CHECK (role_new IN ('user','publisher','admin'));
+      UPDATE users SET role_new = role;
+      ALTER TABLE users DROP COLUMN role;
+      ALTER TABLE users RENAME COLUMN role_new TO role;
+
+      ALTER TABLE games ADD COLUMN owner_id INTEGER REFERENCES users(id);
+
+      CREATE TABLE game_submissions (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        game_id      INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+        build_id     INTEGER NOT NULL REFERENCES game_builds(id) ON DELETE CASCADE,
+        submitted_by INTEGER NOT NULL REFERENCES users(id),
+        status       TEXT NOT NULL DEFAULT 'pending'
+                     CHECK (status IN ('pending','approved','rejected','canceled')),
+        feedback     TEXT NOT NULL DEFAULT '',
+        reviewer_id  INTEGER REFERENCES users(id),
+        created_at   TEXT NOT NULL,
+        reviewed_at  TEXT
+      );
+      CREATE INDEX idx_game_submissions_status ON game_submissions(status);
+      CREATE INDEX idx_game_submissions_game ON game_submissions(game_id);
+    `);
+  },
 ];
 
 /** Runs all pending migrations in order. Idempotent via user_version. */

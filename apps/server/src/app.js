@@ -14,13 +14,14 @@ import crypto from 'node:crypto';
 import { openDatabase } from './db.js';
 import { config } from './config.js';
 import { registerErrorContract } from './errors.js';
-import { makeAuthenticate, makeRequireAdmin } from './auth.js';
+import { makeAuthenticate, makeRequireAdmin, makeRequirePublisher } from './auth.js';
 import authRoutes from './routes/auth.js';
 import accountRoutes from './routes/account.js';
 import adminRoutes from './routes/admin.js';
 import billingRoutes from './routes/billing.js';
 import gamesRoutes from './routes/games.js';
 import licenseRoutes from './routes/license.js';
+import publisherRoutes from './routes/publisher.js';
 import tiktokRoutes from './routes/tiktok.js';
 
 /**
@@ -98,7 +99,8 @@ export async function buildApp(opts = {}) {
 
   const authenticate = makeAuthenticate(db);
   const requireAdmin = makeRequireAdmin(db);
-  const deps = { db, authenticate, requireAdmin };
+  const requirePublisher = makeRequirePublisher(db);
+  const deps = { db, authenticate, requireAdmin, requirePublisher };
 
   app.get('/api/health', async () => ({ ok: true, ts: Date.now() }));
   await app.register(adminRoutes, { prefix: '/api/admin', ...deps });
@@ -107,6 +109,7 @@ export async function buildApp(opts = {}) {
   await app.register(billingRoutes, { prefix: '/api/billing', ...deps });
   await app.register(gamesRoutes, { prefix: '/api/games', ...deps });
   await app.register(licenseRoutes, { prefix: '/api/license', ...deps });
+  await app.register(publisherRoutes, { prefix: '/api/publisher', ...deps });
   await app.register(tiktokRoutes, { prefix: '/api/tiktok-sign', ...deps });
 
   app.addHook('onClose', async () => db.close());

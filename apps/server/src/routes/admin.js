@@ -11,7 +11,6 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import rateLimit from '@fastify/rate-limit';
 import { config } from '../config.js';
 import {
@@ -22,9 +21,7 @@ import {
 } from '../db.js';
 import { subscriptionView, recordPayment, refreshSubscription } from '../subscriptions.js';
 import { ipHash } from '../hwid.js';
-
-const SLUG_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
-const VERSION_RE = /^\d+\.\d+\.\d+(-[0-9a-z.]+)?$/i;
+import { SLUG_RE, storeGameBuild } from '../build_store.js';
 
 /**
  * Registers the admin routes on a Fastify instance.
@@ -103,9 +100,8 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
 
   /**
    * POST /api/admin/games/:slug/builds?version=X.Y.Z[&changelog=…]
-   * Body: application/octet-stream zip. Validates the archive (executable at
-   * root, no traversal), hashes it, writes atomically to
-   * static/games/<slug>/<version>.zip and records an immutable build row.
+   * Body: application/octet-stream zip. Same validation/persistence
+   * pipeline as the publisher API (see build_store.js).
    */
   app.post(
     '/games/:slug/builds',
@@ -114,76 +110,25 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
       const game = findGameBySlug(db, request.params.slug);
       if (!game) return reply.code(404).send({ error: 'GAME_NOT_FOUND' });
 
-      const version = request.query.version || '';
-      if (!VERSION_RE.test(version)) {
-        return reply.code(400).send({ error: 'INVALID_VERSION' });
+      const res = storeGameBuild(db, {
+        game,
+        version: request.query.version || '',
+        changelog:
+          request.query.changelog || request.headers['x-changelog'] || '',
+        body: request.body,
+        uploadedBy: request.auth.userId,
+      });
+      if (!res.ok) {
+        const code = res.error === 'VERSION_EXISTS' ? 409 : 400;
+        const { ok: _ok, error: _e, ...extra } = res;
+        return reply.code(code).send({ error: res.error, ...extra });
       }
-      const changelog =
-        request.query.changelog || request.headers['x-changelog'] || '';
-
-      if (!Buffer.isBuffer(request.body) || request.body.length === 0) {
-        return reply.code(400).send({ error: 'EMPTY_BODY' });
-      }
-      const body = request.body;
-
-      const dup = db
-        .prepare('SELECT id FROM game_builds WHERE game_id = ? AND version = ?')
-        .get(game.id, version);
-      if (dup) return reply.code(409).send({ error: 'VERSION_EXISTS' });
-
-      // Zip sanity: readable central directory, executable at root,
-      // no absolute/parent-traversal entries.
-      let entries;
-      try {
-        entries = listZipEntries(body);
-      } catch {
-        return reply.code(400).send({ error: 'INVALID_ZIP' });
-      }
-      const bad = entries.find(
-        (n) => n.includes('..') || n.startsWith('/') || /^[a-zA-Z]:/.test(n)
-      );
-      if (bad) {
-        return reply.code(400).send({ error: 'UNSAFE_ZIP_PATH', entry: bad });
-      }
-      if (!entries.includes(game.executable_name)) {
-        return reply.code(400).send({
-          error: 'EXECUTABLE_MISSING',
-          expected: game.executable_name,
-        });
-      }
-
-      const sha256 = crypto.createHash('sha256').update(body).digest('hex');
-      const rel = `${game.slug}/${version}.zip`;
-      const dir = path.join(config.staticDir, 'games', game.slug);
-      const dst = path.join(config.staticDir, 'games', rel);
-      const tmp = `${dst}.tmp-${process.pid}`;
-      fs.mkdirSync(dir, { recursive: true });
-      try {
-        fs.writeFileSync(tmp, body);
-        fs.renameSync(tmp, dst);
-      } catch (err) {
-        fs.rmSync(tmp, { force: true });
-        throw err;
-      }
-
-      const info = db
-        .prepare(
-          `INSERT INTO game_builds
-             (game_id, version, file_name, sha256, size_bytes, changelog, uploaded_by, created_at)
-           VALUES (?,?,?,?,?,?,?,?)`
-        )
-        .run(
-          game.id, version, rel, sha256, body.length,
-          String(changelog), request.auth.userId, nowIso()
-        );
       audit(request.auth.userId, 'upload_build', game.slug, {
-        version, sha256, size_bytes: body.length,
+        version: res.build.version,
+        sha256: res.build.sha256,
+        size_bytes: res.build.size_bytes,
       });
-      return reply.code(201).send({
-        build: db
-          .prepare('SELECT * FROM game_builds WHERE id = ?')
-          .get(Number(info.lastInsertRowid)),
-      });
+      return reply.code(201).send({ build: res.build });
     }
   );
 
@@ -271,6 +216,105 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
     return { game: adminGameView(db, game.id) };
   });
 
+  /** POST /api/admin/games/:slug/transfer — {user_id} sets games.owner_id. */
+  app.post('/games/:slug/transfer', async (request, reply) => {
+    const game = findGameBySlug(db, request.params.slug);
+    if (!game) return reply.code(404).send({ error: 'GAME_NOT_FOUND' });
+    const user = findUserById(db, Number(request.body?.user_id));
+    if (!user) return reply.code(404).send({ error: 'USER_NOT_FOUND' });
+    db.prepare('UPDATE games SET owner_id = ?, updated_at = ? WHERE id = ?')
+      .run(user.id, nowIso(), game.id);
+    audit(request.auth.userId, 'transfer_game', game.slug, { to: user.email });
+    return { game: adminGameView(db, game.id) };
+  });
+
+  // ---------------------------------------------------------------
+  // Review queue (publisher submissions)
+  // ---------------------------------------------------------------
+
+  /**
+   * GET /api/admin/submissions?status=pending|approved|rejected|canceled|all
+   * Review queue for publisher-submitted builds.
+   */
+  app.get('/submissions', async (request) => {
+    const VALID = new Set(['pending', 'approved', 'rejected', 'canceled']);
+    const status = String(request.query.status || 'pending');
+    const where =
+      status === 'all'
+        ? '1=1'
+        : `s.status = '${VALID.has(status) ? status : 'pending'}'`;
+    const rows = db
+      .prepare(
+        `SELECT s.*, g.slug AS game_slug, g.title AS game_title,
+                b.version, u.email AS submitted_by_email
+         FROM game_submissions s
+         JOIN games g ON g.id = s.game_id
+         JOIN game_builds b ON b.id = s.build_id
+         JOIN users u ON u.id = s.submitted_by
+         WHERE ${where}
+         ORDER BY s.id DESC LIMIT 200`
+      )
+      .all();
+    return { submissions: rows.map(submissionView) };
+  });
+
+  /** POST /api/admin/submissions/:id/approve — build becomes live. */
+  app.post('/submissions/:id/approve', async (request, reply) => {
+    const s = db
+      .prepare('SELECT * FROM game_submissions WHERE id = ?')
+      .get(Number(request.params.id));
+    if (!s) return reply.code(404).send({ error: 'SUBMISSION_NOT_FOUND' });
+    if (s.status !== 'pending') {
+      return reply.code(409).send({ error: 'ALREADY_REVIEWED' });
+    }
+    const game = db.prepare('SELECT * FROM games WHERE id = ?').get(s.game_id);
+    const build = db
+      .prepare('SELECT * FROM game_builds WHERE id = ?')
+      .get(s.build_id);
+    db.prepare(
+      `UPDATE game_submissions
+       SET status = 'approved', reviewer_id = ?, reviewed_at = ? WHERE id = ?`
+    ).run(request.auth.userId, nowIso(), s.id);
+    db.prepare(
+      `UPDATE games SET published_build_id = ?, status = 'published', updated_at = ? WHERE id = ?`
+    ).run(s.build_id, nowIso(), s.game_id);
+    audit(request.auth.userId, 'approve_submission', game.slug, {
+      version: build.version,
+      submission_id: s.id,
+    });
+    return {
+      submission: findSubmissionView(db, s.id),
+      game: adminGameView(db, game.id),
+    };
+  });
+
+  /** POST /api/admin/submissions/:id/reject — {feedback} back to publisher. */
+  app.post('/submissions/:id/reject', async (request, reply) => {
+    const s = db
+      .prepare('SELECT * FROM game_submissions WHERE id = ?')
+      .get(Number(request.params.id));
+    if (!s) return reply.code(404).send({ error: 'SUBMISSION_NOT_FOUND' });
+    if (s.status !== 'pending') {
+      return reply.code(409).send({ error: 'ALREADY_REVIEWED' });
+    }
+    const feedback = String(request.body?.feedback || '').slice(0, 2000);
+    const game = db.prepare('SELECT * FROM games WHERE id = ?').get(s.game_id);
+    const build = db
+      .prepare('SELECT * FROM game_builds WHERE id = ?')
+      .get(s.build_id);
+    db.prepare(
+      `UPDATE game_submissions
+       SET status = 'rejected', feedback = ?, reviewer_id = ?, reviewed_at = ?
+       WHERE id = ?`
+    ).run(feedback, request.auth.userId, nowIso(), s.id);
+    audit(request.auth.userId, 'reject_submission', game.slug, {
+      version: build.version,
+      submission_id: s.id,
+      feedback,
+    });
+    return { submission: findSubmissionView(db, s.id) };
+  });
+
   // ---------------------------------------------------------------
   // Users
   // ---------------------------------------------------------------
@@ -314,6 +358,29 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
     return { ok: true, subscription: subscriptionView(sub) };
   });
 
+  /**
+   * POST /api/admin/users/:id/set-role — {role: 'user'|'publisher'|'admin'}
+   * Promotes/demotes a publisher or admin. Self-changes are refused so an
+   * admin can't accidentally lock themselves out of the panel.
+   */
+  app.post('/users/:id/set-role', async (request, reply) => {
+    const user = findUserById(db, Number(request.params.id));
+    if (!user) return reply.code(404).send({ error: 'USER_NOT_FOUND' });
+    if (user.id === request.auth.userId) {
+      return reply.code(400).send({ error: 'CANNOT_CHANGE_OWN_ROLE' });
+    }
+    const role = String(request.body?.role || '');
+    if (!['user', 'publisher', 'admin'].includes(role)) {
+      return reply.code(400).send({ error: 'INVALID_ROLE' });
+    }
+    db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, user.id);
+    audit(request.auth.userId, 'set_role', user.email, {
+      from: user.role,
+      to: role,
+    });
+    return { ok: true, user: adminUserView(db, findUserById(db, user.id)) };
+  });
+
   /** POST /api/admin/users/:id/reset-hwid — unbind HWID without cooldown. */
   app.post('/users/:id/reset-hwid', async (request, reply) => {
     const user = findUserById(db, Number(request.params.id));
@@ -345,7 +412,15 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
 // ---------------------------------------------------------------------------
 
 function listAdminGames(db) {
-  const games = db.prepare('SELECT * FROM games ORDER BY id').all();
+  const games = db
+    .prepare(
+      `SELECT g.*, u.email AS owner_email,
+        (SELECT COUNT(*) FROM game_submissions s
+          WHERE s.game_id = g.id AND s.status = 'pending') AS pending_submissions
+       FROM games g LEFT JOIN users u ON u.id = g.owner_id
+       ORDER BY g.id`
+    )
+    .all();
   const builds = db
     .prepare(
       `SELECT b.*, u.email AS uploaded_by_email
@@ -362,7 +437,15 @@ function listAdminGames(db) {
 }
 
 function adminGameView(db, gameId) {
-  const g = db.prepare('SELECT * FROM games WHERE id = ?').get(gameId);
+  const g = db
+    .prepare(
+      `SELECT g.*, u.email AS owner_email,
+        (SELECT COUNT(*) FROM game_submissions s
+          WHERE s.game_id = g.id AND s.status = 'pending') AS pending_submissions
+       FROM games g LEFT JOIN users u ON u.id = g.owner_id
+       WHERE g.id = ?`
+    )
+    .get(gameId);
   const builds = db
     .prepare(
       `SELECT b.*, u.email AS uploaded_by_email
@@ -383,9 +466,42 @@ function gameViewFull(g, builds) {
     executable_name: g.executable_name,
     cover_image: g.cover_image,
     status: g.status,
+    owner_email: g.owner_email || null,
+    pending_submissions: g.pending_submissions || 0,
     published_version: published?.version || null,
     updated_at: g.updated_at,
     builds,
+  };
+}
+
+function findSubmissionView(db, id) {
+  const s = db
+    .prepare(
+      `SELECT s.*, g.slug AS game_slug, g.title AS game_title,
+              b.version, u.email AS submitted_by_email
+       FROM game_submissions s
+       JOIN games g ON g.id = s.game_id
+       JOIN game_builds b ON b.id = s.build_id
+       JOIN users u ON u.id = s.submitted_by
+       WHERE s.id = ?`
+    )
+    .get(id);
+  return s ? submissionView(s) : null;
+}
+
+function submissionView(s) {
+  return {
+    id: s.id,
+    game_id: s.game_id,
+    game_slug: s.game_slug,
+    game_title: s.game_title,
+    build_id: s.build_id,
+    version: s.version,
+    submitted_by: s.submitted_by_email || s.submitted_by,
+    status: s.status,
+    feedback: s.feedback,
+    created_at: s.created_at,
+    reviewed_at: s.reviewed_at,
   };
 }
 
@@ -420,44 +536,4 @@ function adminUserView(db, u) {
     subscription: subscriptionView(sub),
     payments,
   };
-}
-
-// ---------------------------------------------------------------------------
-// Minimal zip reader — central directory only, good enough to list entries.
-// ---------------------------------------------------------------------------
-
-/**
- * Lists file names in a zip buffer by walking the end-of-central-directory
- * record. Throws on malformed archives.
- * @param {Buffer} buf
- * @returns {string[]}
- */
-function listZipEntries(buf) {
-  const EOCD = 0x06054b50;
-  const CDIR = 0x02014b50;
-  // EOCD lives in the last 64 KiB + 22 bytes of the file.
-  let eocd = -1;
-  for (
-    let i = buf.length - 22;
-    i >= Math.max(0, buf.length - 22 - 65536);
-    i--
-  ) {
-    if (buf.readUInt32LE(i) === EOCD) {
-      eocd = i;
-      break;
-    }
-  }
-  if (eocd < 0) throw new Error('EOCD not found');
-  const count = buf.readUInt16LE(eocd + 10);
-  let off = buf.readUInt32LE(eocd + 16);
-  const names = [];
-  for (let i = 0; i < count; i++) {
-    if (buf.readUInt32LE(off) !== CDIR) throw new Error('bad central dir');
-    const nameLen = buf.readUInt16LE(off + 28);
-    const extraLen = buf.readUInt16LE(off + 30);
-    const commentLen = buf.readUInt16LE(off + 32);
-    names.push(buf.toString('utf8', off + 46, off + 46 + nameLen));
-    off += 46 + nameLen + extraLen + commentLen;
-  }
-  return names;
 }

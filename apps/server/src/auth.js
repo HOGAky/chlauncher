@@ -97,20 +97,33 @@ export function makeAuthenticate(db) {
 /**
  * Fastify preHandler factory: `authenticate` + DB-side role check.
  * The JWT role claim is never trusted — `users.role` is read on every call.
- * Responds 403 FORBIDDEN for non-admins.
+ * Responds 403 FORBIDDEN when the caller's role isn't in `roles`.
  * @param {import('node:sqlite').DatabaseSync} db
+ * @param {string[]} roles
  */
-export function makeRequireAdmin(db) {
+export function makeRequireRole(db, roles) {
   const authenticate = makeAuthenticate(db);
   const roleQuery = db.prepare('SELECT role FROM users WHERE id = ?');
-  return async function requireAdmin(request, reply) {
+  const allowed = new Set(roles);
+  return async function requireRole(request, reply) {
     await authenticate(request, reply);
     if (reply.sent) return;
     const row = roleQuery.get(request.auth.userId);
-    if (!row || row.role !== 'admin') {
+    if (!row || !allowed.has(row.role)) {
       return reply.code(403).send({ error: 'FORBIDDEN' });
     }
+    request.auth.role = row.role;
   };
+}
+
+/** Admin-only preHandler. */
+export function makeRequireAdmin(db) {
+  return makeRequireRole(db, ['admin']);
+}
+
+/** Publisher self-service preHandler — admins also pass. */
+export function makeRequirePublisher(db) {
+  return makeRequireRole(db, ['publisher', 'admin']);
 }
 
 /**
