@@ -10,6 +10,7 @@ import * as api from '../api';
 import type { GiftEntry, TriggerPreset, TriggerProfile, TriggerRule } from '../types';
 import { renderPresetPoster } from '../lib/presetPoster';
 import GiftPicker from '../components/GiftPicker';
+import GiftIcon from '../components/GiftIcon';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -266,6 +267,7 @@ export default function MapperPage() {
                   <option key={k}>{k}</option>
                 ))}
               </select>
+              <GiftIcon matchValue={r.match_value} kind={r.event_kind} />
               <Input
                 className="w-32"
                 placeholder="совпадение (Rose)"

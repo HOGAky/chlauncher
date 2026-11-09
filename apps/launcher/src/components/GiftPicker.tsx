@@ -7,6 +7,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Gift } from 'lucide-react';
 import type { GiftEntry } from '../types';
+import { loadGifts } from '../lib/gifts';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 
@@ -19,10 +20,7 @@ export default function GiftPicker({ onPick }: { onPick: (name: string) => void 
   // Load the catalog lazily on first open.
   useEffect(() => {
     if (open && rows === null) {
-      fetch('/gifts.json')
-        .then((r) => r.json())
-        .then(setRows)
-        .catch(() => setRows([]));
+      loadGifts().then(setRows);
     }
   }, [open, rows]);
 
@@ -77,6 +75,7 @@ export default function GiftPicker({ onPick }: { onPick: (name: string) => void 
               >
                 <img src={`/${g.image}`} alt={g.name} className="h-10 w-10" loading="lazy" />
                 <span className="max-w-full truncate">{g.name}</span>
+                <span className="text-[9px] text-amber-400/80">{g.coins} ◉</span>
               </button>
             ))}
             {rows && filtered.length === 0 && (
