@@ -15,7 +15,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::Mutex;
 use tokio::sync::broadcast;
 
-use crate::types::{RawStreamEvent, StreamEvent, TriggerProfile, TriggerRule};
+use crate::types::{RawStreamEvent, StreamEvent, TriggerPreset, TriggerProfile, TriggerRule};
 
 /// How many recent events are kept for the overlay snapshot & UI feed.
 const RECENT_CAPACITY: usize = 100;
@@ -135,6 +135,7 @@ impl TriggerMapper {
             };
         TriggerProfile {
             game_slug: game_slug.into(),
+            preset: None,
             rules: vec![
                 mk("tiktok", "gift", "Rose", 0, "spawn_enemy"),
                 mk("donationalerts", "donation", "", 100, "spawn_boss"),
@@ -145,10 +146,10 @@ impl TriggerMapper {
         }
     }
 
-    /// Named presets a streamer can apply in one click. `"steal-the-stream"`
+    /// The presets shipped with the launcher. `"steal-the-stream"`
     /// covers the whitelist from `docs/roblox-integration.md` §C /
     /// `DESIGN.md` §5.7 in the Roblox project.
-    pub fn template_profile(game_slug: &str, name: &str) -> Option<TriggerProfile> {
+    pub fn builtin_presets() -> Vec<TriggerPreset> {
         let mk =
             |source: &str, kind: &str, match_value: &str, min: i32, action: &str| TriggerRule {
                 id: uuid::Uuid::new_v4().to_string(),
@@ -159,8 +160,11 @@ impl TriggerMapper {
                 action: action.into(),
                 multiplier: 1.0,
             };
-        let rules = match name {
-            "steal-the-stream" => vec![
+        vec![TriggerPreset {
+            name: "steal-the-stream".into(),
+            description: "Обстрел подарками: дорогие — хаос, бесплатные действия — помощь".into(),
+            builtin: true,
+            rules: vec![
                 // Sabotage tier — the expensive gifts do the mean things.
                 mk("tiktok", "gift", "Drama", 0, "drop_floor"),
                 mk("tiktok", "gift", "Whale", 0, "yeet"),
@@ -191,12 +195,94 @@ impl TriggerMapper {
                 mk("donationalerts", "donation", "", 10000, "yeet"),
                 mk("any", "any", "", 0, "log_only"),
             ],
-            _ => return None,
-        };
-        Some(TriggerProfile {
+        }]
+    }
+
+    /// Looks up a preset by name — built-ins first, then streamer customs.
+    pub fn find_preset<'a>(
+        name: &str,
+        customs: &'a std::collections::HashMap<String, TriggerPreset>,
+    ) -> Option<TriggerPreset> {
+        Self::builtin_presets()
+            .into_iter()
+            .find(|p| p.name == name)
+            .or_else(|| customs.get(name).cloned())
+    }
+
+    /// Whether a name is reserved by a built-in preset.
+    pub fn is_builtin_preset(name: &str) -> bool {
+        Self::builtin_presets().iter().any(|p| p.name == name)
+    }
+
+    /// Applies a preset over a game's profile — records the preset name.
+    pub fn profile_from_preset(game_slug: &str, preset: &TriggerPreset) -> TriggerProfile {
+        TriggerProfile {
             game_slug: game_slug.into(),
-            rules,
-        })
+            preset: Some(preset.name.clone()),
+            rules: preset.rules.clone(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn customs() -> std::collections::HashMap<String, TriggerPreset> {
+        let mut m = std::collections::HashMap::new();
+        m.insert(
+            "my-mix".into(),
+            TriggerPreset {
+                name: "my-mix".into(),
+                description: String::new(),
+                builtin: false,
+                rules: vec![TriggerRule {
+                    id: "r1".into(),
+                    source: "tiktok".into(),
+                    event_kind: "gift".into(),
+                    match_value: "Lion".into(),
+                    min_amount: 0,
+                    action: "spawn_boss".into(),
+                    multiplier: 1.0,
+                }],
+            },
+        );
+        m
+    }
+
+    #[test]
+    fn builtin_then_custom_lookup() {
+        assert!(TriggerMapper::find_preset("steal-the-stream", &customs()).is_some());
+        assert!(TriggerMapper::find_preset("my-mix", &customs()).is_some());
+        assert!(TriggerMapper::find_preset("nope", &customs()).is_none());
+        assert!(TriggerMapper::is_builtin_preset("steal-the-stream"));
+        assert!(!TriggerMapper::is_builtin_preset("my-mix"));
+    }
+
+    #[test]
+    fn applied_profile_records_preset() {
+        let p = TriggerMapper::find_preset("my-mix", &customs()).unwrap();
+        let profile = TriggerMapper::profile_from_preset("mock-game", &p);
+        assert_eq!(profile.preset.as_deref(), Some("my-mix"));
+        assert_eq!(profile.rules.len(), 1);
+        assert_eq!(profile.rules[0].action, "spawn_boss");
+    }
+
+    #[test]
+    fn steal_the_stream_rules_match() {
+        let profile =
+            TriggerMapper::profile_from_preset("mock-game", &TriggerMapper::builtin_presets()[0]);
+        let whale = RawStreamEvent {
+            source: "tiktok".into(),
+            event_kind: "gift".into(),
+            user: "u".into(),
+            avatar_url: String::new(),
+            amount: 1,
+            raw_name: "Whale".into(),
+        };
+        let ev = TriggerMapper::map(&whale, &profile).unwrap();
+        assert_eq!(ev.action_command, "yeet");
+        assert_eq!(profile.preset.as_deref(), Some("steal-the-stream"));
     }
 }
 

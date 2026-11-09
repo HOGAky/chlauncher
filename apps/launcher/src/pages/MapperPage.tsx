@@ -7,7 +7,8 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, Save, Trash2, Wand2 } from 'lucide-react';
 import * as api from '../api';
-import type { TriggerProfile, TriggerRule } from '../types';
+import type { TriggerPreset, TriggerProfile, TriggerRule } from '../types';
+import GiftPicker from '../components/GiftPicker';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -40,12 +41,24 @@ function newRule(): TriggerRule {
 export default function MapperPage() {
   const [slug, setSlug] = useState('mock-game');
   const [profile, setProfile] = useState<TriggerProfile | null>(null);
+  const [presets, setPresets] = useState<TriggerPreset[]>([]);
+  const [presetSel, setPresetSel] = useState('');
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     api.getTriggers(slug).then(setProfile).catch((e) => setError(humanError(e)));
   }, [slug]);
+
+  const reloadPresets = () =>
+    api
+      .listTriggerPresets()
+      .then(setPresets)
+      .catch((e) => setError(humanError(e)));
+
+  useEffect(() => {
+    reloadPresets();
+  }, []);
 
   /** Updates one field of one rule. */
   const patchRule = (id: string, patch: Partial<TriggerRule>) =>
@@ -71,6 +84,48 @@ export default function MapperPage() {
     }
   };
 
+  /** Applies the selected preset to this game's profile. */
+  const applyPreset = () => {
+    if (!presetSel) return;
+    setError(null);
+    api
+      .applyTriggerPreset(slug, presetSel)
+      .then(setProfile)
+      .catch((e) => setError(humanError(e)));
+  };
+
+  /** Saves the current rules as a named streamer preset. */
+  const saveAsPreset = () => {
+    if (!profile) return;
+    const name = window.prompt('Имя пресета (например, «мой-осадок»):')?.trim();
+    if (!name) return;
+    setError(null);
+    api
+      .saveTriggerPreset({ name, rules: profile.rules })
+      .then(() => {
+        setPresetSel(name);
+        reloadPresets();
+      })
+      .catch((e) => setError(humanError(e)));
+  };
+
+  /** Deletes the selected streamer preset (built-ins can't be deleted). */
+  const deletePreset = () => {
+    const p = presets.find((x) => x.name === presetSel);
+    if (!p || p.builtin) return;
+    if (!window.confirm(`Удалить пресет «${presetSel}»? Профили игр не пострадают.`)) return;
+    setError(null);
+    api
+      .deleteTriggerPreset(presetSel)
+      .then(() => {
+        setPresetSel('');
+        reloadPresets();
+      })
+      .catch((e) => setError(humanError(e)));
+  };
+
+  const selBuiltin = presets.find((p) => p.name === presetSel)?.builtin;
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -83,19 +138,6 @@ export default function MapperPage() {
           >
             <option value="mock-game">mock-game</option>
           </select>
-          <Button
-            size="sm"
-            variant="outline"
-            title="Загрузить пресет правил Steal the Stream (Roblox)"
-            onClick={() =>
-              api
-                .applyTriggerTemplate(slug, 'steal-the-stream')
-                .then(setProfile)
-                .catch((e) => setError(humanError(e)))
-            }
-          >
-            <Wand2 size={14} /> StS шаблон
-          </Button>
           <Button size="sm" variant="secondary" onClick={addRule}>
             <Plus size={14} /> Правило
           </Button>
@@ -105,10 +147,61 @@ export default function MapperPage() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted-foreground">Пресет:</span>
+        <select
+          className="h-8 rounded-md border border-input bg-secondary/40 px-2 text-sm"
+          value={presetSel}
+          onChange={(e) => setPresetSel(e.target.value)}
+        >
+          <option value="">— выбрать —</option>
+          {presets.map((p) => (
+            <option key={p.name} value={p.name}>
+              {p.name}
+              {p.builtin ? ' (встроенный)' : ''}
+            </option>
+          ))}
+        </select>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!presetSel}
+          title="Применить пресет к профилю этой игры"
+          onClick={applyPreset}
+        >
+          <Wand2 size={14} /> Применить
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!profile}
+          title="Сохранить текущие правила как именованный пресет"
+          onClick={saveAsPreset}
+        >
+          <Save size={14} /> Как пресет
+        </Button>
+        {presetSel && !selBuiltin && (
+          <Button
+            size="sm"
+            variant="ghost"
+            title="Удалить свой пресет"
+            onClick={deletePreset}
+          >
+            <Trash2 size={14} />
+          </Button>
+        )}
+        {profile?.preset && (
+          <Badge variant="outline" className="ml-auto">
+            применён: {profile.preset}
+          </Badge>
+        )}
+      </div>
+
       <p className="text-xs text-muted-foreground">
         Первое совпавшее правило побеждает — ставьте более специфичные правила выше.
         Пустое «Совпадение» ловит все события этого вида; «Мин. сумма» фильтрует по
-        количеству/сумме (донаты — в копейках).
+        количеству/сумме (донаты — в копейках). Пресеты — именованные наборы правил,
+        которые можно применять к любой игре; встроенный «steal-the-stream» удалить нельзя.
       </p>
 
       {error && (
@@ -145,6 +238,15 @@ export default function MapperPage() {
                 placeholder="совпадение (Rose)"
                 value={r.match_value}
                 onChange={(e) => patchRule(r.id, { match_value: e.target.value })}
+              />
+              <GiftPicker
+                onPick={(name) =>
+                  patchRule(r.id, {
+                    source: 'tiktok',
+                    event_kind: 'gift',
+                    match_value: name,
+                  })
+                }
               />
               <span className="text-muted-foreground text-xs">≥</span>
               <Input

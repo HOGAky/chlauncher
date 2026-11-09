@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
-use crate::types::{TriggerProfile, WindowOptions};
+use crate::types::{TriggerPreset, TriggerProfile, WindowOptions};
 
 /// Everything the launcher persists between restarts.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -34,6 +34,10 @@ pub struct Settings {
     pub window_options: WindowOptions,
     /// Trigger profiles keyed by game slug.
     pub trigger_profiles: HashMap<String, TriggerProfile>,
+    /// Streamer-defined trigger presets keyed by name — reusable rule sets
+    /// applied onto any game's profile in one click.
+    #[serde(default)]
+    pub trigger_presets: HashMap<String, TriggerPreset>,
     /// Roblox/cloud relay: forward mapped StreamEvents over HTTP.
     #[serde(default)]
     pub forward: ForwardSettings,
