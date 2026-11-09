@@ -131,12 +131,14 @@ jobs:
           # that file is produced by tauri-action which we don't use.
           # Generate the updater manifest ourselves in the Tauri v2 format.
           $tag = $env:GITHUB_REF_NAME          # e.g. v0.1.0-rc1
-          $ver = $tag.TrimStart('v')
-          $setup = "chlauncher_${ver}_x64-setup.exe"
-          $sigPath = Join-Path $nsis "$setup.sig"
+          $setupFile = Get-ChildItem "$nsis/*-setup.exe" | Select-Object -First 1
+          if (-not $setupFile) { throw "no NSIS setup exe in $nsis" }
+          $setup = $setupFile.Name
+          $ver = ($setupFile.BaseName -split '_')[1]   # app semver from filename
+          $sigPath = "$($setupFile.FullName).sig"
           if (-not (Test-Path $sigPath)) { throw "missing updater signature: $sigPath" }
           $latest = [ordered]@{
-            version  = $tag
+            version  = $ver
             notes    = "chlauncher $tag"
             pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
             platforms = [ordered]@{
