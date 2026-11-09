@@ -507,7 +507,13 @@ impl ActionScheduler {
                 if rule.interrupt {
                     st.interrupts.push_back(job);
                     st.interrupt_used_at = Some(now);
-                    self.interrupt_wake.notify_one();
+                    // §3.3.3: queued interrupts must not cut the current
+                    // interrupt's alert — wake only while no takeover
+                    // reigns (a normal alert playing then gets cut).
+                    let takeover_active = st.takeover_until.map(|u| u > now).unwrap_or(false);
+                    if !takeover_active {
+                        self.interrupt_wake.notify_one();
+                    }
                 } else if job.not_before.is_some() {
                     st.delayed.push(DelayedJob(job));
                 } else {
@@ -587,10 +593,17 @@ impl ActionScheduler {
                 None => {
                     let deadline = {
                         let st = self.state.lock().unwrap_or_else(|p| p.into_inner());
-                        st.delayed
+                        let base = st
+                            .delayed
                             .peek()
                             .and_then(|d| d.0.not_before)
-                            .unwrap_or_else(|| Instant::now() + Duration::from_secs(3600))
+                            .unwrap_or_else(|| Instant::now() + Duration::from_secs(3600));
+                        // Interrupts queued behind a takeover must wake the
+                        // driver at takeover end — nothing else signals it.
+                        match (st.takeover_until, st.interrupts.is_empty()) {
+                            (Some(u), false) => base.min(u),
+                            _ => base,
+                        }
                     };
                     tokio::select! {
                         _ = self.wake.notified() => {}
@@ -999,5 +1012,147 @@ mod tests {
         assert_eq!(pick_segment(&pool, 0), Some(0));
         assert_eq!(pick_segment(&pool, 1), Some(1));
         assert_eq!(pick_segment(&pool, 3), Some(1));
+    }
+
+    // ---- paid interrupts (§3.3) -----------------------------------------
+
+    /// Collects overlay frames for `ms` real milliseconds.
+    async fn collect_frames(
+        orx: &mut broadcast::Receiver<OverlayFrame>,
+        ms: u64,
+    ) -> Vec<OverlayFrame> {
+        let mut out = vec![];
+        let deadline = tokio::time::sleep(Duration::from_millis(ms));
+        tokio::pin!(deadline);
+        loop {
+            tokio::select! {
+                _ = &mut deadline => break,
+                f = orx.recv() => match f {
+                    Ok(f) => out.push(f),
+                    Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(_) => break,
+                },
+            }
+        }
+        out
+    }
+
+    fn alert(text: &str, duration_ms: u64) -> Option<AlertSpec> {
+        Some(AlertSpec {
+            text: text.into(),
+            duration_ms,
+            ..serde_default_alert()
+        })
+    }
+
+    #[test]
+    fn interrupt_cooldown_blocks_rapid_interrupts() {
+        let (hub_, _rx, otx, _orx) = hub();
+        let sched = ActionScheduler::with_seed(hub_.clone(), otx, 42);
+        let mut r = rule("lion", "Lion");
+        r.interrupt = true;
+        let mut p = profile(vec![r]);
+        p.interrupt_cooldown_ms = 30_000;
+        let sp = no_spinners();
+        let al = alerts();
+
+        sched.ingest(&input(&p, raw("gift", "Lion", 1, 1, 100), &sp, &al));
+        assert_eq!(sched.status().queued, 1);
+        // Second interrupt inside the window → skipped as cooldown.
+        sched.ingest(&input(&p, raw("gift", "Lion", 1, 1, 100), &sp, &al));
+        assert_eq!(sched.status().queued, 1);
+        assert_eq!(sched.status().skipped_cooldown, 1);
+    }
+
+    #[tokio::test]
+    async fn interrupt_cuts_running_alert_and_takes_over() {
+        let (hub_, _rx, otx, mut orx) = hub();
+        let sched = Arc::new(ActionScheduler::with_seed(hub_.clone(), otx, 7));
+        let driver = sched.clone();
+        let handle = tokio::spawn(async move { driver.run().await });
+
+        let mut a = rule("rose", "Rose");
+        a.alert = alert("rose alert", 30_000); // long — must get cut
+        let mut b = rule("lion", "Lion");
+        b.interrupt = true;
+        b.interrupt_preset = Some("vip".into());
+        b.interrupt_duration_ms = 150;
+        b.alert = alert("vip alert", 20);
+        let mut p = profile(vec![a, b]);
+        p.interrupt_cooldown_ms = 0;
+        let sp = no_spinners();
+        let al = alerts();
+
+        sched.ingest(&input(&p, raw("gift", "Rose", 1, 1, 1), &sp, &al));
+        tokio::time::sleep(Duration::from_millis(80)).await; // alert on screen
+        sched.ingest(&input(&p, raw("gift", "Lion", 1, 1, 500), &sp, &al));
+
+        let frames = collect_frames(&mut orx, 400).await;
+        handle.abort();
+        let kinds: Vec<&str> = frames
+            .iter()
+            .map(|f| match f {
+                OverlayFrame::Alert { .. } => "alert",
+                OverlayFrame::AlertCancel { .. } => "cancel",
+                OverlayFrame::Takeover { .. } => "takeover",
+                _ => "other",
+            })
+            .collect();
+        // rose alert → cancel → vip alert → takeover (§3.3.1–3.3.2).
+        assert!(kinds.contains(&"cancel"), "frames: {kinds:?}");
+        assert!(kinds.contains(&"takeover"), "frames: {kinds:?}");
+        let rose_pos = kinds.iter().position(|k| *k == "alert").unwrap();
+        let cancel_pos = kinds.iter().position(|k| *k == "cancel").unwrap();
+        assert!(rose_pos < cancel_pos);
+        // Two alerts shown (rose + vip), exactly one cancel (the rose cut).
+        assert_eq!(kinds.iter().filter(|k| **k == "alert").count(), 2);
+        // The takeover (150 ms) lapses on its own — in-memory only.
+        tokio::time::sleep(Duration::from_millis(120)).await;
+        assert!(sched.active_takeover().is_none());
+    }
+
+    #[tokio::test]
+    async fn queued_interrupt_waits_for_takeover() {
+        let (hub_, _rx, otx, mut orx) = hub();
+        let sched = Arc::new(ActionScheduler::with_seed(hub_.clone(), otx, 11));
+        let driver = sched.clone();
+        let handle = tokio::spawn(async move { driver.run().await });
+
+        let mut b = rule("lion", "Lion");
+        b.interrupt = true;
+        b.interrupt_preset = Some("vip".into());
+        b.interrupt_duration_ms = 200;
+        b.alert = alert("vip alert", 60);
+        let mut p = profile(vec![b]);
+        p.interrupt_cooldown_ms = 0;
+        let sp = no_spinners();
+        let al = alerts();
+
+        // First interrupt → takeover. Second lands during it → FIFO.
+        sched.ingest(&input(&p, raw("gift", "Lion", 1, 1, 500), &sp, &al));
+        tokio::time::sleep(Duration::from_millis(120)).await;
+        assert!(sched.active_takeover().is_some());
+        let mut raw2 = raw("gift", "Lion", 1, 1, 500);
+        raw2.user = "u2".into();
+        sched.ingest(&input(&p, raw2, &sp, &al));
+        // Wait out the first takeover (~200 ms) + margin — the queued
+        // interrupt must fire *after* it, not cut it.
+        let frames = collect_frames(&mut orx, 700).await;
+        handle.abort();
+        let cancels = frames
+            .iter()
+            .filter(|f| matches!(f, OverlayFrame::AlertCancel { .. }))
+            .count();
+        // Exactly one cancel per interrupt at most — the queued one must
+        // not have cut the first alert mid-takeover.
+        assert!(
+            cancels <= 1,
+            "queued interrupt cut a running alert: {cancels} cancels"
+        );
+        let takeovers = frames
+            .iter()
+            .filter(|f| matches!(f, OverlayFrame::Takeover { .. }))
+            .count();
+        assert_eq!(takeovers, 2, "both interrupts should take over");
     }
 }

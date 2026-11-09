@@ -277,7 +277,13 @@ alert and temporarily swap the preset (in-memory only), the earn-limit
 gate (wired to plans in stage 10) and a usage meter. IPC:
 `scheduler_pause`, `get_scheduler_status`, `scheduler_reset_counters`,
 `test_rule` — and `get_event_feed_items` exposes a statusful feed
-(`done`/`cooldown`/`limit`/`dropped`).
+(`done`/`cooldown`/`limit`/`dropped`). Paid interrupts cut the running
+alert, jump a FIFO interrupt queue (queued interrupts never cut each
+other) and optionally swap the preset in-memory for
+`interrupt_duration_ms`; the mapper's 🔔 drawer edits the alert
+(text/duration/position/style + live preview + «Показать на оверлее»)
+and TTS template, while the status bar toggles the master switch and
+the default-alert coin threshold (`set_alerts_settings`).
 
 The **overlay server** (`src-tauri/src/overlay.rs` + `src-tauri/overlay/*.html`,
 spec §5) is now a multi-page Browser Source host. Every page takes

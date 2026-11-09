@@ -286,6 +286,8 @@ pub fn run() {
             commands::set_chroma_key,
             commands::set_overlay_port,
             commands::rotate_overlay_token,
+            commands::get_alerts_settings,
+            commands::set_alerts_settings,
             commands::get_hwid,
             commands::get_server_url,
             commands::set_server_url,

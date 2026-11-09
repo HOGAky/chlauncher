@@ -938,6 +938,42 @@ pub async fn test_rule(
 // Misc settings
 // ---------------------------------------------------------------------------
 
+/// Alert playback settings for the mapper status bar (§3.1–§3.2):
+/// master switch, default-alert coin threshold, default duration,
+/// master volume.
+#[tauri::command]
+pub async fn get_alerts_settings(state: State<'_, AppState>) -> Result<Value, String> {
+    let s = state.settings.lock().await;
+    let a = &s.data.alerts;
+    Ok(json!({
+        "enabled": a.enabled,
+        "default_for_gifts_from_coins": a.default_for_gifts_from_coins,
+        "default_duration_ms": a.default_duration_ms,
+        "volume": a.volume,
+    }))
+}
+
+/// Persists alert playback settings; `enabled` applies to the running
+/// scheduler immediately (§3.1 master switch).
+#[tauri::command]
+pub async fn set_alerts_settings(
+    enabled: bool,
+    default_for_gifts_from_coins: i64,
+    default_duration_ms: u64,
+    volume: f32,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut s = state.settings.lock().await;
+    s.data.alerts.enabled = enabled;
+    s.data.alerts.default_for_gifts_from_coins = default_for_gifts_from_coins.max(0);
+    s.data.alerts.default_duration_ms = default_duration_ms.clamp(200, 60_000);
+    s.data.alerts.volume = volume.clamp(0.0, 1.0);
+    let _ = s.save();
+    drop(s);
+    state.scheduler.set_alerts_enabled(enabled);
+    Ok(())
+}
+
 /// Pins the overlay server to a fixed port (§5.4). `0` = OS-assigned.
 /// The server binds at startup only, so the change applies on the next
 /// launch — the UI warns accordingly.

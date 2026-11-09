@@ -211,6 +211,29 @@ export const setOverlayPort = (port: number) => cmd<void>('set_overlay_port', { 
 /** Rotates the overlay token — all copied Browser Source URLs expire. */
 export const rotateOverlayToken = () => cmd<void>('rotate_overlay_token');
 
+/** Alert playback settings for the mapper status bar (§3.1–§3.2). */
+export const getAlertsSettings = () =>
+  cmd<{
+    enabled: boolean;
+    default_for_gifts_from_coins: number;
+    default_duration_ms: number;
+    volume: number;
+  }>('get_alerts_settings');
+
+/** Persists alert settings; the master switch applies live. */
+export const setAlertsSettings = (
+  enabled: boolean,
+  defaultForGiftsFromCoins: number,
+  defaultDurationMs: number,
+  volume: number
+) =>
+  cmd<void>('set_alerts_settings', {
+    enabled,
+    defaultForGiftsFromCoins,
+    defaultDurationMs,
+    volume,
+  });
+
 /** Backend base URL currently in use. */
 export const getServerUrl = () => cmd<string>('get_server_url');
 
