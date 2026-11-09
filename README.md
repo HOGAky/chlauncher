@@ -210,6 +210,26 @@ atomically as `static/games/<slug>/<version>.zip` and recorded as an
 immutable `game_builds` row — a `(slug, version)` can never be
 overwritten; rollbacks produce a new patch version.
 
+## Cloud servers (Roblox · Minecraft)
+
+External game servers can't connect to the launcher's local WebSocket,
+so `forwarder` pushes every mapped `StreamEvent` (TikTok **and**
+DonationAlerts — the source is transport-agnostic) to a standalone
+relay; consumers poll `GET /api/stream/events?key&since`:
+
+- **Roblox** — the game server validates `stream_key` via
+  `/api/stream/validate`, claims the room and polls events
+  (`docs/roblox-integration.md`).
+- **Minecraft** — `tools/mc-bridge` polls the same relay and sends
+  RCON console commands to any server (`enable-rcon=true`; no plugins).
+  Templates map `action_command` → console commands — see
+  `tools/mc-bridge/README.md`.
+
+Streamer setup lives in the launcher's *Integrations → Облачные
+серверы*: relay URL + admin secret, stream key (generated + copyable,
+registered on the relay while the subscription is active), delivery
+stats and per-game connect instructions.
+
 ## Where the real keys go
 
 See [`.env.example`](.env.example):
