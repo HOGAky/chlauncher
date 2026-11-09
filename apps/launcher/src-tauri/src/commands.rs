@@ -54,6 +54,8 @@ pub struct AppState {
     pub overlay_tx: tokio::sync::broadcast::Sender<OverlayFrame>,
     /// Chat-to-speech service (§6) — queue, filters, SAPI engine, mute.
     pub tts: Arc<crate::tts::Tts>,
+    /// Earn-limit meter + entitlements cache (§8).
+    pub usage: Arc<crate::usage::UsageMeter>,
     /// Last seen slug→version snapshot for catalog-change detection (§6.3).
     pub catalog_seen: Arc<Mutex<Option<std::collections::BTreeMap<String, String>>>>,
     /// Actual OS-assigned overlay port (None until bound / on bind failure).
@@ -75,6 +77,11 @@ struct LibraryEntry {
     update_available: bool,
     running: bool,
     connected_clients: usize,
+    /// Free-tier launchable without a subscription (§8.3).
+    is_free: bool,
+    /// `paid_games` entitlement — UI shows a lock badge on paid titles
+    /// for Free accounts (server still enforces on download/launch).
+    paid_games_allowed: bool,
 }
 
 /// Slug boundary check: `^[a-z0-9][a-z0-9_-]{0,63}$`. Rejects `..`,
@@ -239,22 +246,55 @@ pub async fn get_subscription(state: State<'_, AppState>) -> Result<Subscription
 /// to open in the system browser. The YooKassa webhook extends the
 /// subscription; the UI refreshes on the `chlauncher://` deep-link return.
 #[tauri::command]
-pub async fn billing_checkout(state: State<'_, AppState>) -> Result<Value, String> {
+pub async fn billing_checkout(
+    plan_code: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
     state
         .api
-        .checkout(&token(&state).await?)
+        .checkout(&token(&state).await?, plan_code.as_deref().unwrap_or("pro"))
         .await
         .map_err(|e| e.to_string())
 }
 
-/// TEST billing: grants/extends a 30-day period.
+/// TEST billing: grants/extends one billing period of `plan_code`.
 #[tauri::command]
-pub async fn mock_pay(state: State<'_, AppState>) -> Result<Subscription, String> {
+pub async fn mock_pay(
+    plan_code: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<Subscription, String> {
     state
         .api
-        .mock_pay(&token(&state).await?)
+        .mock_pay(&token(&state).await?, plan_code.as_deref().unwrap_or("pro"))
         .await
         .map_err(|e| e.to_string())
+}
+
+/// `GET /api/plans` — tariff catalog for the pricing table.
+#[tauri::command]
+pub async fn get_plans(state: State<'_, AppState>) -> Result<Vec<crate::types::Plan>, String> {
+    state.api.plans().await.map_err(|e| e.to_string())
+}
+
+/// `GET /api/account/entitlements` — effective plan + limits + usage.
+/// Falls back to the cached snapshot when the backend is unreachable so
+/// the UI never flickers between plans on a network blip.
+#[tauri::command]
+pub async fn get_entitlements(
+    state: State<'_, AppState>,
+) -> Result<crate::types::EntitlementsResponse, String> {
+    let token = token(&state).await?;
+    match state.api.entitlements(&token).await {
+        Ok(res) => {
+            state.usage.update_from_server(&res).await;
+            Ok(res)
+        }
+        Err(e) => state
+            .usage
+            .cached_response()
+            .await
+            .ok_or_else(|| e.to_string()),
+    }
 }
 
 /// TEST billing: forces expiry (for lockout testing).
@@ -284,6 +324,7 @@ pub async fn list_games(state: State<'_, AppState>) -> Result<Value, String> {
             .into_iter()
             .collect();
     let running = state.processes.running_slugs();
+    let paid_games_allowed = state.usage.entitlements().await.paid_games;
 
     let mut entries = Vec::new();
     for g in catalog {
@@ -301,6 +342,8 @@ pub async fn list_games(state: State<'_, AppState>) -> Result<Value, String> {
             executable_name: g.executable_name,
             installed: inst.cloned(),
             update_available,
+            is_free: g.is_free,
+            paid_games_allowed,
         });
     }
     Ok(json!({"games": entries}))
@@ -408,7 +451,7 @@ pub async fn play_game(
     let token = token(&state).await?;
     if !state
         .api
-        .verify_license(&token, require_hwid(&state)?)
+        .verify_license(&token, require_hwid(&state)?, Some(&slug))
         .await
         .map_err(|e| e.to_string())?
     {
@@ -624,12 +667,81 @@ pub async fn set_active_trigger_profile(
     Ok(())
 }
 
+/// Plan-limit gate for profile writes (§8.4). Rejects only NET-NEW
+/// violations — a downgraded streamer can still edit/save an over-limit
+/// profile (runtime executes only the first allowed entries); what they
+/// can't do is grow it further. Returns `PLAN_LIMIT|<feature>|<cap>`.
+async fn gate_profile_write(state: &AppState, profile: &TriggerProfile) -> Result<(), String> {
+    let ent = state.usage.entitlements().await;
+    let prev = {
+        let s = state.settings.lock().await;
+        s.data.trigger_profiles.get(&profile.game_slug).cloned()
+    };
+
+    if let Some(max) = ent.max_rules_per_preset {
+        let enabled = profile.rules.iter().filter(|r| r.enabled).count() as i64;
+        let prev_enabled = prev
+            .as_ref()
+            .map(|p| p.rules.iter().filter(|r| r.enabled).count() as i64)
+            .unwrap_or(0);
+        if enabled > max && enabled > prev_enabled {
+            return Err(format!("PLAN_LIMIT|max_rules_per_preset|{max}"));
+        }
+    }
+
+    // Feature usage of a profile: (interrupts, spinner, tts, media count).
+    fn usage_of(p: &TriggerProfile) -> (bool, bool, bool, i64) {
+        let (mut it, mut sp, mut tt, mut media) = (false, false, false, 0i64);
+        for r in p.rules.iter().filter(|r| r.enabled) {
+            it |= r.interrupt;
+            sp |= r.spinner.is_some();
+            tt |= r.tts.is_some();
+            if r.image.is_some()
+                || r.alert
+                    .as_ref()
+                    .is_some_and(|a| a.sound.is_some() || a.media.is_some())
+            {
+                media += 1;
+            }
+        }
+        (it, sp, tt, media)
+    }
+    let (it, sp, tt, media) = usage_of(profile);
+    let (pit, psp, ptt, pmedia) = prev.as_ref().map(usage_of).unwrap_or_default();
+
+    if it && !pit && !ent.interrupts {
+        return Err("PLAN_LIMIT|interrupts".into());
+    }
+    if sp && !psp && !ent.spinner {
+        return Err("PLAN_LIMIT|spinner".into());
+    }
+    if tt && !ptt && !ent.tts {
+        return Err("PLAN_LIMIT|tts".into());
+    }
+    if let Some(max) = ent.max_media_triggers {
+        if media > max && media > pmedia {
+            return Err(format!("PLAN_LIMIT|max_media_triggers|{max}"));
+        }
+    }
+    if !ent.custom_overlay_style {
+        let is_custom = profile.overlay != crate::types::OverlayStyle::default();
+        let was_custom = prev
+            .as_ref()
+            .is_some_and(|p| p.overlay != crate::types::OverlayStyle::default());
+        if is_custom && !was_custom {
+            return Err("PLAN_LIMIT|custom_overlay_style".into());
+        }
+    }
+    Ok(())
+}
+
 /// Persists an edited trigger profile.
 #[tauri::command]
 pub async fn save_triggers(
     profile: TriggerProfile,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    gate_profile_write(&state, &profile).await?;
     let mut s = state.settings.lock().await;
     s.data
         .trigger_profiles
@@ -668,10 +780,13 @@ pub async fn apply_trigger_preset(
     preset: String,
     state: State<'_, AppState>,
 ) -> Result<TriggerProfile, String> {
-    let mut s = state.settings.lock().await;
+    let s = state.settings.lock().await;
     let p = TriggerMapper::find_preset(&preset, &s.data.trigger_presets)
         .ok_or_else(|| format!("неизвестный пресет: {preset}"))?;
     let profile = TriggerMapper::profile_from_preset(&game_slug, &p);
+    drop(s);
+    gate_profile_write(&state, &profile).await?;
+    let mut s = state.settings.lock().await;
     s.data
         .trigger_profiles
         .insert(game_slug.clone(), profile.clone());
@@ -724,6 +839,18 @@ pub async fn save_trigger_preset(
         ));
     }
     preset.builtin = false;
+    // §8.4: new presets count against `max_presets`; editing an existing
+    // one is always allowed.
+    let ent = state.usage.entitlements().await;
+    if let Some(max) = ent.max_presets {
+        let s = state.settings.lock().await;
+        let exists = s.data.trigger_presets.contains_key(&preset.name);
+        let count = s.data.trigger_presets.len() as i64;
+        drop(s);
+        if !exists && count >= max {
+            return Err(format!("PLAN_LIMIT|max_presets|{max}"));
+        }
+    }
     let mut s = state.settings.lock().await;
     s.data
         .trigger_presets
@@ -902,6 +1029,9 @@ pub async fn save_spinner(pool: SpinnerPool, state: State<'_, AppState>) -> Resu
     if pool.segments.iter().any(|s| s.action.trim().is_empty()) {
         return Err("у каждого сегмента должно быть действие".into());
     }
+    if !state.usage.entitlements().await.spinner {
+        return Err("PLAN_LIMIT|spinner".into());
+    }
     let mut s = state.settings.lock().await;
     s.data.spinners.insert(name.to_string(), pool);
     let _ = s.save();
@@ -981,6 +1111,7 @@ pub async fn test_rule(
         spinners: &spinners,
         alerts: &alerts_cfg,
         earn_limit_coins: 0,
+        usage_base: 0,
         bypass: true,
     });
     Ok(())
@@ -1045,6 +1176,10 @@ pub async fn set_tts_settings(
     tts: crate::settings::TtsSettings,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    // §8.4: turning TTS ON needs the entitlement; disabling always works.
+    if tts.enabled && !state.usage.entitlements().await.tts {
+        return Err("PLAN_LIMIT|tts".into());
+    }
     let mut s = state.settings.lock().await;
     s.data.tts = tts;
     let _ = s.save();
@@ -1507,6 +1642,69 @@ pub async fn admin_audit(state: State<'_, AppState>) -> Result<Value, String> {
     state
         .api
         .admin_json(Method::GET, "/api/admin/audit", &token(&state).await?, None)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Switches a user's plan code (§8.3) — expiry untouched.
+#[tauri::command]
+pub async fn admin_set_plan(
+    user_id: i64,
+    plan_code: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    state
+        .api
+        .admin_json(
+            Method::POST,
+            &format!("/api/admin/users/{user_id}/set-plan"),
+            &token(&state).await?,
+            Some(json!({"plan_code": plan_code})),
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// All tariff plans incl. inactive (admin CRUD list).
+#[tauri::command]
+pub async fn admin_list_plans(state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .admin_json(Method::GET, "/api/admin/plans", &token(&state).await?, None)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Creates a tariff plan; `entitlements` is a raw JSON object.
+#[tauri::command]
+pub async fn admin_create_plan(plan: Value, state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .admin_json(
+            Method::POST,
+            "/api/admin/plans",
+            &token(&state).await?,
+            Some(plan),
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Partial plan update (title/price/entitlements/active/sort).
+#[tauri::command]
+pub async fn admin_update_plan(
+    code: String,
+    patch: Value,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    state
+        .api
+        .admin_json(
+            Method::PATCH,
+            &format!("/api/admin/plans/{code}"),
+            &token(&state).await?,
+            Some(patch),
+        )
         .await
         .map_err(|e| e.to_string())
 }

@@ -18,6 +18,10 @@ import {
   findUserById,
   nowIso,
   recordDeviceEvent,
+  findPlan,
+  listAllPlans,
+  usageForMonth,
+  currentMonth,
 } from '../db.js';
 import { subscriptionView, recordPayment, refreshSubscription } from '../subscriptions.js';
 import { ipHash } from '../hwid.js';
@@ -57,7 +61,7 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
 
   /** POST /api/admin/games — create a draft game entry. */
   app.post('/games', async (request, reply) => {
-    const { slug, title, description = '', executable_name } = request.body || {};
+    const { slug, title, description = '', executable_name, is_free } = request.body || {};
     if (!slug || !SLUG_RE.test(slug)) {
       return reply.code(400).send({ error: 'INVALID_SLUG' });
     }
@@ -69,10 +73,10 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
     }
     const info = db
       .prepare(
-        `INSERT INTO games (slug, title, description, version, file_name, executable_name, status, updated_at)
-         VALUES (?, ?, ?, '', '', ?, 'draft', ?)`
+        `INSERT INTO games (slug, title, description, version, file_name, executable_name, status, is_free, updated_at)
+         VALUES (?, ?, ?, '', '', ?, 'draft', ?, ?)`
       )
-      .run(slug, title, description, executable_name, nowIso());
+      .run(slug, title, description, executable_name, is_free ? 1 : 0, nowIso());
     audit(request.auth.userId, 'create_game', slug, { title });
     return reply.code(201).send({ game: adminGameView(db, Number(info.lastInsertRowid)) });
   });
@@ -81,17 +85,25 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
   app.patch('/games/:slug', async (request, reply) => {
     const game = findGameBySlug(db, request.params.slug);
     if (!game) return reply.code(404).send({ error: 'GAME_NOT_FOUND' });
-    const { title, description, cover_image } = request.body || {};
+    const { title, description, cover_image, is_free } = request.body || {};
     db.prepare(
       `UPDATE games SET
          title = COALESCE(?, title),
          description = COALESCE(?, description),
          cover_image = COALESCE(?, cover_image),
+         is_free = COALESCE(?, is_free),
          updated_at = ?
        WHERE id = ?`
-    ).run(title ?? null, description ?? null, cover_image ?? null, nowIso(), game.id);
+    ).run(
+      title ?? null,
+      description ?? null,
+      cover_image ?? null,
+      is_free === undefined ? null : is_free ? 1 : 0,
+      nowIso(),
+      game.id
+    );
     audit(request.auth.userId, 'update_game', game.slug, {
-      fields: ['title', 'description', 'cover_image'].filter(
+      fields: ['title', 'description', 'cover_image', 'is_free'].filter(
         (f) => request.body?.[f] !== undefined
       ),
     });
@@ -391,6 +403,91 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
     return { ok: true, user: adminUserView(db, findUserById(db, user.id)) };
   });
 
+  /**
+   * POST /api/admin/users/:id/set-plan — {plan_code}
+   * Switches the plan code on the user's subscription row; the expiry
+   * date is untouched (granting days stays `grant-days`).
+   */
+  app.post('/users/:id/set-plan', async (request, reply) => {
+    const user = findUserById(db, Number(request.params.id));
+    if (!user) return reply.code(404).send({ error: 'USER_NOT_FOUND' });
+    const planCode = String(request.body?.plan_code || '');
+    if (!findPlan(db, planCode)) {
+      return reply.code(400).send({ error: 'UNKNOWN_PLAN' });
+    }
+    db.prepare('UPDATE subscriptions SET plan_code = ? WHERE user_id = ?').run(
+      planCode,
+      user.id
+    );
+    audit(request.auth.userId, 'set_plan', user.email, { plan_code: planCode });
+    return { ok: true, user: adminUserView(db, findUserById(db, user.id)) };
+  });
+
+  // ---------------------------------------------------------------
+  // Tariff plans (§8.3) — CRUD under /api/admin/plans
+  // ---------------------------------------------------------------
+
+  /** GET /api/admin/plans — all plans incl. inactive. */
+  app.get('/plans', async () => ({ plans: listAllPlans(db) }));
+
+  /** POST /api/admin/plans — create a plan; entitlements is a JSON object. */
+  app.post('/plans', async (request, reply) => {
+    const { code, title, price_minor, period_days = 30, entitlements = {}, sort = 0 } =
+      request.body || {};
+    if (!/^[a-z0-9_-]{1,32}$/.test(String(code || ''))) {
+      return reply.code(400).send({ error: 'INVALID_PLAN_CODE' });
+    }
+    if (findPlan(db, code)) {
+      return reply.code(409).send({ error: 'PLAN_EXISTS' });
+    }
+    if (!title || !Number.isInteger(Number(price_minor)) || Number(price_minor) < 0) {
+      return reply.code(400).send({ error: 'MISSING_FIELDS' });
+    }
+    db.prepare(
+      `INSERT INTO plans (code, title, price_minor, period_days, entitlements, sort)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(
+      code,
+      String(title),
+      Number(price_minor),
+      Number(period_days) || 30,
+      JSON.stringify(entitlements),
+      Number(sort) || 0
+    );
+    audit(request.auth.userId, 'create_plan', code, { title, price_minor });
+    return reply.code(201).send({ plan: findPlan(db, code) });
+  });
+
+  /** PATCH /api/admin/plans/:code — partial update (title/price/entitlements/active/sort). */
+  app.patch('/plans/:code', async (request, reply) => {
+    const plan = findPlan(db, request.params.code);
+    if (!plan) return reply.code(404).send({ error: 'PLAN_NOT_FOUND' });
+    const { title, price_minor, period_days, entitlements, active, sort } =
+      request.body || {};
+    db.prepare(
+      `UPDATE plans SET
+         title = COALESCE(?, title),
+         price_minor = COALESCE(?, price_minor),
+         period_days = COALESCE(?, period_days),
+         entitlements = COALESCE(?, entitlements),
+         active = COALESCE(?, active),
+         sort = COALESCE(?, sort)
+       WHERE code = ?`
+    ).run(
+      title ?? null,
+      price_minor === undefined ? null : Number(price_minor),
+      period_days === undefined ? null : Number(period_days),
+      entitlements === undefined ? null : JSON.stringify(entitlements),
+      active === undefined ? null : active ? 1 : 0,
+      sort === undefined ? null : Number(sort),
+      request.params.code
+    );
+    audit(request.auth.userId, 'update_plan', request.params.code, {
+      fields: Object.keys(request.body || {}),
+    });
+    return { plan: findPlan(db, request.params.code) };
+  });
+
   // ---------------------------------------------------------------
   // Audit log
   // ---------------------------------------------------------------
@@ -467,6 +564,7 @@ function gameViewFull(g, builds) {
     cover_image: g.cover_image,
     status: g.status,
     owner_email: g.owner_email || null,
+    is_free: !!g.is_free,
     pending_submissions: g.pending_submissions || 0,
     published_version: published?.version || null,
     updated_at: g.updated_at,
@@ -527,6 +625,7 @@ function adminUserView(db, u) {
     )
     .all(u.id);
   const masked = u.hwid ? `${u.hwid.slice(0, 8)}…` : null;
+  const month = currentMonth();
   return {
     id: u.id,
     email: u.email,
@@ -534,6 +633,8 @@ function adminUserView(db, u) {
     hwid: masked,
     created_at: u.created_at,
     subscription: subscriptionView(sub),
+    plan_code: sub?.status === 'active' ? sub?.plan_code || 'pro' : 'free',
+    usage: { month, coins: usageForMonth(db, u.id, month) },
     payments,
   };
 }

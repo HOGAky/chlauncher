@@ -23,6 +23,8 @@ import gamesRoutes from './routes/games.js';
 import licenseRoutes from './routes/license.js';
 import publisherRoutes from './routes/publisher.js';
 import tiktokRoutes from './routes/tiktok.js';
+import plansRoutes, { entitlementsRoutes } from './routes/plans.js';
+import usageRoutes from './routes/usage.js';
 
 /**
  * Builds a configured (but not yet listening) Fastify instance.
@@ -106,6 +108,9 @@ export async function buildApp(opts = {}) {
   await app.register(adminRoutes, { prefix: '/api/admin', ...deps });
   await app.register(authRoutes, { prefix: '/api/auth', ...deps });
   await app.register(accountRoutes, { prefix: '/api/account', ...deps });
+  await app.register(entitlementsRoutes, { prefix: '/api/account', ...deps });
+  await app.register(plansRoutes, { prefix: '/api/plans', ...deps });
+  await app.register(usageRoutes, { prefix: '/api/usage', ...deps });
   await app.register(billingRoutes, { prefix: '/api/billing', ...deps });
   await app.register(gamesRoutes, { prefix: '/api/games', ...deps });
   await app.register(licenseRoutes, { prefix: '/api/license', ...deps });

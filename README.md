@@ -358,6 +358,38 @@ Refresh with `node tools/fetch-gifts.mjs` (re-scrapes the community
 list at streamtoearn.io); CI validates the committed catalog with
 `--check`.
 
+## Tariff plans & usage limits (§8)
+
+The server now ships a `plans` table (migration v6 → `free`/`pro`/`expert`
+seeds — placeholder prices the owner adjusts in «Управление → Тарифы»)
+with a JSON `entitlements` blob per plan: preset/rule/media caps,
+feature flags (`tts`, `spinner`, `custom_overlay_style`, `interrupts`,
+`paid_games`) and the monthly earn limit (`earn_limit_coins_month`,
+`null` = unlimited). An **active** subscription carries `plan_code`
+(existing subs migrated to `pro`); an expired one resolves to `free`.
+
+API: `GET /api/plans` (public), `GET /api/account/entitlements`,
+`POST /api/billing/checkout { plan_code }` (price/period read from the
+plan row; the webhook activates the plan actually paid — switching plans
+stacks days without recalculation), `POST /api/usage/report
+{ month, coins_delta, nonce }` (idempotent by nonce, 2/min per account,
+delta ≤ 1M). Admin: `POST /api/admin/users/:id/set-plan`, plan CRUD under
+`/api/admin/plans`, plan + usage columns in the user list.
+
+On the launcher, `src-tauri/src/usage.rs` is the `UsageMeter`: coins of
+events that actually produced actions accumulate in `usage.json` and are
+reported every 60 s (and on exit) with per-report nonces. Entitlements
+are cached (startup + every 10 min) and enforced two ways — save-time
+gates reject NET-NEW violations (`PLAN_LIMIT|<feature>|<cap>`, localized
+in `errorMessages.ts`) while `enforce_profile_limits` trims the runtime
+profile copy: a downgrade never deletes the streamer's rules, excess and
+gated features just stop executing. `games.is_free` marks Free-tier
+titles — they download and launch without a subscription
+(`/api/license/verify` accepts `game_slug`); paid titles show a lock
+badge when `paid_games` isn't entitled. «Подписка» renders the plan
+comparison table with the monthly usage bar; the main screen banners
+«Лимит месяца исчерпан» when the free cap is hit.
+
 ## Where the real keys go
 
 See [`.env.example`](.env.example):

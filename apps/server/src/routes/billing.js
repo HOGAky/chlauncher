@@ -23,7 +23,7 @@ import {
   recordPayment,
   forceExpire,
 } from '../subscriptions.js';
-import { nowIso } from '../db.js';
+import { nowIso, findPlan } from '../db.js';
 import { config } from '../config.js';
 
 /** Official YooKassa notification source networks (docs.yookassa.ru). */
@@ -88,14 +88,23 @@ export default async function billingRoutes(app, { db, authenticate }) {
   );
 
   /**
-   * POST /api/billing/checkout — creates a pending payments row and asks
-   * YooKassa for a hosted checkout page. 501 until YOOKASSA_* is set.
+   * POST /api/billing/checkout — {plan_code?} creates a pending payments
+   * row priced from the plans table and asks YooKassa for a hosted
+   * checkout page. 501 until YOOKASSA_* is set.
    */
   app.post('/checkout', { preHandler: authenticate }, async (request, reply) => {
     if (!config.yookassaShopId || !config.yookassaSecretKey) {
       return reply.code(501).send({ error: 'PROVIDER_NOT_CONFIGURED' });
     }
-    const amount = { value: '299.00', currency: 'RUB' }; // v1 fixed price
+    const planCode = String(request.body?.plan_code || 'pro');
+    const plan = findPlan(db, planCode);
+    if (!plan || !plan.active || plan.price_minor <= 0) {
+      return reply.code(400).send({ error: 'UNKNOWN_PLAN' });
+    }
+    const amount = {
+      value: (plan.price_minor / 100).toFixed(2),
+      currency: plan.currency,
+    };
     const res = await fetch('https://api.yookassa.ru/v3/payments', {
       method: 'POST',
       headers: {
@@ -109,7 +118,7 @@ export default async function billingRoutes(app, { db, authenticate }) {
         amount,
         capture: true,
         confirmation: { type: 'redirect', return_url: 'chlauncher://billing/return' },
-        description: 'chlauncher subscription — 30 days',
+        description: `chlauncher ${plan.title} — ${plan.period_days} days`,
       }),
     });
     const body = await res.json().catch(() => ({}));
@@ -118,11 +127,12 @@ export default async function billingRoutes(app, { db, authenticate }) {
       return reply.code(502).send({ error: 'PROVIDER_ERROR' });
     }
     db.prepare(
-      `INSERT INTO payments (user_id, provider, external_id, days, status, created_at)
-       VALUES (?, 'yookassa', ?, 30, 'pending', ?)`
-    ).run(request.auth.userId, body.id, nowIso());
+      `INSERT INTO payments (user_id, provider, external_id, days, status, plan_code, created_at)
+       VALUES (?, 'yookassa', ?, ?, 'pending', ?, ?)`
+    ).run(request.auth.userId, body.id, plan.period_days, plan.code, nowIso());
     return {
       payment_id: body.id,
+      plan_code: plan.code,
       checkout_url: body.confirmation?.confirmation_url || null,
     };
   });
@@ -158,7 +168,9 @@ export default async function billingRoutes(app, { db, authenticate }) {
       if (payment.status === 'succeeded') return { ok: true }; // idempotent
       if (payment.status !== 'pending') return { ok: true };
       db.prepare("UPDATE payments SET status = 'succeeded' WHERE id = ?").run(payment.id);
-      activateOrExtend(db, payment.user_id, payment.days);
+      // §8.3: the paid plan activates; leftover days of the old plan are
+      // not recalculated — the new period simply stacks.
+      activateOrExtend(db, payment.user_id, payment.days, payment.plan_code);
     } else if (event === 'payment.canceled') {
       db.prepare("UPDATE payments SET status = 'failed' WHERE id = ? AND status = 'pending'").run(payment.id);
     } else if (event === 'refund.succeeded') {
@@ -171,13 +183,19 @@ export default async function billingRoutes(app, { db, authenticate }) {
   // Mock endpoints — only registered when ENABLE_MOCK_BILLING allows (§5.5)
   // -------------------------------------------------------------------
   if (config.enableMockBilling) {
-    /** POST /api/billing/mock-pay — TEST ONLY: grant/extend 30 days. */
-    app.post('/mock-pay', { preHandler: authenticate }, async (request) => {
+    /** POST /api/billing/mock-pay — TEST ONLY: grant/extend a plan. */
+    app.post('/mock-pay', { preHandler: authenticate }, async (request, reply) => {
+      const planCode = String(request.body?.plan_code || 'pro');
+      const plan = findPlan(db, planCode);
+      if (!plan || !plan.active || plan.price_minor <= 0) {
+        return reply.code(400).send({ error: 'UNKNOWN_PLAN' });
+      }
       const { subscription } = recordPayment(db, {
         userId: request.auth.userId,
         provider: 'mock',
         externalId: `mock-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        days: 30,
+        days: plan.period_days,
+        planCode: plan.code,
       });
       request.log.info({ userId: request.auth.userId }, 'mock payment applied');
       return { ok: true, subscription: subscriptionView(subscription) };

@@ -179,7 +179,7 @@ pub struct TtsRuleSpec {
 }
 
 /// Look & layout of the preset cheat-sheet overlay (`/overlay/preset`, §5.2).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OverlayStyle {
     /// `"cards"` | `"list"` | `"text"`.
     #[serde(default = "default_cards")]
@@ -562,6 +562,9 @@ pub struct CatalogGame {
     pub size_bytes: Option<i64>,
     #[serde(default)]
     pub changelog: Option<String>,
+    /// Free-tier games launch/download without a subscription (§8.3).
+    #[serde(default)]
+    pub is_free: bool,
 }
 
 /// Locally installed game state.
@@ -585,6 +588,85 @@ pub struct Subscription {
     pub current_period_end: Option<String>,
     pub auto_renew: bool,
     pub days_left: i64,
+    /// Tariff code ('free'|'pro'|'expert'|…) — absent on pre-v6 servers.
+    #[serde(default)]
+    pub plan_code: Option<String>,
+}
+
+/// What a plan unlocks — mirrors the `entitlements` JSON column (§8.2).
+/// `None` on numeric fields = unlimited. Unknown keys are ignored so
+/// servers can add entitlements without breaking old launchers.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Entitlements {
+    #[serde(default)]
+    pub max_presets: Option<i64>,
+    #[serde(default)]
+    pub max_rules_per_preset: Option<i64>,
+    #[serde(default)]
+    pub max_media_triggers: Option<i64>,
+    #[serde(default)]
+    pub tts: bool,
+    #[serde(default)]
+    pub spinner: bool,
+    #[serde(default)]
+    pub custom_overlay_style: bool,
+    #[serde(default)]
+    pub interrupts: bool,
+    #[serde(default)]
+    pub earn_limit_coins_month: Option<i64>,
+    #[serde(default)]
+    pub paid_games: bool,
+    #[serde(default)]
+    pub mc_premium_plugins: bool,
+}
+
+/// Unrestricted map — used when the entitlements fetch fails (offline /
+/// old server) so a network blip never silently degrades a paying user.
+impl Default for Entitlements {
+    fn default() -> Self {
+        Self {
+            max_presets: None,
+            max_rules_per_preset: None,
+            max_media_triggers: None,
+            tts: true,
+            spinner: true,
+            custom_overlay_style: true,
+            interrupts: true,
+            earn_limit_coins_month: None,
+            paid_games: true,
+            mc_premium_plugins: true,
+        }
+    }
+}
+
+/// Tariff plan row for the pricing table (`GET /api/plans`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Plan {
+    pub code: String,
+    pub title: String,
+    pub price_minor: i64,
+    pub currency: String,
+    pub period_days: i64,
+    pub entitlements: Entitlements,
+    #[serde(default)]
+    pub active: bool,
+    #[serde(default)]
+    pub sort: i64,
+}
+
+/// `GET /api/account/entitlements` — plan + limits + this month's usage.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EntitlementsResponse {
+    pub plan: Plan,
+    pub entitlements: Entitlements,
+    pub usage: MonthlyUsage,
+}
+
+/// `usage_monthly` view for the UI progress bar.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MonthlyUsage {
+    pub month: String,
+    pub coins: i64,
 }
 
 /// Connection status of an external integration.

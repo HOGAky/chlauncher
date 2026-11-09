@@ -32,6 +32,7 @@ pub mod scheduler;
 pub mod settings;
 pub mod tts;
 pub mod types;
+pub mod usage;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -194,6 +195,18 @@ pub fn run() {
             // (Roblox-side games poll the relay; see docs/roblox-integration.md).
             let forwarder = forwarder::Forwarder::start(&hub, settings.clone(), api.clone());
 
+            // Earn-limit meter + entitlements cache (§8) — reports coins
+            // every 60 s, refreshes the plan snapshot every 10 min.
+            let usage = usage::UsageMeter::new(&data_dir, api.clone(), settings.clone());
+            {
+                let u = usage.clone();
+                tauri::async_runtime::spawn(async move { u.reporter_loop().await });
+            }
+            {
+                let u = usage.clone();
+                tauri::async_runtime::spawn(async move { u.entitlements_loop().await });
+            }
+
             let scheduler = Arc::new(ActionScheduler::new(hub.clone(), overlay_tx.clone()));
             scheduler.set_tts(tts.clone());
             scheduler.set_alerts_enabled(
@@ -234,6 +247,7 @@ pub fn run() {
                 scheduler: scheduler.clone(),
                 overlay_tx: overlay_tx.clone(),
                 tts: tts.clone(),
+                usage: usage.clone(),
                 catalog_seen: Arc::new(Mutex::new(None)),
                 overlay_port: Mutex::new(overlay_port),
                 service_error: Mutex::new(service_error),
@@ -247,6 +261,7 @@ pub fn run() {
                     scheduler.clone(),
                     active_game_slug.clone(),
                     tts.clone(),
+                    usage.clone(),
                 ));
             }
 
@@ -303,6 +318,8 @@ pub fn run() {
             commands::billing_checkout,
             commands::mock_pay,
             commands::mock_expire,
+            commands::get_plans,
+            commands::get_entitlements,
             commands::list_games,
             commands::download_game,
             commands::play_game,
@@ -366,6 +383,10 @@ pub fn run() {
             commands::admin_list_users,
             commands::admin_grant_days,
             commands::admin_reset_hwid,
+            commands::admin_set_plan,
+            commands::admin_list_plans,
+            commands::admin_create_plan,
+            commands::admin_update_plan,
             commands::admin_audit,
             commands::services_health,
             commands::get_proc_info,
@@ -399,6 +420,9 @@ pub fn run() {
                             state.processes.collect_exited();
                             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                         }
+                        // Last usage report before exit (§8.4) — bounded
+                        // by its own 5 s timeout inside flush().
+                        state.usage.flush().await;
                     });
                     state.processes.kill_all();
                 }
@@ -462,6 +486,7 @@ async fn mapper_loop(
     scheduler: Arc<ActionScheduler>,
     active_slug: Arc<Mutex<Option<String>>>,
     tts: Arc<tts::Tts>,
+    usage: Arc<usage::UsageMeter>,
 ) {
     while let Some(raw) = raw_rx.recv().await {
         // Chat-to-speech sees every event — gifter tracking, comment and
@@ -472,7 +497,7 @@ async fn mapper_loop(
             .await
             .clone()
             .unwrap_or_else(|| "default".to_string());
-        let (profile, spinners, alerts_cfg) = {
+        let (mut profile, spinners, alerts_cfg) = {
             let mut s = settings.lock().await;
             let mut profile = s
                 .data
@@ -491,15 +516,26 @@ async fn mapper_loop(
             }
             (profile, s.data.spinners.clone(), s.data.alerts.clone())
         };
+        // Plan entitlements (§8): trim the profile copy to what the plan
+        // allows and seed the earn-limit check with the monthly total.
+        let ent = usage.entitlements().await;
+        usage::enforce_profile_limits(&mut profile, &ent);
+        let before = scheduler.status().usage_coins;
         scheduler.ingest(&scheduler::IngestInput {
             profile: &profile,
             raw,
             spinners: &spinners,
             alerts: &alerts_cfg,
-            // Earn limit lands with plan entitlements (spec §8, stage 10).
-            earn_limit_coins: 0,
+            earn_limit_coins: ent.earn_limit_coins_month.unwrap_or(0),
+            usage_base: usage.month_coins().await,
             bypass: false,
         });
+        // Coins of events that actually produced actions feed the meter —
+        // skipped/queued events don't count (§8.4).
+        let delta = scheduler.status().usage_coins - before;
+        if delta > 0 {
+            usage.note(delta).await;
+        }
     }
 }
 

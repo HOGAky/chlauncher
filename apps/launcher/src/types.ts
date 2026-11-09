@@ -10,6 +10,47 @@ export interface Subscription {
   current_period_end: string | null;
   auto_renew: boolean;
   days_left: number;
+  /** Tariff code ('free' | 'pro' | …) — absent on pre-v6 servers. */
+  plan_code?: string;
+}
+
+/** What a plan unlocks — mirrors the server `entitlements` JSON (§8.2). */
+export interface Entitlements {
+  max_presets: number | null;
+  max_rules_per_preset: number | null;
+  max_media_triggers: number | null;
+  tts: boolean;
+  spinner: boolean;
+  custom_overlay_style: boolean;
+  interrupts: boolean;
+  earn_limit_coins_month: number | null;
+  paid_games: boolean;
+  mc_premium_plugins: boolean;
+}
+
+/** Tariff plan row for the pricing table (`GET /api/plans`). */
+export interface Plan {
+  code: string;
+  title: string;
+  price_minor: number;
+  currency: string;
+  period_days: number;
+  entitlements: Entitlements;
+  active: boolean;
+  sort: number;
+}
+
+/** `usage_monthly` view for the UI progress bar. */
+export interface MonthlyUsage {
+  month: string;
+  coins: number;
+}
+
+/** `GET /api/account/entitlements` — plan + limits + this month's usage. */
+export interface EntitlementsResponse {
+  plan: Plan;
+  entitlements: Entitlements;
+  usage: MonthlyUsage;
 }
 
 /** A mapped stream event (same shape the games receive). */
@@ -268,6 +309,10 @@ export interface LibraryEntry {
   update_available: boolean;
   running: boolean;
   connected_clients: number;
+  /** Free-tier launchable without a subscription (§8.3). */
+  is_free?: boolean;
+  /** The account's `paid_games` entitlement — UI lock badge only. */
+  paid_games_allowed?: boolean;
 }
 
 /** Window-shaping options passed to the game process. */
@@ -340,6 +385,10 @@ export interface AdminUser {
   hwid: string | null;
   created_at: string;
   subscription: Subscription;
+  /** Effective tariff code ('free' when the sub is expired). */
+  plan_code?: string;
+  /** This month's earn-limit usage. */
+  usage?: { month: string; coins: number };
   payments: AdminPayment[];
 }
 

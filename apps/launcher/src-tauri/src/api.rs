@@ -10,7 +10,7 @@ use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
 use std::env;
 
-use crate::types::{CatalogGame, Subscription};
+use crate::types::{CatalogGame, EntitlementsResponse, Plan, Subscription};
 
 /// Fallback base URL used when neither settings nor `VITE_API_URL` apply.
 pub const DEFAULT_BASE_URL: &str = "http://127.0.0.1:8787";
@@ -319,27 +319,27 @@ impl ApiClient {
         serde_json::from_value(v["subscription"].clone()).map_err(|_| ApiError::Malformed)
     }
 
-    /// `POST /api/billing/checkout` — creates a pending payment and returns
-    /// the provider's hosted checkout URL (501 PROVIDER_NOT_CONFIGURED
-    /// until YOOKASSA_* is set on the server).
-    pub async fn checkout(&self, token: &str) -> Result<Value, ApiError> {
+    /// `POST /api/billing/checkout` — creates a pending payment for
+    /// `plan_code` and returns the provider's hosted checkout URL (501
+    /// PROVIDER_NOT_CONFIGURED until YOOKASSA_* is set on the server).
+    pub async fn checkout(&self, token: &str, plan_code: &str) -> Result<Value, ApiError> {
         self.req(
             reqwest::Method::POST,
             "/api/billing/checkout",
             Some(token),
-            Some(json!({})),
+            Some(json!({"plan_code": plan_code})),
         )
         .await
     }
 
-    /// `POST /api/billing/mock-pay` — TEST endpoint, grants 30 days.
-    pub async fn mock_pay(&self, token: &str) -> Result<Subscription, ApiError> {
+    /// `POST /api/billing/mock-pay` — TEST endpoint, grants a plan period.
+    pub async fn mock_pay(&self, token: &str, plan_code: &str) -> Result<Subscription, ApiError> {
         let v: Value = self
             .req(
                 reqwest::Method::POST,
                 "/api/billing/mock-pay",
                 Some(token),
-                Some(json!({})),
+                Some(json!({"plan_code": plan_code})),
             )
             .await?;
         serde_json::from_value(v["subscription"].clone()).map_err(|_| ApiError::Malformed)
@@ -358,20 +358,71 @@ impl ApiClient {
         serde_json::from_value(v["subscription"].clone()).map_err(|_| ApiError::Malformed)
     }
 
-    /// `POST /api/license/verify` — pre-launch gate.
-    pub async fn verify_license(&self, token: &str, hwid: &str) -> Result<bool, ApiError> {
+    /// `POST /api/license/verify` — pre-launch gate. `game_slug` lets the
+    /// server allow `is_free` titles for Free-tier accounts (§8.3).
+    pub async fn verify_license(
+        &self,
+        token: &str,
+        hwid: &str,
+        game_slug: Option<&str>,
+    ) -> Result<bool, ApiError> {
         match self
             .req::<VerifyResponse>(
                 reqwest::Method::POST,
                 "/api/license/verify",
                 Some(token),
-                Some(json!({"hwid": hwid})),
+                Some(json!({"hwid": hwid, "game_slug": game_slug})),
             )
             .await
         {
             Ok(v) => Ok(v.allowed),
             Err(e) => Err(e),
         }
+    }
+
+    /// `GET /api/plans` — public tariff catalog for the pricing table.
+    pub async fn plans(&self) -> Result<Vec<Plan>, ApiError> {
+        let v: Value = self
+            .req(reqwest::Method::GET, "/api/plans", None, None)
+            .await?;
+        serde_json::from_value(v["plans"].clone()).map_err(|_| ApiError::Malformed)
+    }
+
+    /// `GET /api/account/entitlements` — effective plan + limits + usage.
+    pub async fn entitlements(&self, token: &str) -> Result<EntitlementsResponse, ApiError> {
+        self.req(
+            reqwest::Method::GET,
+            "/api/account/entitlements",
+            Some(token),
+            None,
+        )
+        .await
+    }
+
+    /// `POST /api/usage/report` — ships a coins delta for the earn limit;
+    /// `nonce` makes retries idempotent. Returns the month total.
+    pub async fn report_usage(
+        &self,
+        token: &str,
+        month: &str,
+        coins_delta: i64,
+        nonce: &str,
+    ) -> Result<i64, ApiError> {
+        let v: Value = self
+            .req(
+                reqwest::Method::POST,
+                "/api/usage/report",
+                Some(token),
+                Some(json!({
+                    "month": month,
+                    "coins_delta": coins_delta,
+                    "nonce": nonce,
+                })),
+            )
+            .await?;
+        v.get("coins")
+            .and_then(|c| c.as_i64())
+            .ok_or(ApiError::Malformed)
     }
 
     /// `GET /api/games` — catalog.

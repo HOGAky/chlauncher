@@ -9,7 +9,7 @@
  * WebSocket handshake — see `packages/game-sdk` and the launcher docs.
  */
 
-import { findUserById } from '../db.js';
+import { findUserById, findGameBySlug } from '../db.js';
 import { isUsableHwid, hwidHash } from '../hwid.js';
 import {
   refreshSubscription,
@@ -28,7 +28,7 @@ export default async function licenseRoutes(app, { db, authenticate }) {
    * → 403 {allowed:false, error}        on HWID mismatch / expired sub
    */
   app.post('/verify', { preHandler: authenticate }, async (request, reply) => {
-    const { hwid } = request.body || {};
+    const { hwid, game_slug } = request.body || {};
     const user = findUserById(db, request.auth.userId);
     if (!user) return reply.code(401).send({ allowed: false, error: 'UNKNOWN_USER' });
 
@@ -43,11 +43,15 @@ export default async function licenseRoutes(app, { db, authenticate }) {
 
     const sub = refreshSubscription(db, user.id);
     if (!sub || sub.status !== 'active') {
-      return reply.code(403).send({
-        allowed: false,
-        error: 'SUBSCRIPTION_REQUIRED',
-        subscription: subscriptionView(sub),
-      });
+      // §8.3: free-tier users can launch games flagged `is_free`.
+      const game = game_slug ? findGameBySlug(db, String(game_slug)) : null;
+      if (!game?.is_free) {
+        return reply.code(403).send({
+          allowed: false,
+          error: 'SUBSCRIPTION_REQUIRED',
+          subscription: subscriptionView(sub),
+        });
+      }
     }
 
     return { allowed: true, subscription: subscriptionView(sub) };

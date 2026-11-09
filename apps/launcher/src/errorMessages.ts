@@ -55,6 +55,17 @@ export const ERROR_MESSAGES: Record<string, string> = {
   INTERNAL_ERROR: 'Произошла непредвиденная ошибка. Подробности в логах.',
 };
 
+/** `PLAN_LIMIT|<feature>|<cap>` — feature names for the tariff-limit error. */
+const PLAN_FEATURES: Record<string, string> = {
+  max_presets: 'количество пресетов',
+  max_rules_per_preset: 'правил в пресете',
+  max_media_triggers: 'медиа-триггеров',
+  tts: 'TTS-озвучка',
+  spinner: 'колесо подарков',
+  custom_overlay_style: 'свои стили оверлея',
+  interrupts: 'прерывания-алерты',
+};
+
 export interface ParsedError {
   code: string;
   requestId: string | null;
@@ -85,6 +96,12 @@ export function parseError(raw: unknown): ParsedError {
 /** Human-readable error text for banners/toasts, with optional request id. */
 export function humanError(raw: unknown, opts?: { withRequestId?: boolean }): string {
   const { code, requestId, detail } = parseError(raw);
+  if (code === 'PLAN_LIMIT') {
+    // detail = "<feature>[|<cap>]"
+    const [feature, cap] = (detail ?? '').split('|');
+    const name = PLAN_FEATURES[feature] ?? feature;
+    return `Лимит тарифа: ${name}${cap ? ` (максимум ${cap})` : ''} недоступно на текущем плане. Обновите подписку на странице «Подписка».`;
+  }
   let msg = ERROR_MESSAGES[code] || ERROR_MESSAGES.INTERNAL_ERROR;
   if (detail && !msg.endsWith('.')) msg += '.';
   if (opts?.withRequestId && requestId) msg += ` Код обращения: ${requestId}`;

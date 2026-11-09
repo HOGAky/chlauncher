@@ -206,6 +206,88 @@ const MIGRATIONS = [
       CREATE INDEX idx_game_submissions_game ON game_submissions(game_id);
     `);
   },
+  // v5 → v6: tariff plans (parity spec §8.1). `plans` holds the catalog of
+  // subscription tiers with a JSON entitlements blob; existing active
+  // subscriptions migrate to 'pro' so nothing is lost. `usage_monthly`
+  // tracks earn-limit consumption reported by launchers; `usage_nonces`
+  // makes /api/usage/report idempotent. `games.is_free` lets the Free tier
+  // launch a whitelist of catalog games.
+  (db) => {
+    db.exec(`
+      CREATE TABLE plans (
+        code          TEXT PRIMARY KEY,
+        title         TEXT NOT NULL,
+        price_minor   INTEGER NOT NULL,
+        currency      TEXT NOT NULL DEFAULT 'RUB',
+        period_days   INTEGER NOT NULL DEFAULT 30,
+        entitlements  TEXT NOT NULL,
+        active        INTEGER NOT NULL DEFAULT 1,
+        sort          INTEGER NOT NULL DEFAULT 0
+      );
+
+      ALTER TABLE subscriptions ADD COLUMN plan_code TEXT NOT NULL DEFAULT 'pro';
+      ALTER TABLE payments      ADD COLUMN plan_code TEXT;
+      ALTER TABLE games         ADD COLUMN is_free INTEGER NOT NULL DEFAULT 0;
+
+      CREATE TABLE usage_monthly (
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        month      TEXT NOT NULL,
+        coins      INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, month)
+      );
+
+      CREATE TABLE usage_nonces (
+        nonce      TEXT PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TEXT NOT NULL
+      );
+    `);
+
+    // Seed the default tiers — placeholder prices/names (owner decides,
+    // spec §15). free/pro/expert map to §8.2 entitlement keys.
+    const seed = db.prepare(
+      `INSERT OR IGNORE INTO plans
+         (code, title, price_minor, currency, period_days, entitlements, active, sort)
+       VALUES (?, ?, ?, 'RUB', 30, ?, 1, ?)`
+    );
+    seed.run('free', 'Free', 0, JSON.stringify({
+      max_presets: 3,
+      max_rules_per_preset: 12,
+      max_media_triggers: 5,
+      tts: false,
+      spinner: false,
+      custom_overlay_style: false,
+      interrupts: false,
+      earn_limit_coins_month: 5000,
+      paid_games: false,
+      mc_premium_plugins: false,
+    }), 0);
+    seed.run('pro', 'Pro', 29900, JSON.stringify({
+      max_presets: 25,
+      max_rules_per_preset: 50,
+      max_media_triggers: 50,
+      tts: true,
+      spinner: true,
+      custom_overlay_style: true,
+      interrupts: true,
+      earn_limit_coins_month: null,
+      paid_games: true,
+      mc_premium_plugins: false,
+    }), 1);
+    seed.run('expert', 'Expert', 59900, JSON.stringify({
+      max_presets: 100,
+      max_rules_per_preset: 200,
+      max_media_triggers: 200,
+      tts: true,
+      spinner: true,
+      custom_overlay_style: true,
+      interrupts: true,
+      earn_limit_coins_month: null,
+      paid_games: true,
+      mc_premium_plugins: true,
+    }), 2);
+  },
 ];
 
 /** Runs all pending migrations in order. Idempotent via user_version. */
@@ -397,4 +479,105 @@ export function listGames(db) {
 /** Finds one game by slug. */
 export function findGameBySlug(db, slug) {
   return db.prepare('SELECT * FROM games WHERE slug = ?').get(slug);
+}
+
+// ---------------------------------------------------------------------------
+// Tariff plans & usage metering (parity spec §8)
+// ---------------------------------------------------------------------------
+
+/** Active plan rows for the public catalog, ordered for display. */
+export function listActivePlans(db) {
+  return db
+    .prepare('SELECT * FROM plans WHERE active = 1 ORDER BY sort, price_minor')
+    .all()
+    .map(planView);
+}
+
+/** All plan rows (admin view — includes inactive). */
+export function listAllPlans(db) {
+  return db.prepare('SELECT * FROM plans ORDER BY sort, price_minor').all().map(planView);
+}
+
+/** One plan row by code (raw, with entitlements JSON parsed). */
+export function findPlan(db, code) {
+  const row = db.prepare('SELECT * FROM plans WHERE code = ?').get(code);
+  return row ? planView(row) : null;
+}
+
+/** Public plan shape — `entitlements` arrives already parsed. */
+export function planView(row) {
+  let entitlements = {};
+  try {
+    entitlements = JSON.parse(row.entitlements || '{}');
+  } catch {
+    /* malformed JSON → safest is an empty (fully restricted) map */
+  }
+  return {
+    code: row.code,
+    title: row.title,
+    price_minor: row.price_minor,
+    currency: row.currency,
+    period_days: row.period_days,
+    entitlements,
+    active: !!row.active,
+    sort: row.sort,
+  };
+}
+
+/**
+ * Resolves the plan a user is effectively on RIGHT NOW: an active
+ * subscription returns its `plan_code`; anything else (expired, missing)
+ * means Free. Unknown/stale plan codes fall back to Free too.
+ * @returns {object} plan row via {@link planView}
+ */
+export function activePlanForUser(db, userId) {
+  const sub = db
+    .prepare(
+      'SELECT status, plan_code, current_period_end FROM subscriptions WHERE user_id = ?'
+    )
+    .get(userId);
+  // Lazy expiry can't run here (would be a circular import), so check the
+  // period end directly — an overdue row counts as Free.
+  const live =
+    sub?.status === 'active' && (!sub.current_period_end || sub.current_period_end > nowIso());
+  const code = live ? sub.plan_code : 'free';
+  return findPlan(db, code) || findPlan(db, 'free');
+}
+
+/** Current UTC month as 'YYYY-MM' — the usage_monthly key. */
+export function currentMonth() {
+  return new Date().toISOString().slice(0, 7);
+}
+
+/** Coins consumed by `userId` in `month` (0 when absent). */
+export function usageForMonth(db, userId, month) {
+  const row = db
+    .prepare('SELECT coins FROM usage_monthly WHERE user_id = ? AND month = ?')
+    .get(userId, month);
+  return row ? row.coins : 0;
+}
+
+/**
+ * Applies a usage report idempotently: a fresh `nonce` inserts and adds
+ * `coinsDelta`; a seen nonce is a retry → returns `applied: false` with
+ * the current total and no write.
+ * @returns {{applied: boolean, coins: number}}
+ */
+export function reportUsage(db, userId, month, coinsDelta, nonce) {
+  const seen = db
+    .prepare('SELECT nonce FROM usage_nonces WHERE nonce = ?')
+    .get(nonce);
+  if (seen) {
+    return { applied: false, coins: usageForMonth(db, userId, month) };
+  }
+  db.prepare(
+    'INSERT INTO usage_nonces (nonce, user_id, created_at) VALUES (?, ?, ?)'
+  ).run(nonce, userId, nowIso());
+  db.prepare(
+    `INSERT INTO usage_monthly (user_id, month, coins, updated_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(user_id, month)
+     DO UPDATE SET coins = coins + excluded.coins, updated_at = excluded.updated_at`
+  ).run(userId, month, coinsDelta, nowIso());
+  return { applied: true, coins: usageForMonth(db, userId, month) };
 }

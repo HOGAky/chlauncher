@@ -18,6 +18,7 @@ import type {
   FeedItem,
   ForwardStatus,
   LibraryEntry,
+  Plan,
   RawStreamEvent,
   SchedulerStatus,
   SpinnerPool,
@@ -64,9 +65,10 @@ export const getSubscription = () => cmd<Subscription>('get_subscription');
  * `chlauncher://billing/return` (the deep-link plugin reopens this app and
  * `onBillingReturn` fires → the UI re-reads the subscription).
  */
-export const checkout = async (): Promise<void> => {
+export const checkout = async (planCode?: string): Promise<void> => {
   const r = await cmd<{ payment_id: string; checkout_url: string | null }>(
-    'billing_checkout'
+    'billing_checkout',
+    { planCode: planCode ?? 'pro' }
   );
   if (!r.checkout_url) throw new Error('NO_CHECKOUT_URL');
   await openUrl(r.checkout_url);
@@ -84,8 +86,16 @@ export const getColdBillingReturn = async (): Promise<boolean> => {
   return !!urls?.some((u) => u.startsWith('chlauncher://billing'));
 };
 
-/** TEST: pays for 30 days. */
-export const mockPay = () => cmd<Subscription>('mock_pay');
+/** TEST: pays for one billing period of the plan. */
+export const mockPay = (planCode?: string) =>
+  cmd<Subscription>('mock_pay', { planCode: planCode ?? 'pro' });
+
+/** Public tariff catalog for the pricing table. */
+export const getPlans = () => cmd<import('./types').Plan[]>('get_plans');
+
+/** Effective plan + entitlements + this month's usage. */
+export const getEntitlements = () =>
+  cmd<import('./types').EntitlementsResponse>('get_entitlements');
 
 /** TEST: forces subscription expiry. */
 export const mockExpire = () => cmd<Subscription>('mock_expire');
@@ -362,6 +372,14 @@ export const adminGrantDays = (userId: number, days: number, comment: string) =>
   });
 export const adminResetHwid = (userId: number) =>
   cmd<{ ok: boolean }>('admin_reset_hwid', { userId });
+export const adminSetPlan = (userId: number, planCode: string) =>
+  cmd<{ ok: boolean }>('admin_set_plan', { userId, planCode });
+export const adminListPlans = () =>
+  cmd<{ plans: Plan[] }>('admin_list_plans');
+export const adminCreatePlan = (plan: Record<string, unknown>) =>
+  cmd<{ plan: Plan }>('admin_create_plan', { plan });
+export const adminUpdatePlan = (code: string, patch: Record<string, unknown>) =>
+  cmd<{ plan: Plan }>('admin_update_plan', { code, patch });
 export const adminAudit = () => cmd<{ entries: AuditEntry[] }>('admin_audit');
 
 /** Upload progress events emitted by adminUploadBuild. */

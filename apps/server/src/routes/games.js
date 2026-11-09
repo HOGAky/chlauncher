@@ -51,6 +51,7 @@ function gameView(row) {
     executable_name: row.executable_name,
     cover_image: row.cover_image,
     changelog: row.changelog,
+    is_free: !!row.is_free,
   };
 }
 
@@ -58,7 +59,7 @@ function gameView(row) {
 function listPublished(db) {
   return db
     .prepare(
-      `SELECT g.slug, g.title, g.description, g.executable_name, g.cover_image,
+      `SELECT g.slug, g.title, g.description, g.executable_name, g.cover_image, g.is_free,
               b.version, b.sha256, b.size_bytes, b.changelog
        FROM games g
        JOIN game_builds b ON b.id = g.published_build_id
@@ -72,7 +73,7 @@ function listPublished(db) {
 function findPublished(db, slug) {
   return db
     .prepare(
-      `SELECT g.slug, g.title, g.description, g.executable_name, g.cover_image,
+      `SELECT g.slug, g.title, g.description, g.executable_name, g.cover_image, g.is_free,
               b.version, b.sha256, b.size_bytes, b.changelog, b.file_name
        FROM games g
        JOIN game_builds b ON b.id = g.published_build_id
@@ -100,11 +101,13 @@ export default async function gamesRoutes(app, { db, authenticate }) {
     if (!SLUG_RE.test(request.params.slug || '')) {
       return reply.code(400).send({ error: 'INVALID_SLUG' });
     }
-    if (!hasActiveSubscription(db, request.auth.userId)) {
-      return reply.code(403).send({ error: 'SUBSCRIPTION_REQUIRED' });
-    }
     const game = findPublished(db, request.params.slug);
     if (!game) return reply.code(404).send({ error: 'GAME_NOT_FOUND' });
+    // §8.3: free-tier users may download is_free games; everything else
+    // requires an active subscription (any paid plan).
+    if (!game.is_free && !hasActiveSubscription(db, request.auth.userId)) {
+      return reply.code(403).send({ error: 'SUBSCRIPTION_REQUIRED' });
+    }
 
     const filePath = safeBuildPath(game.file_name);
     if (!filePath || !fs.existsSync(filePath)) {

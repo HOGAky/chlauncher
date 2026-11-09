@@ -3,9 +3,11 @@
  * Main launcher shell: left sidebar navigation + page area.
  * Pages: Library, Subscription, Integrations, Trigger mapper, Simulator.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Gamepad2, CreditCard, Radio, SlidersHorizontal, FlaskConical, Wrench, FolderOpen, MonitorPlay, Mic, Dices } from 'lucide-react';
 import { cn } from '../lib/utils';
+import * as api from '../api';
+import type { EntitlementsResponse } from '../types';
 import Header from '../components/Header';
 import { useApp } from '../App';
 import LibraryPage from '../pages/LibraryPage';
@@ -46,6 +48,7 @@ export default function MainScreen() {
           Нет соединения с сервером — библиотека и настройки доступны, онлайн-функции отложены.
         </div>
       )}
+      <EarnLimitBanner onUpgrade={() => setPage('subscription')} />
       <div className="flex-1 flex min-h-0">
         <nav className="w-52 shrink-0 border-r border-border bg-card/40 p-3 flex flex-col gap-1">
           {NAV.map((n) => (
@@ -92,5 +95,35 @@ export default function MainScreen() {
         </main>
       </div>
     </div>
+  );
+}
+
+/** §8.4 — «Лимит месяца исчерпан»: shows when monthly usage ≥ earn limit. */
+function EarnLimitBanner({ onUpgrade }: { onUpgrade: () => void }) {
+  const [ent, setEnt] = useState<EntitlementsResponse | null>(null);
+  useEffect(() => {
+    let dead = false;
+    const poll = () =>
+      api
+        .getEntitlements()
+        .then((r) => !dead && setEnt(r))
+        .catch(() => {});
+    poll();
+    const id = setInterval(poll, 30_000);
+    return () => {
+      dead = true;
+      clearInterval(id);
+    };
+  }, []);
+  const limit = ent?.entitlements.earn_limit_coins_month;
+  if (!limit || !ent || ent.usage.coins < limit) return null;
+  return (
+    <button
+      onClick={onUpgrade}
+      className="shrink-0 bg-red-500/15 text-red-300 border-b border-red-500/30 px-4 py-1.5 text-xs text-left hover:bg-red-500/25 transition-colors"
+    >
+      Лимит месяца исчерпан ({ent.usage.coins.toLocaleString('ru-RU')} /{' '}
+      {limit.toLocaleString('ru-RU')} монет) — платные события не запускают действия. Апгрейд →
+    </button>
   );
 }

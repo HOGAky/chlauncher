@@ -736,7 +736,7 @@ mock-game и Minecraft, без зависаний очереди.
 | 7 ✅ | Оверлей пресета (3 шаблона, live-update), общий рендер с PNG | `overlay/preset.html`, `OverlaysPage.tsx`, `lib/presetRows.ts` | правка → перерисовка |
 | 8 ✅ | TTS | `tts.rs`, `TtsPage.tsx`, global-shortcut | голос, фильтры, хоткей |
 | 9 ✅ | Gift Spinner | `scheduler.rs`, `overlay/spinner.html`, `SpinnerPage.tsx` | e2e спина |
-| 10 | Тарифы: БД, API, админка, entitlements в лаунчере, usage | `db.js`, `routes/*`, `AdminPage.tsx`, `SubscriptionPage.tsx`, `usage.rs` | серверные тесты §13 |
+| 10 ✅ | Тарифы: БД, API, админка, entitlements в лаунчере, usage | `db.js`, `routes/*`, `AdminPage.tsx`, `SubscriptionPage.tsx`, `usage.rs` | серверные тесты §13 |
 | 11 | Minecraft: Java/Paper/EULA/RCON/консоль + пресет Survival | `minecraft/*`, `MinecraftPage.tsx` | Роза → зомби |
 | 12 | Каталог MC-плагинов + первый свой плагин | `routes/mc.js`, отдельный репо плагина | установка из лаунчера |
 | 13 | Протокол адаптеров + пилотный мод | `game_ws.rs`, `docs/protocol.md`, репо мода | событие из эфира → действие в пилотной игре |

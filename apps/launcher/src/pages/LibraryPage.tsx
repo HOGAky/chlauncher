@@ -70,7 +70,7 @@ export default function LibraryPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold">Библиотека игр</h1>
         <Badge variant={active ? 'success' : 'destructive'}>
-          {active ? 'Подписка активна' : 'Запуск заблокирован'}
+          {active ? 'Подписка активна' : 'Free · только бесплатные игры'}
         </Badge>
       </div>
 
@@ -128,6 +128,10 @@ export default function LibraryPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {games.map((g) => {
           const isBusy = !!busy[g.slug];
+          // §8.3: Free accounts play is_free titles; paid titles need an
+          // active sub AND the paid_games entitlement (undefined = not
+          // fetched yet → optimistic, the server still enforces).
+          const canPlay = g.is_free || (active && (g.paid_games_allowed ?? true));
           return (
             <Card key={g.slug} className="overflow-hidden">
               <div className="h-24 bg-gradient-to-br from-primary/30 to-accent/30 flex items-end p-3">
@@ -139,6 +143,11 @@ export default function LibraryPage() {
                   <div className="flex gap-1.5">
                     {g.running && <Badge variant="success">Запущена</Badge>}
                     {g.update_available && <Badge variant="warning">Обновление</Badge>}
+                    {g.is_free ? (
+                      <Badge variant="outline">Free</Badge>
+                    ) : !g.paid_games_allowed && !active ? (
+                      <Badge variant="destructive">Платная</Badge>
+                    ) : null}
                     {!g.installed && <Badge variant="outline">Не установлена</Badge>}
                   </div>
                 </div>
@@ -155,7 +164,8 @@ export default function LibraryPage() {
                   <Button
                     size="sm"
                     variant="secondary"
-                    disabled={isBusy}
+                    disabled={isBusy || !canPlay}
+                    title={canPlay ? '' : 'Платная игра — нужна подписка'}
                     onClick={act(g.slug, 'dl', () => api.downloadGame(g.slug))}
                   >
                     {g.update_available ? <RefreshCw size={14} /> : <Download size={14} />}
@@ -165,11 +175,11 @@ export default function LibraryPage() {
                   <>
                     <Button
                       size="sm"
-                      disabled={isBusy || !active || g.running}
-                      title={active ? '' : 'Требуется активная подписка'}
+                      disabled={isBusy || !canPlay || g.running}
+                      title={canPlay ? '' : 'Платная игра — нужна подписка'}
                       onClick={act(g.slug, 'play', () => api.playGame(g.slug, opts))}
                     >
-                      {active ? <Play size={14} /> : <Lock size={14} />}
+                      {canPlay ? <Play size={14} /> : <Lock size={14} />}
                       {isBusy ? 'Запуск…' : 'Играть'}
                     </Button>
                     {g.running && (

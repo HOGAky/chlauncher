@@ -59,6 +59,7 @@ export function subscriptionView(sub) {
     current_period_end: sub.current_period_end,
     auto_renew: !!sub.auto_renew,
     days_left: daysLeft,
+    plan_code: sub.plan_code || 'pro',
   };
 }
 
@@ -68,9 +69,12 @@ export function subscriptionView(sub) {
  * @param {import('node:sqlite').DatabaseSync} db
  * @param {number} userId
  * @param {number} [days]
+ * @param {string|null} [planCode] — when given, switches the plan code
+ *   (spec §8.3: the new plan applies immediately, leftover days on the
+ *   old plan are NOT recalculated — days simply stack).
  * @returns {object} updated subscription row
  */
-export function activateOrExtend(db, userId, days = SUBSCRIPTION_DAYS) {
+export function activateOrExtend(db, userId, days = SUBSCRIPTION_DAYS, planCode = null) {
   const sub = refreshSubscription(db, userId);
   const base =
     sub && sub.status === 'active' && sub.current_period_end > nowIso()
@@ -78,6 +82,12 @@ export function activateOrExtend(db, userId, days = SUBSCRIPTION_DAYS) {
       : new Date();
   const newEnd = isoInDays(days, base);
   updateSubscription(db, userId, 'active', newEnd);
+  if (planCode) {
+    db.prepare('UPDATE subscriptions SET plan_code = ? WHERE user_id = ?').run(
+      planCode,
+      userId
+    );
+  }
   return findSubscription(db, userId);
 }
 
@@ -98,19 +108,19 @@ export function activateOrExtend(db, userId, days = SUBSCRIPTION_DAYS) {
  */
 export function recordPayment(
   db,
-  { userId, provider, externalId = null, days = SUBSCRIPTION_DAYS, actorId = null }
+  { userId, provider, externalId = null, days = SUBSCRIPTION_DAYS, actorId = null, planCode = null }
 ) {
   const info = db
     .prepare(
       `INSERT OR IGNORE INTO payments
-         (user_id, provider, external_id, days, status, actor_id, created_at)
-       VALUES (?,?,?,?, 'succeeded', ?, ?)`
+         (user_id, provider, external_id, days, status, actor_id, plan_code, created_at)
+       VALUES (?,?,?,?, 'succeeded', ?, ?, ?)`
     )
-    .run(userId, provider, externalId, days, actorId, nowIso());
+    .run(userId, provider, externalId, days, actorId, planCode, nowIso());
   if (info.changes === 0) {
     return { applied: false, subscription: refreshSubscription(db, userId) };
   }
-  const subscription = activateOrExtend(db, userId, days);
+  const subscription = activateOrExtend(db, userId, days, planCode);
   return { applied: true, subscription };
 }
 

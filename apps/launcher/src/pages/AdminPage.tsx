@@ -14,7 +14,7 @@ import {
   Upload, Plus, RefreshCw, RotateCcw, EyeOff, Check, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import * as api from '../api';
-import type { AdminGame, AdminUser, AuditEntry } from '../types';
+import type { AdminGame, AdminUser, AuditEntry, Plan } from '../types';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -22,7 +22,7 @@ import { Input } from '../components/ui/input';
 import { cn } from '../lib/utils';
 
 import { humanError } from '../errorMessages';
-type Tab = 'games' | 'users' | 'audit';
+type Tab = 'games' | 'users' | 'plans' | 'audit';
 const fmtSize = (n: number) => `${(n / 1024 / 1024).toFixed(1)} МБ`;
 
 export default function AdminPage() {
@@ -32,7 +32,7 @@ export default function AdminPage() {
       <div className="flex items-center gap-3">
         <h1 className="text-lg font-semibold">Управление</h1>
         <div className="flex gap-1 text-sm">
-          {(['games', 'users', 'audit'] as Tab[]).map((t) => (
+          {(['games', 'users', 'plans', 'audit'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -41,13 +41,20 @@ export default function AdminPage() {
                 tab === t ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:bg-secondary/60'
               )}
             >
-              {t === 'games' ? 'Игры' : t === 'users' ? 'Пользователи' : 'Аудит'}
+              {t === 'games'
+                ? 'Игры'
+                : t === 'users'
+                  ? 'Пользователи'
+                  : t === 'plans'
+                    ? 'Тарифы'
+                    : 'Аудит'}
             </button>
           ))}
         </div>
       </div>
       {tab === 'games' && <GamesTab />}
       {tab === 'users' && <UsersTab />}
+      {tab === 'plans' && <PlansTab />}
       {tab === 'audit' && <AuditTab />}
     </div>
   );
@@ -299,11 +306,13 @@ function UploadForm({ slug, act }: { slug: string; act: (f: () => Promise<unknow
 function UsersTab() {
   const [query, setQuery] = useState('');
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [grant, setGrant] = useState<Record<number, string>>({});
 
   const refresh = useCallback(() => {
     api.adminListUsers(query).then((r) => setUsers(r.users)).catch((e) => setError(humanError(e)));
+    api.adminListPlans().then((r) => setPlans(r.plans)).catch(() => {});
   }, [query]);
   useEffect(() => {
     const t = setTimeout(refresh, 250);
@@ -336,12 +345,26 @@ function UsersTab() {
             <div>
               <div className="font-medium">{u.email}</div>
               <div className="text-xs text-muted-foreground">
-                {u.role} · hwid {u.hwid ?? '—'} · до {u.subscription.current_period_end?.slice(0, 10) ?? '—'}
+                {u.role} · план <b>{u.plan_code ?? 'free'}</b> · hwid {u.hwid ?? '—'} · до{' '}
+                {u.subscription.current_period_end?.slice(0, 10) ?? '—'}
+                {u.usage ? ` · ${u.usage.coins.toLocaleString('ru-RU')} монет/${u.usage.month}` : ''}
               </div>
             </div>
             <Badge variant={u.subscription.status === 'active' ? 'success' : 'outline'} className="ml-auto">
               {u.subscription.status}
             </Badge>
+            <select
+              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+              value={u.subscription.status === 'active' ? (u.subscription.plan_code ?? u.plan_code ?? 'free') : 'free'}
+              title="Сменить тариф (даты подписки не меняются)"
+              onChange={(e) => void act(() => api.adminSetPlan(u.id, e.target.value))()}
+            >
+              {plans.map((p) => (
+                <option key={p.code} value={p.code}>
+                  {p.title}
+                </option>
+              ))}
+            </select>
             <div className="flex items-center gap-1">
               <Input
                 className="h-8 w-16"
@@ -379,6 +402,135 @@ function UsersTab() {
                 ))}
               </div>
             )}
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+// ================================================================ Plans
+
+function PlansTab() {
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
+  const [nc, setNc] = useState({ code: '', title: '', price: '', days: '30' });
+
+  const refresh = useCallback(() => {
+    api.adminListPlans().then((r) => setPlans(r.plans)).catch((e) => setError(humanError(e)));
+  }, []);
+  useEffect(refresh, [refresh]);
+
+  const act = (fn: () => Promise<unknown>) => async () => {
+    setError(null);
+    try {
+      await fn();
+    } catch (e) {
+      setError(humanError(e));
+    } finally {
+      refresh();
+    }
+  };
+
+  /** Edits the entitlements blob as raw JSON in a textarea. */
+  const saveEntitlements = (p: Plan) => {
+    try {
+      const entitlements = JSON.parse(draft);
+      void act(() => api.adminUpdatePlan(p.code, { entitlements }))();
+      setDraft('');
+    } catch {
+      setError('entitlements: невалидный JSON');
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      {error && <div className="text-sm text-destructive">{error}</div>}
+
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-2 py-3 text-sm">
+          <Input className="h-8 w-28" placeholder="код (vip)" value={nc.code}
+            onChange={(e) => setNc((s) => ({ ...s, code: e.target.value }))} />
+          <Input className="h-8 w-32" placeholder="название" value={nc.title}
+            onChange={(e) => setNc((s) => ({ ...s, title: e.target.value }))} />
+          <Input className="h-8 w-24" placeholder="цена ₽" value={nc.price}
+            onChange={(e) => setNc((s) => ({ ...s, price: e.target.value }))} />
+          <Input className="h-8 w-20" placeholder="дней" value={nc.days}
+            onChange={(e) => setNc((s) => ({ ...s, days: e.target.value }))} />
+          <Button
+            size="sm"
+            onClick={act(() =>
+              api.adminCreatePlan({
+                code: nc.code,
+                title: nc.title,
+                price_minor: Math.round(Number(nc.price) * 100) || 0,
+                period_days: Number(nc.days) || 30,
+                entitlements: {},
+              })
+            )}
+          >
+            <Plus size={14} /> Создать план
+          </Button>
+        </CardContent>
+      </Card>
+
+      {plans.map((p) => (
+        <Card key={p.code}>
+          <CardContent className="flex flex-col gap-2 py-3 text-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={p.active ? 'success' : 'outline'}>{p.code}</Badge>
+              <Input
+                className="h-8 w-36"
+                defaultValue={p.title}
+                onBlur={(e) =>
+                  e.target.value !== p.title &&
+                  void act(() => api.adminUpdatePlan(p.code, { title: e.target.value }))()
+                }
+              />
+              <Input
+                className="h-8 w-24"
+                defaultValue={(p.price_minor / 100).toString()}
+                title="Цена, ₽"
+                onBlur={(e) => {
+                  const rub = Number(e.target.value);
+                  if (Number.isFinite(rub) && Math.round(rub * 100) !== p.price_minor) {
+                    void act(() => api.adminUpdatePlan(p.code, { price_minor: Math.round(rub * 100) }))();
+                  }
+                }}
+              />
+              <Input
+                className="h-8 w-16"
+                defaultValue={p.period_days.toString()}
+                title="Период, дней"
+                onBlur={(e) => {
+                  const d = Number(e.target.value);
+                  if (Number.isInteger(d) && d > 0 && d !== p.period_days) {
+                    void act(() => api.adminUpdatePlan(p.code, { period_days: d }))();
+                  }
+                }}
+              />
+              <Button
+                size="sm"
+                variant={p.active ? 'outline' : 'default'}
+                onClick={act(() => api.adminUpdatePlan(p.code, { active: !p.active }))}
+              >
+                {p.active ? 'Скрыть' : 'Показать'}
+              </Button>
+            </div>
+            <details className="text-xs">
+              <summary className="cursor-pointer text-muted-foreground">
+                entitlements ({Object.keys(p.entitlements).length} ключей)
+              </summary>
+              <textarea
+                className="mt-1 h-40 w-full rounded-md border border-input bg-background p-2 font-mono text-xs"
+                defaultValue={JSON.stringify(p.entitlements, null, 2)}
+                onChange={(e) => setDraft(e.target.value)}
+              />
+              <Button size="sm" variant="outline" className="mt-1" onClick={() => saveEntitlements(p)}>
+                Сохранить entitlements
+              </Button>
+            </details>
           </CardContent>
         </Card>
       ))}

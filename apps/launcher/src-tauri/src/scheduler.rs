@@ -37,6 +37,9 @@ pub struct IngestInput<'a> {
     pub alerts: &'a AlertSettings,
     /// Monthly earn limit in coins — 0 = unlimited (§8.4).
     pub earn_limit_coins: i64,
+    /// Coins already consumed this month per [`UsageMeter`] — added to
+    /// the session counter so the limit survives restarts (§8.4).
+    pub usage_base: i64,
     /// `test_rule` path: bypasses cooldowns and the earn limit.
     pub bypass: bool,
 }
@@ -444,7 +447,7 @@ impl ActionScheduler {
                 // --- earn limit (§8.4): only paid events are gated --------
                 if input.earn_limit_coins > 0
                     && raw.coins > 0
-                    && st.usage_coins >= input.earn_limit_coins
+                    && input.usage_base + st.usage_coins >= input.earn_limit_coins
                 {
                     st.skipped_limit += 1;
                     self.hub.note(TriggerMapper::apply(rule, raw), "limit");
@@ -856,6 +859,7 @@ mod tests {
             spinners,
             alerts,
             earn_limit_coins: 0,
+            usage_base: 0,
             bypass: false,
         }
     }
