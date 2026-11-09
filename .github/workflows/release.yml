@@ -91,9 +91,10 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npx tauri build
 
-      # dumpbin lives in the VS toolchain dir — setup-msbuild puts it on
-      # PATH (it's not there by default on windows-latest).
-      - uses: microsoft/setup-msbuild@v2
+      # dumpbin lives in the MSVC toolchain dir, not on PATH by default —
+      # msvc-dev-cmd runs the equivalent of vcvarsall so it is.
+      # (setup-msbuild only puts MSBuild on PATH, dumpbin is NOT included.)
+      - uses: ilammy/msvc-dev-cmd@v1
 
       # src-tauri is excluded from the workspace → its target dir is
       # apps/launcher/src-tauri/target (host triple, no --target flag).
