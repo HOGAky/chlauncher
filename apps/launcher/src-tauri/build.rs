@@ -14,16 +14,20 @@ fn main() {
 /// resolved through the manifest. Such binaries fail to start with
 /// `STATUS_ENTRYPOINT_NOT_FOUND` (0xC0000139) before `main` runs.
 ///
-/// Link a minimal comctl32-v6 manifest into test/example targets so
-/// `cargo test` and `cargo run --example` work locally. MSVC builds are
-/// unaffected: `embed-resource` uses the MSVC toolchain there and test
-/// binaries get the same fix, while shipped binaries keep the full tauri
-/// manifest (version info, icon, execution level).
+/// Link a minimal comctl32-v6 manifest into every linkable target so
+/// `cargo test` and `cargo run --example` work on windows-gnu. GNU ld merges
+/// duplicate manifests (warning only); MSVC's cvtres instead hard-fails on
+/// `CVT1100: duplicate resource. type:MANIFEST`, so the extra manifest must
+/// never reach MSVC binaries — this stays gated to `target_env = "gnu"`.
 #[cfg(windows)]
 fn embed_test_manifest() {
     use std::env;
     use std::fs;
     use std::path::PathBuf;
+
+    if env::var("CARGO_CFG_TARGET_ENV").as_deref() != Ok("gnu") {
+        return;
+    }
 
     let manifest = concat!(
         "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>",
@@ -48,8 +52,8 @@ fn embed_test_manifest() {
     )
     .unwrap();
 
-    if let Err(err) = embed_resource::compile_for_everything(&rc_path, embed_resource::NONE)
-        .manifest_required()
+    if let Err(err) =
+        embed_resource::compile_for_everything(&rc_path, embed_resource::NONE).manifest_required()
     {
         println!("cargo:warning=test manifest embedding failed: {err}");
     }
