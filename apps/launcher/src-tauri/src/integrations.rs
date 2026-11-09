@@ -83,7 +83,14 @@ impl IntegrationManager {
 
     /// Connects to a public TikTok Live room by username via the
     /// `tiktoklive` webcast client (gifts/likes/chat/joins/follows).
-    pub async fn tiktok_connect(&self, username: String) -> Result<(), String> {
+    /// `sign_cfg` — optional `(sign_url, jwt)` routed to the sidecar over
+    /// stdin: when our backend runs the sign proxy, the paid EulerStream
+    /// key stays server-side and the sidecar signs through it.
+    pub async fn tiktok_connect(
+        &self,
+        username: String,
+        sign_cfg: Option<(String, String)>,
+    ) -> Result<(), String> {
         self.tiktok_disconnect().await;
         let username = username.trim().trim_start_matches('@').to_string();
         if username.is_empty() {
@@ -97,7 +104,7 @@ impl IntegrationManager {
         let app = self.app.clone();
         let raw_tx = self.raw_tx.clone();
         let handle = tokio::spawn(async move {
-            run_tiktok(username, raw_tx, status, app).await;
+            run_tiktok(username, raw_tx, status, app, sign_cfg).await;
         });
         *self.tiktok_task.lock().await = Some(handle);
         Ok(())
@@ -322,6 +329,7 @@ async fn run_tiktok(
     raw_tx: mpsc::Sender<RawStreamEvent>,
     status: Arc<Mutex<IntegrationStatus>>,
     app: AppHandle,
+    sign_cfg: Option<(String, String)>,
 ) {
     let finish = |st: IntegrationStatus| {
         let status = status.clone();
@@ -361,7 +369,11 @@ async fn run_tiktok(
         .current_dir(&dir)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
-        .stdin(std::process::Stdio::null())
+        .stdin(if sign_cfg.is_some() {
+            std::process::Stdio::piped()
+        } else {
+            std::process::Stdio::null()
+        })
         .env("EULERSTREAM_API_KEY", eulerstream_key(&app))
         .kill_on_drop(true);
 
@@ -378,6 +390,18 @@ async fn run_tiktok(
             return;
         }
     };
+
+    // Launcher → sidecar bootstrap: one JSON line with the sign-proxy URL
+    // and the user's JWT, then close stdin. The JWT travels over a pipe —
+    // never in argv, never in env — so it doesn't show up in process
+    // listings. Without a line the sidecar hits EOF and goes direct.
+    if let (Some((sign_url, token)), Some(mut stdin)) = (sign_cfg, child.stdin.take()) {
+        use tokio::io::AsyncWriteExt;
+        let line = serde_json::json!({"sign_url": sign_url, "token": token}).to_string() + "\n";
+        let _ = stdin.write_all(line.as_bytes()).await;
+        drop(stdin); // close → sidecar proceeds
+    }
+
     let Some(stdout) = child.stdout.take() else {
         finish(IntegrationStatus::Error("sidecar: нет stdout".into())).await;
         return;
@@ -412,15 +436,20 @@ async fn run_tiktok(
         match v["type"].as_str().unwrap_or("") {
             "ping" => last_ping = std::time::Instant::now(),
             "status" => {
+                // Unknown status strings (e.g. "sign_proxy") are
+                // informational only — never flip the UI state on them.
                 let st = match v["status"].as_str() {
-                    Some("live") => IntegrationStatus::Live,
-                    _ => IntegrationStatus::Disconnected,
+                    Some("live") => Some(IntegrationStatus::Live),
+                    Some("disconnected") => Some(IntegrationStatus::Disconnected),
+                    _ => None,
                 };
-                *status.lock().await = st.clone();
-                let _ = app.emit(
-                    STATUS_EVENT,
-                    json!({"integration":"tiktok","status":st,"username":username}),
-                );
+                if let Some(st) = st {
+                    *status.lock().await = st.clone();
+                    let _ = app.emit(
+                        STATUS_EVENT,
+                        json!({"integration":"tiktok","status":st,"username":username}),
+                    );
+                }
             }
             "event" => {
                 let ev = RawStreamEvent {

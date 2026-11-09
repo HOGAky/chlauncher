@@ -470,7 +470,21 @@ pub async fn kill_game(slug: String, state: State<'_, AppState>) -> Result<(), S
 /// Connect TikTok Live presence polling for `username`.
 #[tauri::command]
 pub async fn tiktok_connect(username: String, state: State<'_, AppState>) -> Result<(), String> {
-    state.integrations.tiktok_connect(username.clone()).await?;
+    // When signed in, hand the sidecar our sign-proxy URL + JWT over
+    // stdin: the backend injects the paid EulerStream key there, so it
+    // never ships inside the client. Signed-out users get the free tier.
+    let sign_cfg = state
+        .settings
+        .lock()
+        .await
+        .data
+        .auth_token
+        .clone()
+        .map(|t| (format!("{}/api/tiktok-sign", state.api.base()), t));
+    state
+        .integrations
+        .tiktok_connect(username.clone(), sign_cfg)
+        .await?;
     let mut s = state.settings.lock().await;
     s.data.tiktok_username = Some(username);
     let _ = s.save();

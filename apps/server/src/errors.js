@@ -28,6 +28,7 @@ export const ERROR_MESSAGES = {
   HWID_UNAVAILABLE: 'Не удалось определить идентификатор устройства.',
   HWID_RESET_COOLDOWN: 'Отвязка устройства доступна раз в 7 дней.',
   TOO_MANY_ATTEMPTS: 'Слишком много попыток. Попробуйте позже.',
+  SIGN_NOT_CONFIGURED: 'Подпись TikTok временно недоступна на сервере.',
   SUBSCRIPTION_REQUIRED: 'Требуется активная подписка.',
   GAME_NOT_FOUND: 'Игра не найдена.',
   BUILD_NOT_UPLOADED: 'Сборка не загружена.',

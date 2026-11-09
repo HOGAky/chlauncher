@@ -16,6 +16,9 @@ crate-type = ["staticlib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+# Embeds a comctl32-v6 manifest into test/example binaries on Windows —
+# see build.rs for why they otherwise crash at load time.
+embed-resource = "3"
 
 [dependencies]
 tauri = { version = "2", features = [] }

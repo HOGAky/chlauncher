@@ -548,6 +548,7 @@ dependencies = [
  "axum",
  "bytes",
  "dirs 6.0.0",
+ "embed-resource",
  "futures-util",
  "machine-uid",
  "reqwest 0.12.28",
