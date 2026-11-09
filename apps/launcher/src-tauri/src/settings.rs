@@ -63,6 +63,63 @@ pub struct Settings {
     /// Fixed overlay port — 0 lets the OS pick a fresh one per launch.
     #[serde(default)]
     pub overlay_port: u16,
+    /// Managed Minecraft server (§9): EULA, RAM, RCON credentials.
+    #[serde(default)]
+    pub mc: McSettings,
+}
+
+/// Managed Minecraft server configuration (parity spec §9.2–§9.3).
+/// `rcon_password` is generated on install — stored here, never logged.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McSettings {
+    /// Streamer explicitly accepted the Minecraft EULA (checkbox in the UI).
+    #[serde(default)]
+    pub eula_accepted: bool,
+    /// `-Xmx`/`-Xms` in MB.
+    #[serde(default = "default_mc_ram")]
+    pub ram_mb: u32,
+    /// Requested MC version ("" = latest stable from the Fill API).
+    #[serde(default)]
+    pub mc_version: String,
+    /// `online-mode` in server.properties — Mojang auth for player names.
+    #[serde(default = "default_true")]
+    pub online_mode: bool,
+    /// Default `{player}` target for command templates (`@a` when empty).
+    #[serde(default)]
+    pub player: String,
+    /// RCON port chosen at install (0 = not yet assigned).
+    #[serde(default)]
+    pub rcon_port: u16,
+    /// Generated 48-hex password (24 random bytes) — written to
+    /// server.properties on install; never sent to the renderer.
+    #[serde(default)]
+    pub rcon_password: String,
+    /// Installed Paper version ("" = not installed).
+    #[serde(default)]
+    pub paper_version: String,
+}
+
+fn default_mc_ram() -> u32 {
+    4096
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl Default for McSettings {
+    fn default() -> Self {
+        Self {
+            eula_accepted: false,
+            ram_mb: default_mc_ram(),
+            mc_version: String::new(),
+            online_mode: true,
+            player: String::new(),
+            rcon_port: 0,
+            rcon_password: String::new(),
+            paper_version: String::new(),
+        }
+    }
 }
 
 /// Alert queue + playback settings (parity spec §3.1–§3.2, §4.3).

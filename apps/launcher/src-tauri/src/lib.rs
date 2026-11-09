@@ -26,6 +26,7 @@ pub mod hwid;
 pub mod integrations;
 pub mod logging;
 pub mod media;
+pub mod minecraft;
 pub mod overlay;
 pub mod process;
 pub mod scheduler;
@@ -219,6 +220,20 @@ pub fn run() {
                 let sched = scheduler.clone();
                 tauri::async_runtime::spawn(async move { sched.run().await });
             }
+
+            // Managed Paper server (§9) — the event router subscribes to
+            // the EventHub; while `active_profile == "minecraft"` and the
+            // server is up, mapped actions become RCON console commands.
+            let mc = minecraft::MinecraftManager::new(&data_dir, settings.clone());
+            {
+                let mc2 = mc.clone();
+                let hub2 = hub.clone();
+                let slug2 = active_game_slug.clone();
+                let app_h = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    mc2.event_router(hub2, app_h, slug2).await;
+                });
+            }
             // Frontend live-feed relay: every dispatched event reaches the
             // React feed as `stream-event` (games get it via WS, the
             // overlay via its own WS — one source of truth).
@@ -248,6 +263,7 @@ pub fn run() {
                 overlay_tx: overlay_tx.clone(),
                 tts: tts.clone(),
                 usage: usage.clone(),
+                mc: mc.clone(),
                 catalog_seen: Arc::new(Mutex::new(None)),
                 overlay_port: Mutex::new(overlay_port),
                 service_error: Mutex::new(service_error),
@@ -392,6 +408,16 @@ pub fn run() {
             commands::get_proc_info,
             commands::get_diagnostics,
             commands::check_launcher_update,
+            commands::mc_status,
+            commands::mc_accept_eula,
+            commands::mc_install,
+            commands::mc_start,
+            commands::mc_stop,
+            commands::mc_console,
+            commands::mc_logs,
+            commands::mc_set_settings,
+            commands::mc_world_reset,
+            commands::mc_world_backup,
         ])
         .build(tauri::generate_context!());
     let app = match app {
@@ -420,6 +446,9 @@ pub fn run() {
                             state.processes.collect_exited();
                             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                         }
+                        // Managed MC server: RCON `stop` + 5 s grace,
+                        // then kill — no orphaned java process.
+                        state.mc.shutdown().await;
                         // Last usage report before exit (§8.4) — bounded
                         // by its own 5 s timeout inside flush().
                         state.usage.flush().await;

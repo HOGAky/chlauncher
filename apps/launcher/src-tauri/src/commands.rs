@@ -56,6 +56,8 @@ pub struct AppState {
     pub tts: Arc<crate::tts::Tts>,
     /// Earn-limit meter + entitlements cache (§8).
     pub usage: Arc<crate::usage::UsageMeter>,
+    /// Managed Paper server lifecycle (§9).
+    pub mc: Arc<crate::minecraft::MinecraftManager>,
     /// Last seen slug→version snapshot for catalog-change detection (§6.3).
     pub catalog_seen: Arc<Mutex<Option<std::collections::BTreeMap<String, String>>>>,
     /// Actual OS-assigned overlay port (None until bound / on bind failure).
@@ -1805,4 +1807,130 @@ pub async fn check_launcher_update(app: AppHandle) -> Result<Option<String>, Str
         .map_err(|e| e.to_string())?;
     // NSIS passive install applies on the next start — relaunch now.
     app.restart();
+}
+
+// ---------------------------------------------------------------------------
+// Managed Minecraft (Paper) server — parity spec §9.3
+// ---------------------------------------------------------------------------
+
+/// Status snapshot: install state, running flag, settings, log tail.
+/// Never includes the RCON password — it never leaves the Rust side.
+#[tauri::command]
+pub async fn mc_status(state: State<'_, AppState>) -> Result<Value, String> {
+    Ok(state.mc.status().await)
+}
+
+/// Explicit EULA consent — the only writer of `eula=true`. The UI links
+/// to https://www.minecraft.net/eula next to the checkbox.
+#[tauri::command]
+pub async fn mc_accept_eula(state: State<'_, AppState>) -> Result<(), String> {
+    state.mc.accept_eula().await
+}
+
+/// Downloads Java (when missing) + Paper jar, writes server.properties.
+/// Progress lines stream via the `mc-log` event — takes a minute.
+#[tauri::command]
+pub async fn mc_install(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    state.mc.install(&app).await
+}
+
+#[tauri::command]
+pub async fn mc_start(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    state.mc.start(&app).await
+}
+
+/// RCON `stop`, force-kill after the 30 s grace period.
+#[tauri::command]
+pub async fn mc_stop(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    state.mc.stop(&app).await
+}
+
+/// Sends one console command through RCON (the server's own console —
+/// the streamer types `say hi`, `give …`). Multi-line input is split
+/// into sequential commands; template sanitization does NOT apply here
+/// (this is the owner's own input, like typing at the real console).
+#[tauri::command]
+pub async fn mc_console(cmd: String, state: State<'_, AppState>) -> Result<String, String> {
+    let cmd = cmd.trim();
+    if cmd.is_empty() || cmd.len() > 500 {
+        return Err("MC_CMD_INVALID".into());
+    }
+    let mut last = String::new();
+    for line in cmd.lines().map(str::trim).filter(|l| !l.is_empty()) {
+        last = state.mc.console(line).await?;
+    }
+    Ok(last)
+}
+
+/// Replays the log ring — the page polls this after the initial status
+/// snapshot; `since` is the number of lines already shown.
+#[tauri::command]
+pub async fn mc_logs(since: u32, state: State<'_, AppState>) -> Result<Value, String> {
+    let status = state.mc.status().await;
+    let tail = status
+        .get("log_tail")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let skip = (since as usize).min(tail.len());
+    Ok(serde_json::json!({
+        "total": tail.len(),
+        "lines": tail[skip..],
+    }))
+}
+
+/// Editable server settings (§9.2): RAM, MC version, online-mode,
+/// player name used by `{player}` templates. RCON port/password are
+/// managed internally and not settable here.
+#[tauri::command]
+pub async fn mc_set_settings(
+    ram_mb: Option<u32>,
+    mc_version: Option<String>,
+    online_mode: Option<bool>,
+    player: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut s = state.settings.lock().await;
+    if let Some(ram) = ram_mb {
+        s.data.mc.ram_mb = ram.clamp(1024, 32768);
+    }
+    if let Some(v) = mc_version {
+        let v = v.trim().to_string();
+        if !v.is_empty() && v.len() <= 32 {
+            s.data.mc.mc_version = v;
+        }
+    }
+    if let Some(m) = online_mode {
+        s.data.mc.online_mode = m;
+        // Keep the live properties file in sync for the next start.
+        if s.data.mc.eula_accepted {
+            let _ = crate::minecraft::install::write_server_properties(
+                &state.mc.dir.join("server"),
+                s.data.mc.rcon_port,
+                &s.data.mc.rcon_password,
+                m,
+            );
+        }
+    }
+    if let Some(p) = player {
+        // Same rules as the {player} template placeholder.
+        let p = crate::minecraft::templates::sanitize_player(&p);
+        if !p.is_empty() {
+            s.data.mc.player = p;
+        }
+    }
+    let _ = s.save();
+    Ok(())
+}
+
+/// Deletes `world*` dirs (stopped server only) — fresh map on next start.
+#[tauri::command]
+pub async fn mc_world_reset(state: State<'_, AppState>) -> Result<(), String> {
+    state.mc.world_reset().await
+}
+
+/// Zips `world*` into `minecraft/backups/` — returns the archive name.
+#[tauri::command]
+pub async fn mc_world_backup(state: State<'_, AppState>) -> Result<String, String> {
+    state.mc.world_backup().await
 }

@@ -227,7 +227,8 @@ impl TriggerMapper {
                 action: action.into(),
                 ..Default::default()
             };
-        vec![TriggerPreset {
+        vec![
+        TriggerPreset {
             name: "steal-the-stream".into(),
             game_slug: None,
             description: "Обстрел подарками: дорогие — хаос, бесплатные действия — помощь".into(),
@@ -262,6 +263,59 @@ impl TriggerMapper {
                 mk("tiktok", "comment", "!start", 0, "start_game"),
                 mk("donationalerts", "donation", "", 10000, "yeet"),
                 mk("any", "any", "", 0, "log_only"),
+            ],
+            ..Default::default()
+        },
+        // §9 pilot — Survival on vanilla commands only (no plugins).
+        // `action` IS the console command; `{player}`/ `{user}`/`{count}`/
+        // `{gift}` are rendered+sanitized by minecraft::templates.
+        TriggerPreset {
+            name: "mc-survival".into(),
+            game_slug: Some("minecraft".into()),
+            description: "Minecraft Survival: ванильные команды — подарки хаосят, бесплатные действия помогают".into(),
+            builtin: true,
+            rules: vec![
+                // Big gifts — chaos around the player.
+                mk("tiktok", "gift", "Whale", 0,
+                   "execute at {player} run summon minecraft:warden ~ ~3 ~\nsay {user} призвал Warden!"),
+                mk("tiktok", "gift", "Lion", 0,
+                   "execute at {player} run summon minecraft:lightning_bolt ~ ~ ~\nexecute at {player} run summon minecraft:zombie ~2 ~ ~"),
+                mk("tiktok", "gift", "Galaxy", 0,
+                   "execute at {player} run effect give @p minecraft:levitation 10 1\nsay {user} отправил стримера в полёт"),
+                mk("tiktok", "gift", "Drama", 0,
+                   "execute at {player} run summon minecraft:creeper ~ ~ ~\nexecute at {player} run summon minecraft:creeper ~1 ~ ~1"),
+                // Mid tier.
+                mk("tiktok", "gift", "Rose", 0,
+                   "give {player} minecraft:diamond {count}\nsay спасибо {user} за {gift}"),
+                mk("tiktok", "gift", "", 2000,
+                   "execute at {player} run summon minecraft:tnt ~ ~3 ~"),
+                mk("tiktok", "gift", "", 500,
+                   "execute at {player} run summon minecraft:zombie ~2 ~ ~"),
+                mk("tiktok", "gift", "", 100,
+                   "give {player} minecraft:golden_apple 1"),
+                mk("tiktok", "gift", "", 0,
+                   "execute at {player} run summon minecraft:firework_rocket ~ ~ ~"),
+                // Free interactions help.
+                mk("tiktok", "like", "", 500,
+                   "effect give {player} minecraft:speed 30 0"),
+                mk("tiktok", "follow", "", 0,
+                   "give {player} minecraft:cooked_beef 8"),
+                mk("tiktok", "subscribe", "", 0,
+                   "give {player} minecraft:totem_of_undying 1\ntitle {player} title \"Новый саб!\""),
+                // Chat commands.
+                mk("tiktok", "comment", "!storm", 0, "weather thunder"),
+                mk("tiktok", "comment", "!clear", 0, "weather clear"),
+                mk("tiktok", "comment", "!night", 0, "time set night"),
+                mk("tiktok", "comment", "!day", 0, "time set day"),
+                mk("tiktok", "comment", "!heal", 0,
+                   "effect give {player} minecraft:instant_health 1 1"),
+                mk("donationalerts", "donation", "", 10000,
+                   "execute at {player} run summon minecraft:wither ~ ~5 ~\nsay ДОНАТ {user}: WITHER!"),
+                mk("donationalerts", "donation", "", 0,
+                   "give {player} minecraft:diamond 1\nsay донат от {user}"),
+                // Catch-all stays visible in console without spamming
+                // the world — `say` is the vanilla-safe no-op.
+                mk("any", "any", "", 0, "say {user}: {gift}"),
             ],
             ..Default::default()
         }]

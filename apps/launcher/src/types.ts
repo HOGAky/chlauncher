@@ -445,3 +445,18 @@ export interface Bootstrap {
     status: ForwardStatus;
   } | null;
 }
+
+/** `mc_status` snapshot — managed Paper server (parity spec §9). */
+export interface McStatus {
+  state: 'not_installed' | 'stopped' | 'starting' | 'running' | 'stopping';
+  eula_accepted: boolean;
+  installed: boolean;
+  paper_version: string;
+  mc_version: string;
+  ram_mb: number;
+  online_mode: boolean;
+  player: string;
+  rcon_port: number;
+  last_error: string | null;
+  log_tail: string[];
+}

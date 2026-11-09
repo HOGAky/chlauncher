@@ -4,7 +4,7 @@
  * Pages: Library, Subscription, Integrations, Trigger mapper, Simulator.
  */
 import React, { useEffect, useState } from 'react';
-import { Gamepad2, CreditCard, Radio, SlidersHorizontal, FlaskConical, Wrench, FolderOpen, MonitorPlay, Mic, Dices } from 'lucide-react';
+import { Gamepad2, CreditCard, Radio, SlidersHorizontal, FlaskConical, Wrench, FolderOpen, MonitorPlay, Mic, Dices, Blocks } from 'lucide-react';
 import { cn } from '../lib/utils';
 import * as api from '../api';
 import type { EntitlementsResponse } from '../types';
@@ -19,9 +19,10 @@ import MediaPage from '../pages/MediaPage';
 import OverlaysPage from '../pages/OverlaysPage';
 import TtsPage from '../pages/TtsPage';
 import SpinnerPage from '../pages/SpinnerPage';
+import MinecraftPage from '../pages/MinecraftPage';
 import AdminPage from '../pages/AdminPage';
 
-type Page = 'library' | 'subscription' | 'integrations' | 'mapper' | 'overlays' | 'tts' | 'spinner' | 'media' | 'simulator' | 'admin';
+type Page = 'library' | 'subscription' | 'integrations' | 'mapper' | 'overlays' | 'tts' | 'spinner' | 'media' | 'minecraft' | 'simulator' | 'admin';
 
 const NAV: { id: Page; label: string; icon: React.ReactNode }[] = [
   { id: 'library', label: 'Библиотека', icon: <Gamepad2 size={16} /> },
@@ -32,6 +33,7 @@ const NAV: { id: Page; label: string; icon: React.ReactNode }[] = [
   { id: 'tts', label: 'TTS', icon: <Mic size={16} /> },
   { id: 'spinner', label: 'Спиннер', icon: <Dices size={16} /> },
   { id: 'media', label: 'Медиатека', icon: <FolderOpen size={16} /> },
+  { id: 'minecraft', label: 'Minecraft', icon: <Blocks size={16} /> },
   { id: 'simulator', label: 'Симулятор', icon: <FlaskConical size={16} /> },
 ];
 
@@ -90,6 +92,7 @@ export default function MainScreen() {
           {page === 'tts' && <TtsPage />}
           {page === 'spinner' && <SpinnerPage />}
           {page === 'media' && <MediaPage />}
+          {page === 'minecraft' && <MinecraftPage />}
           {page === 'simulator' && <SimulatorPage />}
           {page === 'admin' && isAdmin && <AdminPage />}
         </main>

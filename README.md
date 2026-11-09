@@ -230,15 +230,43 @@ relay; consumers poll `GET /api/stream/events?key&since`:
 - **Roblox** — the game server validates `stream_key` via
   `/api/stream/validate`, claims the room and polls events
   (`docs/roblox-integration.md`).
-- **Minecraft** — `tools/mc-bridge` polls the same relay and sends
-  RCON console commands to any server (`enable-rcon=true`; no plugins).
-  Templates map `action_command` → console commands — see
+- **Minecraft (remote)** — `tools/mc-bridge` polls the same relay and
+  sends RCON console commands to any server (`enable-rcon=true`; no
+  plugins). Templates map `action_command` → console commands — see
   `tools/mc-bridge/README.md`.
 
 Streamer setup lives in the launcher's *Integrations → Облачные
 серверы*: relay URL + admin secret, stream key (generated + copyable,
 registered on the relay while the subscription is active), delivery
 stats and per-game connect instructions.
+
+## Managed Minecraft server
+
+The *Minecraft* page runs a full Paper server inside the launcher — no
+manual setup (parity spec §9). `mc_install` resolves Java 21 (PATH /
+JAVA_HOME, or downloads Temurin JRE via the Adoptium API) and the latest
+stable Paper build via the Fill API — every download is SHA-256-verified
+from the API metadata; the Mojang jar is never redistributed (Paperclip
+fetches it on first run). Starting requires explicit EULA consent —
+`eula=true` is written only after the checkbox.
+
+`server.properties` is generated with `enable-rcon=true` on a free port
+and a generated 24-byte password stored in `settings.mc.rcon_password`
+(never logged, never sent to the renderer). Lifecycle: `mc_start` /
+`mc_stop` (RCON `stop`, force-kill after 30 s), `mc_console`, `mc_logs`,
+live stdout via `mc-log` events, RAM (`-Xmx`, default 4096 MB), MC
+version, `online-mode`, the `{player}` target name, world backup (zip)
+and reset.
+
+Mapper integration: apply the built-in **mc-survival** preset
+(vanilla commands — `summon`, `effect`, `weather`, `give`, …) and
+activate the `minecraft` profile; while it is active and the server is
+running, each mapped event's `action` is rendered as console-command
+templates (`{player}` `{user}` `{count}` `{amount}` `{gift}`, multi-line
+templates split on `\n`) and sent over RCON. Viewer-controlled
+`{user}`/`{gift}` are sanitized to `[A-Za-z0-9_.-]` — no newline/quote/`§`
+injection (`minecraft::templates`). The external `tools/mc-bridge`
+remains for remote servers.
 
 ## Trigger presets & the gift catalog
 

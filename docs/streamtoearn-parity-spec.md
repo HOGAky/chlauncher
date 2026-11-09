@@ -553,12 +553,14 @@ CREATE TABLE usage_monthly (
 Цель: «Запусти полноценный Minecraft-сервер внутри приложения» — без
 ручной настройки RCON и без relay.
 
-### 9.1. Компоненты
+### 9.1. Компоненты ✅ (этап 11)
 
-- `apps/launcher/src-tauri/src/minecraft/` — `java.rs`, `paper.rs`,
-  `server.rs` (процесс), `rcon.rs` (клиент Source RCON на Rust, порт логики
-  из `tools/mc-bridge/index.js`), `templates.rs`.
-- Сервер живёт в `%APPDATA%/com.chlauncher.app/minecraft/<world-slug>/`.
+- `apps/launcher/src-tauri/src/minecraft/` — `install.rs` (Java-дискавери +
+  Adoptium JRE 21, Fill API + Paper-jar, eula/server.properties),
+  `server.rs` (процесс, логи, роутер событий), `rcon.rs` (клиент Source
+  RCON на tokio, порт `tools/mc-bridge/rcon.js`), `templates.rs`.
+- Сервер живёт в `%APPDATA%/com.chlauncher.app/minecraft/server/`,
+  JRE — в `minecraft/runtime/`, бэкапы — в `minecraft/backups/`.
 
 ### 9.2. Установка
 
@@ -576,10 +578,13 @@ CREATE TABLE usage_monthly (
    `rcon.password` — 24 случайных байта (хранить в settings, не в логах),
    `server-ip=` пусто, `online-mode` настраивается (default `true`).
 
-### 9.3. Управление
+### 9.3. Управление ✅ (этап 11)
 
-- IPC: `mc_install`, `mc_start`, `mc_stop` (через RCON `stop`, по таймауту
-  30 с — kill), `mc_status`, `mc_console(cmd)`, `mc_logs(since)`.
+- IPC: `mc_install`, `mc_accept_eula`, `mc_start`, `mc_stop` (через RCON
+  `stop`, по таймауту 30 с — kill), `mc_status`, `mc_console(cmd)`,
+  `mc_logs(since)`, `mc_set_settings`, `mc_world_reset`, `mc_world_backup`.
+- При выходе лаунчера — RCON `stop` + kill через 5 с (сиротский java
+  процесс не остаётся).
 - UI «Minecraft»: статус, кнопки, живой лог консоли (стрим stdout через
   `app.emit`), поле команды, RAM (`-Xmx`, default 4G), версия MC, мир
   (создать/сбросить/бэкап zip).

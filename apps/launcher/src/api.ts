@@ -10,6 +10,7 @@ import { onOpenUrl, getCurrent } from '@tauri-apps/plugin-deep-link';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import type {
   MediaItem,
+  McStatus,
   AdminBuild,
   AdminGame,
   AdminUser,
@@ -389,3 +390,23 @@ export const onBuildUploadProgress = (
   listen<{ slug: string; sent: number; total: number }>('build-upload-progress', (e) =>
     cb(e.payload)
   );
+
+// --- Managed Minecraft server (parity spec §9) --------------------------------
+export const mcStatus = () => cmd<McStatus>('mc_status');
+export const mcAcceptEula = () => cmd<void>('mc_accept_eula');
+export const mcInstall = () => cmd<void>('mc_install');
+export const mcStart = () => cmd<void>('mc_start');
+export const mcStop = () => cmd<void>('mc_stop');
+export const mcConsole = (cmdline: string) =>
+  cmd<string>('mc_console', { cmd: cmdline });
+export const mcSetSettings = (patch: {
+  ramMb?: number;
+  mcVersion?: string;
+  onlineMode?: boolean;
+  player?: string;
+}) => cmd<void>('mc_set_settings', patch);
+export const mcWorldReset = () => cmd<void>('mc_world_reset');
+export const mcWorldBackup = () => cmd<string>('mc_world_backup');
+/** Live server console lines (`mc-log` events). */
+export const onMcLog = (cb: (line: string) => void): Promise<UnlistenFn> =>
+  listen<string>('mc-log', (e) => cb(e.payload));
