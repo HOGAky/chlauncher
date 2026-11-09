@@ -110,6 +110,13 @@ export const tiktokConnect = (username: string) =>
 /** Disconnect TikTok. */
 export const tiktokDisconnect = () => cmd<void>('tiktok_disconnect');
 
+/** Reconnect TikTok to the saved username («Обновить связь»). */
+export const tiktokReconnect = () => cmd<void>('tiktok_reconnect');
+
+/** Lightweight status snapshot (statuses + last activity) for UI polling. */
+export const getIntegrationStatus = () =>
+  cmd<Bootstrap['integrations']>('get_integration_status');
+
 /** Connect DonationAlerts with an OAuth token. */
 export const daConnect = (token: string) => cmd<void>('da_connect', { tokenInput: token });
 

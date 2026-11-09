@@ -48,6 +48,7 @@ export default function IntegrationsPage() {
   useEffect(() => {
     const t = setInterval(() => {
       api.getForwardStatus().then(setFwdStatus).catch(() => {});
+      api.getIntegrationStatus().then(setStatuses).catch(() => {});
     }, 5000);
     return () => clearInterval(t);
   }, []);
@@ -91,6 +92,12 @@ export default function IntegrationsPage() {
   const ttConnected =
     statuses?.tiktok === 'connected' || statuses?.tiktok === 'live' || statuses?.tiktok === 'connecting';
   const daConnected = statuses?.donationalerts === 'live' || statuses?.donationalerts === 'connecting';
+  const ttError = typeof statuses?.tiktok === 'object' && statuses.tiktok && 'error' in statuses.tiktok;
+  const lastAct = statuses?.tiktok_last_activity;
+  const actAgeSec = lastAct ? Math.max(0, Math.floor(Date.now() / 1000 - lastAct)) : null;
+  // Свежесть связи: сайдкар шлёт ping примерно каждые 30 с — тишина дольше
+  // минуты при открытой сессии обычно означает мёртвую комнату/зависание.
+  const stale = ttConnected && actAgeSec !== null && actAgeSec > 60;
 
   const copyOverlay = () => {
     navigator.clipboard.writeText(overlayUrl).then(() => {
@@ -136,7 +143,28 @@ export default function IntegrationsPage() {
                 Подключить
               </Button>
             )}
+            {(ttConnected || ttError) && (
+              <Button
+                variant="outline"
+                title="Перезапустить подключение к комнате"
+                onClick={() => api.tiktokReconnect().catch((e) => alert(humanError(e)))}
+              >
+                <RefreshCw size={14} /> Обновить связь
+              </Button>
+            )}
           </div>
+          {ttConnected && (
+            <p className={`text-[11px] ${stale ? 'text-amber-400' : 'text-muted-foreground'}`}>
+              {statuses?.tiktok === 'live' ? 'Эфир идёт' : 'Эфир не обнаружен — ждём старт комнаты'}
+              {' · '}
+              {actAgeSec !== null ? (
+                <>активность {actAgeSec < 5 ? 'только что' : `${actAgeSec} с назад`}</>
+              ) : (
+                'событий пока нет'
+              )}
+              {stale && ' — связь устарела, нажмите «Обновить связь»'}
+            </p>
+          )}
         </CardContent>
       </Card>
 

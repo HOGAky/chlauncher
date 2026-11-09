@@ -38,6 +38,9 @@ pub const STATUS_EVENT: &str = "integration-status";
 pub struct IntegrationManager {
     pub tiktok_status: Arc<Mutex<IntegrationStatus>>,
     pub tiktok_username: Arc<Mutex<Option<String>>>,
+    /// Unix seconds of the last sidecar heartbeat (ping) or event — the UI
+    /// shows "связь жива N сек назад" and offers a reconnect when stale.
+    tiktok_last_activity: Arc<Mutex<Option<i64>>>,
     tiktok_task: Mutex<Option<JoinHandle<()>>>,
     pub da_status: Arc<Mutex<IntegrationStatus>>,
     da_task: Mutex<Option<JoinHandle<()>>>,
@@ -51,6 +54,7 @@ impl IntegrationManager {
         Self {
             tiktok_status: Arc::new(Mutex::new(IntegrationStatus::Disconnected)),
             tiktok_username: Arc::new(Mutex::new(None)),
+            tiktok_last_activity: Arc::new(Mutex::new(None)),
             tiktok_task: Mutex::new(None),
             da_status: Arc::new(Mutex::new(IntegrationStatus::Disconnected)),
             da_task: Mutex::new(None),
@@ -103,8 +107,9 @@ impl IntegrationManager {
         let status = self.tiktok_status.clone();
         let app = self.app.clone();
         let raw_tx = self.raw_tx.clone();
+        let last_activity = self.tiktok_last_activity.clone();
         let handle = tokio::spawn(async move {
-            run_tiktok(username, raw_tx, status, app, sign_cfg).await;
+            run_tiktok(username, raw_tx, status, app, sign_cfg, last_activity).await;
         });
         *self.tiktok_task.lock().await = Some(handle);
         Ok(())
@@ -115,6 +120,7 @@ impl IntegrationManager {
         if let Some(h) = self.tiktok_task.lock().await.take() {
             h.abort();
         }
+        *self.tiktok_last_activity.lock().await = None;
         self.set_status("tiktok", IntegrationStatus::Disconnected)
             .await;
     }
@@ -155,6 +161,7 @@ impl IntegrationManager {
         json!({
             "tiktok": *self.tiktok_status.lock().await,
             "tiktok_username": *self.tiktok_username.lock().await,
+            "tiktok_last_activity": *self.tiktok_last_activity.lock().await,
             "donationalerts": *self.da_status.lock().await,
         })
     }
@@ -293,9 +300,7 @@ fn sidecar_dir(app: &AppHandle) -> Option<std::path::PathBuf> {
         );
         v
     };
-    candidates
-        .into_iter()
-        .find(|p| sidecar_script(p).is_some())
+    candidates.into_iter().find(|p| sidecar_script(p).is_some())
 }
 
 /// Resolves the entry script inside a sidecar dir. Prefer the bundled
@@ -330,7 +335,20 @@ async fn run_tiktok(
     status: Arc<Mutex<IntegrationStatus>>,
     app: AppHandle,
     sign_cfg: Option<(String, String)>,
+    last_activity: Arc<Mutex<Option<i64>>>,
 ) {
+    let unix_now = || {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0)
+    };
+    let touch = |last_activity: &Arc<Mutex<Option<i64>>>| {
+        let la = last_activity.clone();
+        async move {
+            *la.lock().await = Some(unix_now());
+        }
+    };
     let finish = |st: IntegrationStatus| {
         let status = status.clone();
         let app = app.clone();
@@ -434,7 +452,10 @@ async fn run_tiktok(
             continue;
         };
         match v["type"].as_str().unwrap_or("") {
-            "ping" => last_ping = std::time::Instant::now(),
+            "ping" => {
+                last_ping = std::time::Instant::now();
+                touch(&last_activity).await;
+            }
             "status" => {
                 // Unknown status strings (e.g. "sign_proxy") are
                 // informational only — never flip the UI state on them.
@@ -452,6 +473,7 @@ async fn run_tiktok(
                 }
             }
             "event" => {
+                touch(&last_activity).await;
                 let ev = RawStreamEvent {
                     source: "tiktok".into(),
                     event_kind: v["event_kind"].as_str().unwrap_or("other").into(),
