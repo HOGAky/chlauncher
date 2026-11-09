@@ -186,6 +186,35 @@ export interface TriggerPreset {
   rules: TriggerRule[];
 }
 
+/** Statusful feed entry — fired AND skipped events (§2.6). */
+export interface FeedItem {
+  ts: number;
+  /** 'done' | 'cooldown' | 'limit' | 'interrupt_cooldown' | 'paused' | 'dropped' */
+  status: string;
+  event: StreamEvent;
+}
+
+/** One accumulator row in the scheduler status (every_n progress). */
+export interface AccumulatorView {
+  rule_id: string;
+  label: string;
+  value: number;
+  target: number;
+}
+
+/** Live scheduler snapshot from get_scheduler_status (§2.6). */
+export interface SchedulerStatus {
+  queued: number;
+  running_alert: string | null;
+  dropped: number;
+  skipped_cooldown: number;
+  skipped_limit: number;
+  paused: boolean;
+  usage_coins: number;
+  takeover: { preset: string; until_ms: number } | null;
+  accumulators: AccumulatorView[];
+}
+
 /** One row of the bundled TikTok gift catalog (public/gifts.json). */
 export interface GiftEntry {
   name: string;

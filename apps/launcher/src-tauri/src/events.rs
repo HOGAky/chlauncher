@@ -27,6 +27,9 @@ pub struct EventHub {
     pub recent: Mutex<VecDeque<StreamEvent>>,
     /// Aggregate stats for the overlay's "top gifters" board.
     pub totals: Mutex<HashMap<String, i64>>,
+    /// UI feed — fired *and* skipped events with a status label (§2.2:
+    /// the streamer sees why a rule didn't fire). Newest last.
+    pub feed: Mutex<VecDeque<crate::types::FeedItem>>,
 }
 
 impl Default for EventHub {
@@ -42,11 +45,13 @@ impl EventHub {
             tx,
             recent: Mutex::new(VecDeque::with_capacity(RECENT_CAPACITY)),
             totals: Mutex::new(HashMap::new()),
+            feed: Mutex::new(VecDeque::with_capacity(RECENT_CAPACITY)),
         }
     }
 
     /// Records and broadcasts one mapped event to all consumers.
     pub fn dispatch(&self, ev: StreamEvent) {
+        self.note(ev.clone(), "done");
         {
             let mut recent = self.recent.lock().unwrap_or_else(|p| p.into_inner());
             if recent.len() >= RECENT_CAPACITY {
@@ -60,6 +65,32 @@ impl EventHub {
         }
         // No receivers is fine — broadcast just drops the message.
         let _ = self.tx.send(ev);
+    }
+
+    /// Appends an entry to the statusful UI feed (bounded like `recent`).
+    /// Called by `dispatch` for fired events and by the scheduler for
+    /// skipped ones (cooldown/limit/paused) — never reaches games.
+    pub fn note(&self, ev: StreamEvent, status: &str) {
+        let mut feed = self.feed.lock().unwrap_or_else(|p| p.into_inner());
+        if feed.len() >= RECENT_CAPACITY {
+            feed.pop_front();
+        }
+        feed.push_back(crate::types::FeedItem {
+            ts: crate::types::now_ms() / 1000,
+            status: status.into(),
+            event: ev,
+        });
+    }
+
+    /// Snapshot of the statusful feed (newest first) for the UI.
+    pub fn feed_items(&self) -> Vec<crate::types::FeedItem> {
+        self.feed
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .iter()
+            .rev()
+            .cloned()
+            .collect()
     }
 
     /// Snapshot of recent events (newest first) for overlays/UI catch-up.
@@ -94,6 +125,27 @@ impl TriggerMapper {
         Some(Self::apply(rule, raw))
     }
 
+    /// All rules matching a raw event — walks top→bottom, skips disabled
+    /// rules, stops at the first match that doesn't set
+    /// `continue_matching` (§2.1).
+    pub fn match_all<'a>(
+        raw: &RawStreamEvent,
+        profile: &'a TriggerProfile,
+    ) -> Vec<&'a TriggerRule> {
+        let mut out = Vec::new();
+        for rule in &profile.rules {
+            if !Self::matches(rule, raw) {
+                continue;
+            }
+            let cont = rule.continue_matching;
+            out.push(rule);
+            if !cont {
+                break;
+            }
+        }
+        out
+    }
+
     /// Whether one rule matches a raw event. Disabled rules never match;
     /// `match_mode` picks the comparison — `"contains"` (legacy),
     /// `"exact"` (case-insensitive whole name) or `"gift_id"` (stable id).
@@ -123,7 +175,7 @@ impl TriggerMapper {
     }
 
     /// Produces the mapped event from a matched rule.
-    fn apply(rule: &TriggerRule, raw: &RawStreamEvent) -> StreamEvent {
+    pub fn apply(rule: &TriggerRule, raw: &RawStreamEvent) -> StreamEvent {
         StreamEvent {
             source: raw.source.clone(),
             event_kind: raw.event_kind.clone(),
@@ -240,6 +292,7 @@ impl TriggerMapper {
             overlay: preset.overlay.clone(),
             global_cooldown_ms: preset.global_cooldown_ms,
             rules: preset.rules.clone(),
+            ..Default::default()
         }
     }
 }

@@ -48,6 +48,10 @@ pub struct AppState {
     /// Slug whose trigger profile currently maps events (last played/selected).
     /// Shared with the mapper forwarder task.
     pub active_game_slug: Arc<Mutex<Option<String>>>,
+    /// Action scheduler — cooldowns/queue/alerts engine (parity spec §2).
+    pub scheduler: Arc<crate::scheduler::ActionScheduler>,
+    /// Broadcast of overlay frames (alerts/spinner/progress/takeover).
+    pub overlay_tx: tokio::sync::broadcast::Sender<OverlayFrame>,
     /// Last seen slug→version snapshot for catalog-change detection (§6.3).
     pub catalog_seen: Arc<Mutex<Option<std::collections::BTreeMap<String, String>>>>,
     /// Actual OS-assigned overlay port (None until bound / on bind failure).
@@ -582,6 +586,8 @@ pub async fn set_active_trigger_profile(
 ) -> Result<(), String> {
     let slug = slug.trim().to_string();
     *state.active_game_slug.lock().await = if slug.is_empty() { None } else { Some(slug) };
+    // Switching the active profile resets runtime cooldowns/accumulators.
+    state.scheduler.reset_runtime();
     Ok(())
 }
 
@@ -596,6 +602,8 @@ pub async fn save_triggers(
         .trigger_profiles
         .insert(profile.game_slug.clone(), profile);
     let _ = s.save();
+    drop(s);
+    state.scheduler.reset_runtime();
     Ok(())
 }
 
@@ -622,6 +630,9 @@ pub async fn apply_trigger_preset(
     let profile = TriggerMapper::profile_from_preset(&game_slug, &p);
     s.data.trigger_profiles.insert(game_slug, profile.clone());
     let _ = s.save();
+    drop(s);
+    // Profile switch resets runtime cooldowns/accumulators (§2.2).
+    state.scheduler.reset_runtime();
     Ok(profile)
 }
 
@@ -764,10 +775,94 @@ pub async fn simulate_event(
         .map_err(|_| "ingest closed".to_string())
 }
 
-/// Recent mapped events for the UI feed.
+/// Recent mapped events for the UI feed (legacy shape — fired only).
 #[tauri::command]
 pub async fn get_event_feed(state: State<'_, AppState>) -> Result<Vec<StreamEvent>, String> {
     Ok(state.hub.recent_events())
+}
+
+/// Statusful feed — fired *and* skipped events with a status label
+/// (cooldown/limit/paused/dropped), newest first (§2.6).
+#[tauri::command]
+pub async fn get_event_feed_items(state: State<'_, AppState>) -> Result<Vec<FeedItem>, String> {
+    Ok(state.hub.feed_items())
+}
+
+// ---------------------------------------------------------------------------
+// Action scheduler (parity spec §2)
+// ---------------------------------------------------------------------------
+
+/// Global scheduler pause — «перерыв»: actions stop, events keep queueing.
+#[tauri::command]
+pub async fn scheduler_pause(paused: bool, state: State<'_, AppState>) -> Result<(), String> {
+    state.scheduler.set_paused(paused);
+    Ok(())
+}
+
+/// Live scheduler snapshot for the mapper page (§2.6).
+#[tauri::command]
+pub async fn get_scheduler_status(
+    state: State<'_, AppState>,
+) -> Result<crate::scheduler::SchedulerStatus, String> {
+    Ok(state.scheduler.status())
+}
+
+/// «Сбросить счётчики» — clears `every_n` accumulators (§2.3).
+#[tauri::command]
+pub async fn scheduler_reset_counters(state: State<'_, AppState>) -> Result<(), String> {
+    state.scheduler.reset_counters();
+    Ok(())
+}
+
+/// Runs one rule through the whole pipeline bypassing cooldowns and the
+/// earn limit — the ▶ test button (§2.5). Uses a synthetic event shaped
+/// after the rule so `match_all` picks exactly it.
+#[tauri::command]
+pub async fn test_rule(
+    game_slug: String,
+    rule_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let (profile, spinners, alerts_cfg) = {
+        let s = state.settings.lock().await;
+        let Some(profile) = s.data.trigger_profiles.get(&game_slug).cloned() else {
+            return Err(format!("нет профиля для {game_slug}"));
+        };
+        (profile, s.data.spinners.clone(), s.data.alerts.clone())
+    };
+    let Some(rule) = profile.rules.iter().find(|r| r.id == rule_id).cloned() else {
+        return Err("правило не найдено".into());
+    };
+    let raw = RawStreamEvent {
+        source: "simulator".into(),
+        event_kind: if rule.event_kind == "any" {
+            "gift".into()
+        } else {
+            rule.event_kind.clone()
+        },
+        user: "test".into(),
+        avatar_url: String::new(),
+        raw_name: rule.match_value.clone(),
+        amount: rule.min_amount.max(1),
+        count: rule.min_amount.max(1),
+        coins: 0,
+        gift_id: None,
+        ts_ms: now_ms(),
+    };
+    // Single-rule profile so match_all can't pull in neighbors.
+    let p = TriggerProfile {
+        rules: vec![rule],
+        ..profile
+    };
+    state.scheduler.ingest(&crate::scheduler::IngestInput {
+        profile: &p,
+        raw,
+        spinners: &spinners,
+        alerts: &alerts_cfg,
+        earn_limit_coins: 0,
+        bypass: true,
+    });
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------

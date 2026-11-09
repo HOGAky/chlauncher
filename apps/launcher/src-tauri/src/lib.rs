@@ -27,20 +27,22 @@ pub mod integrations;
 pub mod logging;
 pub mod overlay;
 pub mod process;
+pub mod scheduler;
 pub mod settings;
 pub mod types;
 
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{Emitter, Manager};
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{broadcast, mpsc, Mutex};
 
 use commands::AppState;
 use events::{EventHub, TriggerMapper};
 use game_ws::GameServer;
 use integrations::IntegrationManager;
+use scheduler::ActionScheduler;
 use settings::SettingsStore;
-use types::RawStreamEvent;
+use types::{OverlayFrame, RawStreamEvent};
 
 /// Builds and runs the Tauri app.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -136,6 +138,33 @@ pub fn run() {
             // (Roblox-side games poll the relay; see docs/roblox-integration.md).
             let forwarder = forwarder::Forwarder::start(&hub, settings.clone(), api.clone());
 
+            // Overlay frames (alerts/spinner/progress/takeover) — the
+            // overlay server relays these to /ws subscribers (§5.3).
+            let (overlay_tx, _) = broadcast::channel::<OverlayFrame>(256);
+            let scheduler = Arc::new(ActionScheduler::new(hub.clone(), overlay_tx.clone()));
+            scheduler.set_alerts_enabled(
+                settings
+                    .try_lock()
+                    .map(|s| s.data.alerts.enabled)
+                    .unwrap_or(true),
+            );
+            {
+                let sched = scheduler.clone();
+                tauri::async_runtime::spawn(async move { sched.run().await });
+            }
+            // Frontend live-feed relay: every dispatched event reaches the
+            // React feed as `stream-event` (games get it via WS, the
+            // overlay via its own WS — one source of truth).
+            {
+                let mut rx = hub.tx.subscribe();
+                let app_h = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    while let Ok(ev) = rx.recv().await {
+                        let _ = app_h.emit("stream-event", &ev);
+                    }
+                });
+            }
+
             let state = AppState {
                 data_dir: data_dir.clone(),
                 settings: settings.clone(),
@@ -148,18 +177,19 @@ pub fn run() {
                 forwarder: forwarder.clone(),
                 raw_tx,
                 active_game_slug: active_game_slug.clone(),
+                scheduler: scheduler.clone(),
+                overlay_tx: overlay_tx.clone(),
                 catalog_seen: Arc::new(Mutex::new(None)),
                 overlay_port: Mutex::new(overlay_port),
                 service_error: Mutex::new(service_error),
             };
 
-            // --- mapper forwarder: raw → mapped → hub + frontend --------
+            // --- mapper forwarder: raw → scheduler → hub ----------------
             {
                 tauri::async_runtime::spawn(mapper_loop(
                     raw_rx,
                     settings.clone(),
-                    hub.clone(),
-                    app.handle().clone(),
+                    scheduler.clone(),
                     active_game_slug.clone(),
                 ));
             }
@@ -205,6 +235,10 @@ pub fn run() {
             commands::import_trigger_preset,
             commands::simulate_event,
             commands::get_event_feed,
+            commands::scheduler_pause,
+            commands::get_scheduler_status,
+            commands::scheduler_reset_counters,
+            commands::test_rule,
             commands::set_streamer_mode,
             commands::set_chroma_key,
             commands::get_hwid,
@@ -309,13 +343,14 @@ async fn catalog_poller_loop(app: tauri::AppHandle) {
     }
 }
 
-/// Maps raw ingest events through the active game's trigger profile and
-/// dispatches the result to the hub + frontend.
+/// Maps raw ingest events through the active game's trigger profile —
+/// hands them to the [`ActionScheduler`], which owns cooldowns,
+/// accumulators, the priority queue, alerts and interrupts. An active
+/// paid-interrupt takeover swaps the profile in memory only (§3.3).
 async fn mapper_loop(
     mut raw_rx: mpsc::Receiver<RawStreamEvent>,
     settings: Arc<Mutex<SettingsStore>>,
-    hub: Arc<EventHub>,
-    app: tauri::AppHandle,
+    scheduler: Arc<ActionScheduler>,
     active_slug: Arc<Mutex<Option<String>>>,
 ) {
     while let Some(raw) = raw_rx.recv().await {
@@ -324,18 +359,34 @@ async fn mapper_loop(
             .await
             .clone()
             .unwrap_or_else(|| "default".to_string());
-        let profile = {
+        let (profile, spinners, alerts_cfg) = {
             let mut s = settings.lock().await;
-            s.data
+            let mut profile = s
+                .data
                 .trigger_profiles
                 .entry(slug.clone())
                 .or_insert_with(|| TriggerMapper::default_profile(&slug))
-                .clone()
+                .clone();
+            // Paid-interrupt takeover: the override profile is built from
+            // the interrupt's preset and never persisted (§3.3.4).
+            if let Some((preset_name, _user, _until)) = scheduler.active_takeover() {
+                if let Some(preset) =
+                    TriggerMapper::find_preset(&preset_name, &s.data.trigger_presets)
+                {
+                    profile = TriggerMapper::profile_from_preset(&slug, &preset);
+                }
+            }
+            (profile, s.data.spinners.clone(), s.data.alerts.clone())
         };
-        if let Some(ev) = TriggerMapper::map(&raw, &profile) {
-            hub.dispatch(ev.clone());
-            let _ = app.emit("stream-event", &ev);
-        }
+        scheduler.ingest(&scheduler::IngestInput {
+            profile: &profile,
+            raw,
+            spinners: &spinners,
+            alerts: &alerts_cfg,
+            // Earn limit lands with plan entitlements (spec §8, stage 10).
+            earn_limit_coins: 0,
+            bypass: false,
+        });
     }
 }
 

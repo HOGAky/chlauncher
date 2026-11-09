@@ -14,9 +14,11 @@ import type {
   AdminUser,
   AuditEntry,
   Bootstrap,
+  FeedItem,
   ForwardStatus,
   LibraryEntry,
   RawStreamEvent,
+  SchedulerStatus,
   StreamEvent,
   Subscription,
   TriggerPreset,
@@ -173,6 +175,22 @@ export const simulateEvent = (raw: RawStreamEvent) => cmd<void>('simulate_event'
 
 /** Recent mapped events for the feed. */
 export const getEventFeed = () => cmd<StreamEvent[]>('get_event_feed');
+
+/** Statusful feed — fired and skipped events, newest first (§2.6). */
+export const getEventFeedItems = () => cmd<FeedItem[]>('get_event_feed_items');
+
+/** Global scheduler pause («перерыв»): actions stop, events keep queueing. */
+export const schedulerPause = (paused: boolean) => cmd<void>('scheduler_pause', { paused });
+
+/** Live scheduler snapshot — queued/dropped/skipped/accumulators. */
+export const getSchedulerStatus = () => cmd<SchedulerStatus>('get_scheduler_status');
+
+/** Clears every_n accumulators («Сбросить счётчики»). */
+export const schedulerResetCounters = () => cmd<void>('scheduler_reset_counters');
+
+/** Runs one rule through the pipeline bypassing cooldowns/limit — the ▶ button. */
+export const testRule = (gameSlug: string, ruleId: string) =>
+  cmd<void>('test_rule', { gameSlug, ruleId });
 
 // ---- settings --------------------------------------------------------------
 

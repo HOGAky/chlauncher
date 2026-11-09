@@ -265,9 +265,21 @@ and `ts_ms`; `TriggerRule` gained enabled/label/description/image,
 `match_mode` (`contains`|`exact`|`gift_id`), `repeat` (`per_unit`),
 `every_n`, cooldowns, priority, interrupt, `alert`/`tts`/`spinner` and
 `delay_ms`/`continue_matching` — all serde-defaulted so old settings
-load untouched (`settings::tests::old_settings_deserialize`). Matching
-already honours `enabled=false` and `match_mode`; scheduling, alerts,
-media, TTS and the spinner are the next stages of the spec.
+load untouched (`settings::tests::old_settings_deserialize`).
+
+The **ActionScheduler** (`src-tauri/src/scheduler.rs`, spec §2–§3) now
+owns the pipeline between matching and dispatch: `match_all` with
+`continue_matching`, `every_n` accumulators (with overlay `progress`
+frames), rule/user/global cooldowns, `per_unit` expansion capped by
+`max_repeat`, a priority queue (`queue_max` overflow drops the lowest
+priority), `delay_ms` timers, paid interrupts that cut the running
+alert and temporarily swap the preset (in-memory only), the earn-limit
+gate (wired to plans in stage 10) and a usage meter. IPC:
+`scheduler_pause`, `get_scheduler_status`, `scheduler_reset_counters`,
+`test_rule` — and `get_event_feed_items` exposes a statusful feed
+(`done`/`cooldown`/`limit`/`dropped`). Overlay frames
+(`alert`/`spinner`/`progress`/`takeover`) flow on a broadcast channel
+the overlay server will relay in stage 4.
 
 The bundled **gift catalog** (`apps/launcher/public/gifts.json` +
 `public/gifts/*.webp`, ~1.7k entries) backs the 🎁 picker next to each

@@ -374,6 +374,10 @@ impl Default for TriggerRule {
     }
 }
 
+fn default_interrupt_cd_ms() -> u64 {
+    30_000
+}
+
 /// The full trigger profile for one game, persisted as JSON.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TriggerProfile {
@@ -388,6 +392,9 @@ pub struct TriggerProfile {
     /// Minimum gap between any two fired actions of this profile.
     #[serde(default)]
     pub global_cooldown_ms: u64,
+    /// Minimum gap between two interrupt jobs (anti-cascade, §3.3.3).
+    #[serde(default = "default_interrupt_cd_ms")]
+    pub interrupt_cooldown_ms: u64,
     #[serde(default)]
     pub rules: Vec<TriggerRule>,
 }
@@ -422,6 +429,118 @@ pub struct TriggerPreset {
     pub version: u32,
     #[serde(default)]
     pub rules: Vec<TriggerRule>,
+}
+
+// ---------------------------------------------------------------------------
+// Overlay wire frames — §5.3 of the parity spec.
+// ---------------------------------------------------------------------------
+
+/// Sound payload inside an `alert` frame — `MediaRef` resolved to a URL.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FrameSound {
+    pub url: String,
+    pub volume: f32,
+}
+
+/// Media payload inside an `alert` frame.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FrameMedia {
+    pub url: String,
+    pub fit: String,
+    pub volume: f32,
+}
+
+/// One accumulator row in a `progress` frame («лайки: 63/100»).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProgressItem {
+    pub rule_id: String,
+    pub label: String,
+    pub value: u64,
+    pub target: u64,
+}
+
+/// One row of the preset cheat-sheet pushed in a `preset` frame.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PresetRow {
+    /// Matched gift/event name shown to viewers.
+    pub gift: String,
+    /// Icon URL (`/gifts/…`) when the catalog knows the gift.
+    #[serde(default)]
+    pub gift_image: Option<String>,
+    /// Items needed (count/`every_n` target).
+    pub count: i32,
+    /// Coin value hint (0 = free/unknown).
+    pub coins: i64,
+    /// What happens — `label` or `action`.
+    pub label: String,
+    /// Action artwork (`/media/…`) when set.
+    #[serde(default)]
+    pub image: Option<String>,
+}
+
+/// A frame pushed on the overlay broadcast channel (`OverlayFrame` is the
+/// tagged union consumed by `/ws` subscribers, spec §5.3).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum OverlayFrame {
+    Alert {
+        id: String,
+        text: String,
+        duration_ms: u64,
+        #[serde(default)]
+        sound: Option<FrameSound>,
+        #[serde(default)]
+        media: Option<FrameMedia>,
+        position: String,
+        style: String,
+        #[serde(default)]
+        user: String,
+    },
+    /// Interrupt cut the currently shown alert short.
+    AlertCancel { id: String },
+    /// Active preset changed — preset pages re-render live (§5.2).
+    Preset {
+        name: String,
+        style: OverlayStyle,
+        rows: Vec<PresetRow>,
+    },
+    /// Gift-spinner spin — the overlay animates and lands on
+    /// `result_index` (the launcher decides the outcome, §7).
+    Spinner {
+        id: String,
+        pool: String,
+        segments: Vec<SpinnerSegment>,
+        result_index: usize,
+        spin_ms: u64,
+        user: String,
+    },
+    /// TTS voice-over state for `/overlay/tts` (§6).
+    Tts {
+        id: String,
+        text: String,
+        /// `"start"` | `"end"`.
+        state: String,
+    },
+    /// Accumulator progress (`every_n` rules) for `/overlay/progress`.
+    Progress { items: Vec<ProgressItem> },
+    /// Paid interrupt took over the profile for a while (§3.3).
+    Takeover {
+        user: String,
+        preset: String,
+        until_ms: u64,
+    },
+}
+
+/// One entry in the UI's statusful event feed — fired *and* skipped
+/// events (cooldown/limit/paused) so the streamer sees why a rule
+/// didn't fire.
+#[derive(Debug, Clone, Serialize)]
+pub struct FeedItem {
+    pub ts: u64,
+    /// `"done"` | `"cooldown"` | `"limit"` | `"interrupt_cooldown"` |
+    /// `"paused"` | `"dropped"`.
+    pub status: String,
+    pub event: StreamEvent,
 }
 
 /// Catalog game as returned by the licensing server.
