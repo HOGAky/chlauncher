@@ -974,6 +974,76 @@ pub async fn set_alerts_settings(
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Media library (§4.1)
+// ---------------------------------------------------------------------------
+
+/// All indexed media items (files live in `<app-data>/media/`).
+#[tauri::command]
+pub async fn media_list(
+    state: State<'_, AppState>,
+) -> Result<Vec<crate::types::MediaItem>, String> {
+    Ok(state.settings.lock().await.data.media.clone())
+}
+
+/// Imports a file into the media library (magic-byte sniffed, §4.1
+/// limits enforced). `path` comes from the tauri dialog plugin.
+#[tauri::command]
+pub async fn media_import(
+    path: String,
+    state: State<'_, AppState>,
+) -> Result<crate::types::MediaItem, String> {
+    let dir = crate::media::media_dir(&state.data_dir);
+    let mut s = state.settings.lock().await;
+    let used: u64 = s.data.media.iter().map(|m| m.size).sum();
+    let item = crate::media::import(&dir, std::path::Path::new(&path), "", used).await?;
+    s.data.media.push(item.clone());
+    let _ = s.save();
+    Ok(item)
+}
+
+/// Deletes a media item — refused while any rule still references it
+/// (returns the list of referencing rules).
+#[tauri::command]
+pub async fn media_delete(id: String, state: State<'_, AppState>) -> Result<(), String> {
+    let mut s = state.settings.lock().await;
+    let refs = crate::media::usages(&id, &s.data);
+    if !refs.is_empty() {
+        return Err(format!(
+            "файл используется правилами — уберите его оттуда:\n{}",
+            refs.join("\n")
+        ));
+    }
+    let Some(pos) = s.data.media.iter().position(|m| m.id == id) else {
+        return Err("медиа не найдено".into());
+    };
+    let item = s.data.media.remove(pos);
+    let _ = s.save();
+    let dir = crate::media::media_dir(&state.data_dir);
+    let _ = crate::media::delete(&dir, &item).await;
+    Ok(())
+}
+
+/// Renames a media item (display name only).
+#[tauri::command]
+pub async fn media_rename(
+    id: String,
+    name: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let name = name.trim().to_string();
+    if name.is_empty() {
+        return Err("имя пустое".into());
+    }
+    let mut s = state.settings.lock().await;
+    let Some(m) = s.data.media.iter_mut().find(|m| m.id == id) else {
+        return Err("медиа не найдено".into());
+    };
+    m.name = name;
+    let _ = s.save();
+    Ok(())
+}
+
 /// Pins the overlay server to a fixed port (§5.4). `0` = OS-assigned.
 /// The server binds at startup only, so the change applies on the next
 /// launch — the UI warns accordingly.

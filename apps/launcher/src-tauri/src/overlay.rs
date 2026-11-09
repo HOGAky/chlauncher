@@ -39,6 +39,7 @@ use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 
 use crate::events::EventHub;
+use crate::settings::SettingsStore;
 use crate::types::{OverlayFrame, PresetRow, StreamEvent, TriggerProfile};
 
 /// Overlay frame channels — the `subscribe` vocabulary (§5.3).
@@ -72,6 +73,10 @@ struct OverlayState {
     token: Arc<String>,
     /// Directory with bundled gift icons (`*.webp` + `gifts.json`).
     gifts_dir: Option<PathBuf>,
+    /// `<app-data>/media` — files behind `/media/:id` (§4.1).
+    media_dir: PathBuf,
+    /// Media index lives in settings — resolving `:id` → file needs it.
+    settings: Arc<tokio::sync::Mutex<SettingsStore>>,
     /// Last frame per channel — replayed to late-joining subscribers so a
     /// newly opened preset/progress page isn't blank until the next event.
     last_frames: Arc<Mutex<HashMap<&'static str, OverlayFrame>>>,
@@ -229,12 +234,16 @@ pub async fn start_overlay_server(
     frames: broadcast::Sender<OverlayFrame>,
     token: String,
     port_cfg: u16,
+    media_dir: PathBuf,
+    settings: Arc<tokio::sync::Mutex<SettingsStore>>,
 ) -> std::io::Result<(u16, bool)> {
     let state = OverlayState {
         hub,
         frames,
         token: Arc::new(token),
         gifts_dir: gifts_dir(),
+        media_dir,
+        settings,
         last_frames: Arc::new(Mutex::new(HashMap::new())),
     };
 
@@ -266,6 +275,7 @@ pub async fn start_overlay_server(
         .route("/overlay/tts", get(page_route(TTS_HTML)))
         .route("/overlay/progress", get(page_route(PROGRESS_HTML)))
         .route("/gifts/:file", get(serve_gift))
+        .route("/media/:id", get(serve_media))
         .route("/health", get(|| async { "ok" }))
         .route("/ws", get(ws_upgrade))
         .with_state(state);
@@ -325,6 +335,52 @@ async fn serve_gift(
     match tokio::fs::read(&path).await {
         Ok(bytes) => ([("content-type", "image/webp")], bytes).into_response(),
         Err(_) => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// `/media/:id` — media-library file with byte-range support (§4.1:
+/// video in a Browser Source won't seek — and sometimes won't play —
+/// without Range). The id must be a 32-hex index row; paths never come
+/// from the client.
+async fn serve_media(
+    Path(id): Path<String>,
+    Query(q): Query<HashMap<String, String>>,
+    State(st): State<OverlayState>,
+    req: axum::extract::Request,
+) -> Response {
+    if q.get("t").map(|t| t == st.token.as_str()) != Some(true) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    if id.len() != 32
+        || !id
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+    {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let item = {
+        st.settings
+            .lock()
+            .await
+            .data
+            .media
+            .iter()
+            .find(|m| m.id == id)
+            .cloned()
+    };
+    let Some(item) = item else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let path = crate::media::media_path(&st.media_dir, &item);
+    if !path.exists() {
+        // §4.2: file gone from disk → alert renders without media; log it.
+        tracing::warn!(id, "media file missing on disk");
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    use tower::Service;
+    match tower_http::services::ServeFile::new(&path).call(req).await {
+        Ok(res) => res.into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
 

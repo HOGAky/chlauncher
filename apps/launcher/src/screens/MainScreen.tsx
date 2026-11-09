@@ -4,7 +4,7 @@
  * Pages: Library, Subscription, Integrations, Trigger mapper, Simulator.
  */
 import React, { useState } from 'react';
-import { Gamepad2, CreditCard, Radio, SlidersHorizontal, FlaskConical, Wrench } from 'lucide-react';
+import { Gamepad2, CreditCard, Radio, SlidersHorizontal, FlaskConical, Wrench, FolderOpen } from 'lucide-react';
 import { cn } from '../lib/utils';
 import Header from '../components/Header';
 import { useApp } from '../App';
@@ -13,15 +13,17 @@ import SubscriptionPage from '../pages/SubscriptionPage';
 import IntegrationsPage from '../pages/IntegrationsPage';
 import MapperPage from '../pages/MapperPage';
 import SimulatorPage from '../pages/SimulatorPage';
+import MediaPage from '../pages/MediaPage';
 import AdminPage from '../pages/AdminPage';
 
-type Page = 'library' | 'subscription' | 'integrations' | 'mapper' | 'simulator' | 'admin';
+type Page = 'library' | 'subscription' | 'integrations' | 'mapper' | 'media' | 'simulator' | 'admin';
 
 const NAV: { id: Page; label: string; icon: React.ReactNode }[] = [
   { id: 'library', label: 'Библиотека', icon: <Gamepad2 size={16} /> },
   { id: 'subscription', label: 'Подписка', icon: <CreditCard size={16} /> },
   { id: 'integrations', label: 'Интеграции', icon: <Radio size={16} /> },
   { id: 'mapper', label: 'Маппер триггеров', icon: <SlidersHorizontal size={16} /> },
+  { id: 'media', label: 'Медиатека', icon: <FolderOpen size={16} /> },
   { id: 'simulator', label: 'Симулятор', icon: <FlaskConical size={16} /> },
 ];
 
@@ -75,6 +77,7 @@ export default function MainScreen() {
           {page === 'subscription' && <SubscriptionPage />}
           {page === 'integrations' && <IntegrationsPage />}
           {page === 'mapper' && <MapperPage />}
+          {page === 'media' && <MediaPage />}
           {page === 'simulator' && <SimulatorPage />}
           {page === 'admin' && isAdmin && <AdminPage />}
         </main>

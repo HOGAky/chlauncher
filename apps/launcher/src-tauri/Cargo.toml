@@ -31,6 +31,12 @@ tokio-tungstenite = "0.26"
 futures-util = "0.3"
 # Local HTTP + WS server for the browser overlay (TikTok Live Studio source).
 axum = { version = "0.8", features = ["ws"] }
+# ServeFile with Range for /media/:id — video in a Browser Source won't
+# seek (and sometimes won't play) without byte-range responses (§4.1).
+tower-http = { version = "0.6", features = ["fs"] }
+tower = "0.5"
+# Native file picker for media import.
+tauri-plugin-dialog = "2"
 # Downloads game zips and talks to the licensing REST API.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }

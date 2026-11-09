@@ -297,10 +297,21 @@ the old snapshot+event stream. Pages: `/overlay` (all-in-one),
 save/apply via `preset` frames), `/overlay/spinner` (weighted wheel,
 lands on the scheduler-picked `result_index`), `/overlay/tts` (badge +
 subtitle), `/overlay/progress` (accumulator bars), `/gifts/*.webp`
-(bundled catalog icons). `overlay_port` in settings pins the port for
+(bundled catalog icons), `/media/:id` for the media library. `overlay_port` in
+settings pins the port for
 stable OBS URLs (`set_overlay_port`, 0 = OS-assigned with fallback); the
 Integrations page lists every URL with copy buttons and can rotate the
 token (`rotate_overlay_token`).
+
+The **media library** (`src-tauri/src/media.rs` + «Медиатека» page,
+spec §4) stores alert assets under `<app-data>/media/` — import via the
+native picker (`media_import`, magic-byte sniffed:
+mp4/webm/gif/png/webp/jpg/mp3/ogg/wav, ≤ 50 MB each, mp4 ≤ 30 s via
+`mvhd` parsing, 2 GB total), `media_list`/`media_rename`/`media_delete`
+(delete is refused while rules reference the file and names them).
+The alert drawer picks sound/media from the library; `/media/:id`
+serves files with byte ranges (`ServeFile`) so video actually plays in
+a Browser Source.
 
 The bundled **gift catalog** (`apps/launcher/public/gifts.json` +
 `public/gifts/*.webp`, ~1.7k entries) backs the 🎁 picker next to each

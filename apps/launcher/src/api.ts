@@ -9,6 +9,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { onOpenUrl, getCurrent } from '@tauri-apps/plugin-deep-link';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import type {
+  MediaItem,
   AdminBuild,
   AdminGame,
   AdminUser,
@@ -219,6 +220,19 @@ export const getAlertsSettings = () =>
     default_duration_ms: number;
     volume: number;
   }>('get_alerts_settings');
+
+/** Media-library items (files served at /media/<id>). */
+export const mediaList = () => cmd<MediaItem[]>('media_list');
+
+/** Copies a picked file into the media library (sniffed + capped). */
+export const mediaImport = (path: string) => cmd<MediaItem>('media_import', { path });
+
+/** Deletes an item — fails while rules still reference it. */
+export const mediaDelete = (id: string) => cmd<void>('media_delete', { id });
+
+/** Renames an item (display name). */
+export const mediaRename = (id: string, name: string) =>
+  cmd<void>('media_rename', { id, name });
 
 /** Persists alert settings; the master switch applies live. */
 export const setAlertsSettings = (

@@ -25,6 +25,7 @@ pub mod game_ws;
 pub mod hwid;
 pub mod integrations;
 pub mod logging;
+pub mod media;
 pub mod overlay;
 pub mod process;
 pub mod scheduler;
@@ -53,6 +54,7 @@ pub fn run() {
         // system browser.
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             // --- filesystem roots -------------------------------------
@@ -114,6 +116,8 @@ pub fn run() {
                 overlay_tx.clone(),
                 overlay_token,
                 overlay_port_cfg,
+                media::media_dir(&data_dir),
+                settings.clone(),
             )) {
                 Ok((port, fell_back)) => {
                     if fell_back {
@@ -288,6 +292,10 @@ pub fn run() {
             commands::rotate_overlay_token,
             commands::get_alerts_settings,
             commands::set_alerts_settings,
+            commands::media_list,
+            commands::media_import,
+            commands::media_delete,
+            commands::media_rename,
             commands::get_hwid,
             commands::get_server_url,
             commands::set_server_url,

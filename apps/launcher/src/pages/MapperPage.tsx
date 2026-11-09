@@ -24,6 +24,7 @@ import * as api from '../api';
 import type {
   AlertSpec,
   GiftEntry,
+  MediaItem,
   SchedulerStatus,
   SpinnerPool,
   TriggerPreset,
@@ -118,6 +119,8 @@ export default function MapperPage() {
   const [openIds, setOpenIds] = useState<Set<string>>(new Set());
   // Rules with the 🔔 alert drawer open (§3.4).
   const [alertIds, setAlertIds] = useState<Set<string>>(new Set());
+  // Media library for the alert drawer's sound/media pickers (§4.1).
+  const [media, setMedia] = useState<MediaItem[]>([]);
   // Global alert settings — master switch + default-alert threshold (§3.2).
   const [alertsCfg, setAlertsCfg] = useState<{
     enabled: boolean;
@@ -145,6 +148,7 @@ export default function MapperPage() {
   useEffect(() => {
     api.listSpinners().then(setSpinners).catch(() => {});
     api.getAlertsSettings().then(setAlertsCfg).catch(() => {});
+    api.mediaList().then(setMedia).catch(() => {});
   }, []);
 
   /** Persists one alert-setting field; `enabled` applies live (§3.1). */
@@ -816,6 +820,27 @@ export default function MapperPage() {
                     />
                   </label>
                   <label className="flex flex-col gap-1">
+                    <span className="text-muted-foreground">Арт действия (оверлей пресета)</span>
+                    <select
+                      className="h-8 rounded-md border border-input bg-secondary/40 px-2 text-sm"
+                      value={r.image?.id ?? ''}
+                      onChange={(e) =>
+                        patchRule(r.id, {
+                          image: e.target.value ? { id: e.target.value } : null,
+                        })
+                      }
+                    >
+                      <option value="">— без арта —</option>
+                      {media
+                        .filter((m) => m.kind === 'image' || m.kind === 'gif')
+                        .map((m) => (
+                          <option key={m.id} value={m.id}>
+                            🖼 {m.name}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1">
                     <span className="text-muted-foreground">Спиннер (пул)</span>
                     <select
                       className="h-8 rounded-md border border-input bg-secondary/40 px-2 text-sm"
@@ -957,6 +982,93 @@ export default function MapperPage() {
                             ))}
                           </select>
                         </label>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-muted-foreground">Звук (медиатека)</span>
+                          <select
+                            className="h-8 rounded-md border border-input bg-secondary/40 px-2 text-sm"
+                            value={r.alert.sound?.id ?? ''}
+                            onChange={(e) =>
+                              patchAlert(r.id, {
+                                sound: e.target.value
+                                  ? { id: e.target.value, volume: r.alert?.sound?.volume ?? 1 }
+                                  : null,
+                              })
+                            }
+                          >
+                            <option value="">— без звука —</option>
+                            {media
+                              .filter((m) => m.kind === 'audio')
+                              .map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  🔊 {m.name}
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+                        {r.alert.sound && (
+                          <label className="flex flex-col gap-1">
+                            <span className="text-muted-foreground">Громкость звука (0–1)</span>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={1}
+                              step={0.1}
+                              value={r.alert.sound.volume ?? 1}
+                              onChange={(e) =>
+                                patchAlert(r.id, {
+                                  sound: {
+                                    ...r.alert!.sound!,
+                                    volume: Number(e.target.value) || 0,
+                                  },
+                                })
+                              }
+                            />
+                          </label>
+                        )}
+                        <label className="flex flex-col gap-1">
+                          <span className="text-muted-foreground">Видео/картинка (медиатека)</span>
+                          <select
+                            className="h-8 rounded-md border border-input bg-secondary/40 px-2 text-sm"
+                            value={r.alert.media?.id ?? ''}
+                            onChange={(e) =>
+                              patchAlert(r.id, {
+                                media: e.target.value
+                                  ? {
+                                      id: e.target.value,
+                                      fit: r.alert?.media?.fit ?? 'contain',
+                                      volume: r.alert?.media?.volume ?? 1,
+                                    }
+                                  : null,
+                              })
+                            }
+                          >
+                            <option value="">— без медиа —</option>
+                            {media
+                              .filter((m) => m.kind !== 'audio')
+                              .map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  🎬 {m.name}
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+                        {r.alert.media && (
+                          <label className="flex flex-col gap-1">
+                            <span className="text-muted-foreground">Вписывание медиа</span>
+                            <select
+                              className="h-8 rounded-md border border-input bg-secondary/40 px-2 text-sm"
+                              value={r.alert.media.fit ?? 'contain'}
+                              onChange={(e) =>
+                                patchAlert(r.id, {
+                                  media: { ...r.alert!.media!, fit: e.target.value },
+                                })
+                              }
+                            >
+                              <option value="contain">contain</option>
+                              <option value="cover">cover</option>
+                            </select>
+                          </label>
+                        )}
                       </div>
                       {/* Live preview of the alert card (same palette as
                           /overlay/alerts, minimal chrome). */}
