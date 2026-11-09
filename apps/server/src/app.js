@@ -9,6 +9,7 @@
 
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import crypto from 'node:crypto';
 import { openDatabase } from './db.js';
 import { config } from './config.js';
@@ -20,6 +21,7 @@ import adminRoutes from './routes/admin.js';
 import billingRoutes from './routes/billing.js';
 import gamesRoutes from './routes/games.js';
 import licenseRoutes from './routes/license.js';
+import tiktokRoutes from './routes/tiktok.js';
 
 /**
  * Builds a configured (but not yet listening) Fastify instance.
@@ -42,6 +44,43 @@ export async function buildApp(opts = {}) {
   });
 
   registerErrorContract(app);
+
+  // Minimal security headers on every response (the API is consumed by
+  // the launcher, but the same listener serves the admin uploads/docs).
+  app.addHook('onSend', async (_request, reply) => {
+    reply.header('x-content-type-options', 'nosniff');
+    reply.header('x-frame-options', 'DENY');
+    reply.header('referrer-policy', 'no-referrer');
+  });
+
+  // The sign proxy needs the raw request body (the SDK sends JSON, but we
+  // forward it untouched). Everywhere else JSON keeps parsing normally.
+  app.addContentTypeParser(
+    'application/json',
+    { parseAs: 'buffer' },
+    (req, body, done) => {
+      if (req.raw.url?.startsWith('/api/tiktok-sign/')) {
+        return done(null, body);
+      }
+      try {
+        done(null, body.length ? JSON.parse(body.toString('utf8')) : {});
+      } catch (err) {
+        err.statusCode = 400;
+        done(err);
+      }
+    }
+  );
+
+  // HTTP-level rate limit on the auth surface — the DB-backed lockout in
+  // routes/auth.js throttles per (ip,email); this caps the route globally
+  // per IP so a sprayed-email flood can't even reach the DB.
+  await app.register(rateLimit, {
+    global: false,
+    errorResponseBuilder: () => ({
+      error: 'TOO_MANY_ATTEMPTS',
+      retryable: true,
+    }),
+  });
 
   // CORS whitelist: only the origins in config.corsOrigins get
   // Access-Control-Allow-Origin; anything else is answered without CORS
@@ -68,6 +107,7 @@ export async function buildApp(opts = {}) {
   await app.register(billingRoutes, { prefix: '/api/billing', ...deps });
   await app.register(gamesRoutes, { prefix: '/api/games', ...deps });
   await app.register(licenseRoutes, { prefix: '/api/license', ...deps });
+  await app.register(tiktokRoutes, { prefix: '/api/tiktok-sign', ...deps });
 
   app.addHook('onClose', async () => db.close());
   return { app, db };

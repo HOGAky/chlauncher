@@ -160,6 +160,18 @@ const MIGRATIONS = [
     const upd = db.prepare('UPDATE users SET hwid = ? WHERE id = ?');
     for (const r of rows) upd.run(hwidHash(r.hwid), r.id);
   },
+  // v3 → v4: persistent login-attempt journal. Replaces the in-memory Map
+  // so the brute-force lockout survives server restarts; `key` is
+  // `ip_hash|email_lower` — nothing sensitive is stored in plaintext.
+  (db) => {
+    db.exec(`
+      CREATE TABLE login_attempts (
+        key       TEXT PRIMARY KEY,
+        count     INTEGER NOT NULL DEFAULT 0,
+        reset_at  INTEGER NOT NULL
+      );
+    `);
+  },
 ];
 
 /** Runs all pending migrations in order. Idempotent via user_version. */
@@ -290,6 +302,43 @@ export function bumpTokenVersion(db, userId) {
   db.prepare(
     'UPDATE users SET token_version = token_version + 1 WHERE id = ?'
   ).run(userId);
+}
+
+// ---------------------------------------------------------------------------
+// Login-attempt journal (brute-force lockout, DB-backed since v4)
+// ---------------------------------------------------------------------------
+
+/** Returns the live counter row for `key`, or null when expired/absent. */
+export function getLoginAttempts(db, key) {
+  const row = db
+    .prepare('SELECT count, reset_at FROM login_attempts WHERE key = ?')
+    .get(key);
+  if (!row || row.reset_at <= Date.now()) return null;
+  return row;
+}
+
+/** Increments the failure counter for `key`; creates a fresh window row. */
+export function noteLoginAttempt(db, key, windowMs) {
+  const e = getLoginAttempts(db, key);
+  if (e) {
+    db.prepare('UPDATE login_attempts SET count = count + 1 WHERE key = ?').run(key);
+    return { count: e.count + 1, reset_at: e.reset_at };
+  }
+  const resetAt = Date.now() + windowMs;
+  db.prepare(
+    'INSERT OR REPLACE INTO login_attempts (key, count, reset_at) VALUES (?, 1, ?)'
+  ).run(key, resetAt);
+  return { count: 1, reset_at: resetAt };
+}
+
+/** Clears the counter on successful login. */
+export function clearLoginAttempts(db, key) {
+  db.prepare('DELETE FROM login_attempts WHERE key = ?').run(key);
+}
+
+/** Periodic sweep — drops expired rows so the table can't grow forever. */
+export function sweepLoginAttempts(db) {
+  db.prepare('DELETE FROM login_attempts WHERE reset_at <= ?').run(Date.now());
 }
 
 /** Fetches the subscription row for a user. @returns {object|undefined} */

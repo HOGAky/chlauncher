@@ -114,6 +114,18 @@ export function loadConfig(env = process.env) {
             .createHash('sha256')
             .update(`chlauncher-dev-hwid:${env.JWT_SECRET || DEV_JWT_SECRET}`)
             .digest('hex')),
+    /**
+     * EulerStream signing API — server-side key for the /api/tiktok-sign
+     * proxy. When set, subscribed launchers sign TikTok webcast requests
+     * through OUR backend and the paid key never ships in the client.
+     * Empty → proxy answers 503 and sidecars fall back to the free tier.
+     */
+    eulerApiKey: env.EULERSTREAM_API_KEY || '',
+    /** Upstream base URL the sign proxy forwards to (test-overridable). */
+    eulerBaseUrl: (env.EULERSTREAM_BASE_URL || 'https://api.eulerstream.com')
+      .replace(/\/+$/, ''),
+    /** Per-user proxy rate cap — a connect burst is ~5 calls. */
+    tiktokSignMaxPerMin: Number(env.TIKTOK_SIGN_MAX_PER_MIN || 120),
   };
 }
 
