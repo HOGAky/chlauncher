@@ -733,7 +733,7 @@ mock-game и Minecraft, без зависаний очереди.
 | 4 ✅ | Оверлей-сервер: файлы, `subscribe`-протокол, токен, фикс-порт, `/overlay/alerts` | `overlay.rs`, `overlay/*.html`, `docs/protocol.md` | `/overlay` старый работает; алерты идут |
 | 5 ✅ | Алерты + прерывания | `scheduler.rs`, drawer в маппере | тесты прерываний; e2e |
 | 6 ✅ | Медиатека + видео/GIF/звук | `media.rs`, `MediaPage.tsx`, `overlay.rs` | mp4/gif/mp3 играют в TikTok LIVE Studio |
-| 7 | Оверлей пресета (3 шаблона, live-update), общий рендер с PNG | `overlay/preset.html`, `OverlaysPage.tsx` | правка → перерисовка |
+| 7 ✅ | Оверлей пресета (3 шаблона, live-update), общий рендер с PNG | `overlay/preset.html`, `OverlaysPage.tsx`, `lib/presetRows.ts` | правка → перерисовка |
 | 8 | TTS | `tts.rs`, `TtsPage.tsx` | голос, фильтры, хоткей |
 | 9 | Gift Spinner | `scheduler.rs`, `overlay/spinner.html`, `SpinnerPage.tsx` | e2e спина |
 | 10 | Тарифы: БД, API, админка, entitlements в лаунчере, usage | `db.js`, `routes/*`, `AdminPage.tsx`, `SubscriptionPage.tsx`, `usage.rs` | серверные тесты §13 |

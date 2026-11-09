@@ -151,17 +151,20 @@ fn gift_index() -> &'static HashMap<String, String> {
 }
 
 /// Resolves a gift name to its icon URL — exact first, then substring
-/// (mirrors `src/lib/gifts.ts`).
+/// (mirrors `src/lib/gifts.ts`). Catalog `image` already carries the
+/// `gifts/` prefix, so the URL is a plain `/{img}`.
 fn gift_icon(name: &str) -> Option<String> {
+    if name.len() < 3 {
+        return None;
+    }
     let idx = gift_index();
     let key = name.to_lowercase();
     if let Some(img) = idx.get(&key) {
-        return Some(format!("/gifts/{img}"));
+        return Some(format!("/{img}"));
     }
     idx.iter()
         .find(|(k, _)| key.contains(k.as_str()) || k.contains(key.as_str()))
-        .map(|(_, img)| format!("/gifts/{img}"))
-        .filter(|_| key.len() >= 3)
+        .map(|(_, img)| format!("/{img}"))
 }
 
 /// Coin price lookup for the preset rows — same index, coins column.

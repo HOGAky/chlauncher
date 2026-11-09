@@ -303,6 +303,16 @@ stable OBS URLs (`set_overlay_port`, 0 = OS-assigned with fallback); the
 Integrations page lists every URL with copy buttons and can rotate the
 token (`rotate_overlay_token`).
 
+The **Overlays page** («Оверлеи», spec §5.2) edits the preset cheat
+sheet's `OverlayStyle` per game — three templates (`cards`/`list`/
+`text`), accent color, background opacity, font scale, border mode,
+grid columns, `max_rows` paging and page rotation — with a live DOM
+preview rendered from the same `presetRows` model (`src/lib/presetRows.ts`)
+that feeds the `/overlay/preset` frame builder and the PNG poster, so
+OBS, preview and download always agree. Saving the profile emits a
+`preset` frame and every open Browser Source re-renders without reload;
+the PNG export now honors the profile's accent/scale too.
+
 The **media library** (`src-tauri/src/media.rs` + «Медиатека» page,
 spec §4) stores alert assets under `<app-data>/media/` — import via the
 native picker (`media_import`, magic-byte sniffed:

@@ -99,6 +99,16 @@ export interface SpinnerSegment {
   alert?: AlertSpec | null;
 }
 
+/** One row of the preset cheat sheet (preset overlay frame + poster). */
+export interface PresetRow {
+  gift: string;
+  gift_image?: string;
+  count: number;
+  coins: number;
+  label: string;
+  image?: string;
+}
+
 /** A named wheel of fortune — rules reference it by name. */
 export interface SpinnerPool {
   name: string;
