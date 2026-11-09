@@ -201,6 +201,8 @@ pub fn run() {
             commands::list_trigger_presets,
             commands::save_trigger_preset,
             commands::delete_trigger_preset,
+            commands::export_trigger_preset,
+            commands::import_trigger_preset,
             commands::simulate_event,
             commands::get_event_feed,
             commands::set_streamer_mode,

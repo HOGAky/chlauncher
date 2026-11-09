@@ -24,6 +24,12 @@ function raw(kind: string, rawName: string, amount: number, source = 'simulator'
     avatar_url: '',
     raw_name: rawName,
     amount,
+    // For gifts/likes the amount IS the item count — per_unit rules fire
+    // N times; other kinds fire once. coins stay 0: simulator events
+    // don't count toward the earn limit.
+    count: kind === 'gift' || kind === 'like' ? Math.max(1, amount) : 1,
+    coins: 0,
+    ts_ms: Date.now(),
   };
 }
 

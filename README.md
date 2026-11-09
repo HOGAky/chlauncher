@@ -253,7 +253,21 @@ rules under a name, the dropdown applies one to the selected game, and
 names are reserved server-side; deleting a preset never touches game
 profiles already applied from it. The **PNG** button renders the profile
 as a cheat-sheet poster (gift icon × quantity → action glyph + name) for
-viewer pin/print.
+viewer pin/print. Presets are shareable: `export_trigger_preset` /
+`import_trigger_preset` round-trip them as
+`{format:"chlauncher-preset", version:1, …}` JSON (media embedding lands
+with the media library).
+
+The parity data model (`docs/streamtoearn-parity-spec.md` §1) is in
+place: `RawStreamEvent` carries `count` (gift repeats / like batch),
+`coins` (TikTok coin value; DA converts at `da_coins_per_rub`), `gift_id`
+and `ts_ms`; `TriggerRule` gained enabled/label/description/image,
+`match_mode` (`contains`|`exact`|`gift_id`), `repeat` (`per_unit`),
+`every_n`, cooldowns, priority, interrupt, `alert`/`tts`/`spinner` and
+`delay_ms`/`continue_matching` — all serde-defaulted so old settings
+load untouched (`settings::tests::old_settings_deserialize`). Matching
+already honours `enabled=false` and `match_mode`; scheduling, alerts,
+media, TTS and the spinner are the next stages of the spec.
 
 The bundled **gift catalog** (`apps/launcher/public/gifts.json` +
 `public/gifts/*.webp`, ~1.7k entries) backs the 🎁 picker next to each

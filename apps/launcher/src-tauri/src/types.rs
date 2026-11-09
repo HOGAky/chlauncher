@@ -38,13 +38,231 @@ pub struct RawStreamEvent {
     /// Amount in source units (gift repeat count, donation minor units,
     /// batched like count).
     pub amount: i32,
+    /// Item count inside this event: gift `repeatCount`, batched
+    /// `likeCount`, 1 for everything else. Kept separate from `amount`
+    /// (legacy units) so `per_unit`/`every_n` rules can count items.
+    #[serde(default = "default_one_i32")]
+    pub count: i32,
+    /// TikTok-coin value of the whole event (`diamondCount × repeatCount`;
+    /// donations converted at `da_coins_per_rub`). 0 for free events —
+    /// the earn limit ignores those.
+    #[serde(default)]
+    pub coins: i64,
+    /// Stable TikTok gift id — survives gift-name localization.
+    #[serde(default)]
+    pub gift_id: Option<i64>,
+    /// Unix ms when the event reached the launcher (queueing latency).
+    #[serde(default)]
+    pub ts_ms: u64,
+}
+
+/// Current unix time in milliseconds — fills `ts_ms` at ingest points.
+pub fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+fn default_true() -> bool {
+    true
+}
+fn default_one_i32() -> i32 {
+    1
+}
+fn default_one_u32() -> u32 {
+    1
+}
+fn default_one_f32() -> f32 {
+    1.0
+}
+fn default_contains() -> String {
+    "contains".into()
+}
+fn default_once() -> String {
+    "once".into()
+}
+fn default_max_repeat() -> u32 {
+    20
+}
+fn default_interrupt_ms() -> u64 {
+    60_000
+}
+fn default_version() -> u32 {
+    1
+}
+fn default_alert_ms() -> u64 {
+    4_000
+}
+fn default_top() -> String {
+    "top".into()
+}
+fn default_alert_style() -> String {
+    "default".into()
+}
+fn default_contain() -> String {
+    "contain".into()
+}
+fn default_accent() -> String {
+    "#7c3aed".into()
+}
+fn default_cards() -> String {
+    "cards".into()
+}
+fn default_columns() -> u32 {
+    3
+}
+fn default_rotate_ms() -> u64 {
+    8_000
+}
+fn default_opacity() -> f32 {
+    0.85
+}
+fn default_spin_ms() -> u64 {
+    4_500
+}
+
+/// Reference to a media-library file (`Settings::media`, §4.1).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MediaRef {
+    pub id: String,
+}
+
+/// Sound attachment for an alert — plays inside the overlay.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SoundRef {
+    pub id: String,
+    #[serde(default = "default_one_f32")]
+    pub volume: f32,
+}
+
+/// Video/GIF/image attachment for an alert.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MediaPlayRef {
+    pub id: String,
+    /// `"contain"` | `"cover"`.
+    #[serde(default = "default_contain")]
+    pub fit: String,
+    #[serde(default = "default_one_f32")]
+    pub volume: f32,
+}
+
+/// On-overlay alert attached to a rule fire (§3).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AlertSpec {
+    /// Template — placeholders `{user} {gift} {count} {coins} {action} {label}`.
+    #[serde(default)]
+    pub text: String,
+    #[serde(default = "default_alert_ms")]
+    pub duration_ms: u64,
+    #[serde(default)]
+    pub sound: Option<SoundRef>,
+    #[serde(default)]
+    pub media: Option<MediaPlayRef>,
+    /// `"top"` | `"center"` | `"bottom"`.
+    #[serde(default = "default_top")]
+    pub position: String,
+    /// `"default"` | `"minimal"` | `"big"`.
+    #[serde(default = "default_alert_style")]
+    pub style: String,
+}
+
+/// TTS voice-over attached to a rule (§6).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TtsRuleSpec {
+    /// Phrase template with the same placeholders as alerts.
+    #[serde(default)]
+    pub template: String,
+    /// Voice override — `None` falls back to `TtsSettings::voice`.
+    #[serde(default)]
+    pub voice: Option<String>,
+}
+
+/// Look & layout of the preset cheat-sheet overlay (`/overlay/preset`, §5.2).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OverlayStyle {
+    /// `"cards"` | `"list"` | `"text"`.
+    #[serde(default = "default_cards")]
+    pub template: String,
+    #[serde(default = "default_accent")]
+    pub accent_color: String,
+    #[serde(default = "default_opacity")]
+    pub bg_opacity: f32,
+    #[serde(default = "default_one_f32")]
+    pub font_scale: f32,
+    /// `"none"` | `"thin"` | `"glow"`.
+    #[serde(default)]
+    pub border: String,
+    #[serde(default = "default_columns")]
+    pub columns: u32,
+    /// Rows per page; when there are more rules the pages rotate every
+    /// `rotate_ms` (0 = show everything at once).
+    #[serde(default)]
+    pub max_rows: u32,
+    #[serde(default = "default_rotate_ms")]
+    pub rotate_ms: u64,
+}
+
+impl Default for OverlayStyle {
+    fn default() -> Self {
+        Self {
+            template: default_cards(),
+            accent_color: default_accent(),
+            bg_opacity: default_opacity(),
+            font_scale: 1.0,
+            border: "none".into(),
+            columns: default_columns(),
+            max_rows: 0,
+            rotate_ms: default_rotate_ms(),
+        }
+    }
+}
+
+/// One segment of a gift spinner wheel (§7).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpinnerSegment {
+    pub label: String,
+    /// Game command emitted when the wheel lands here.
+    pub action: String,
+    #[serde(default = "default_one_u32")]
+    pub weight: u32,
+    #[serde(default = "default_accent")]
+    pub color: String,
+    #[serde(default)]
+    pub alert: Option<AlertSpec>,
+}
+
+/// A named wheel of fortune — rules reference it via `TriggerRule::spinner`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SpinnerPool {
+    pub name: String,
+    #[serde(default)]
+    pub segments: Vec<SpinnerSegment>,
+    #[serde(default = "default_spin_ms")]
+    pub spin_ms: u64,
+}
+
+/// Media-library index row; the file itself lives in
+/// `<app-data>/media/<id>.<ext>` and is served at `/media/:id` (§4.1).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MediaItem {
+    pub id: String,
+    pub name: String,
+    /// `"video"` | `"gif"` | `"image"` | `"audio"`.
+    pub kind: String,
+    /// File extension without the dot (`mp4`, `webp`, `mp3`, …).
+    pub ext: String,
+    #[serde(default)]
+    pub size: u64,
+    #[serde(default)]
+    pub duration_ms: Option<u64>,
 }
 
 /// One trigger-mapping rule in a streamer's profile.
 ///
 /// Matching semantics: `source` and `event_kind` support the wildcard
-/// `"any"`; `match_value` is a case-insensitive substring/`=` check against
-/// the raw payload name (empty string = match all); `min_amount` filters
+/// `"any"`; `match_value` checks against the raw payload name per
+/// `match_mode` (empty string = match all); `min_amount` filters
 /// on the event amount.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TriggerRule {
@@ -53,24 +271,124 @@ pub struct TriggerRule {
     pub source: String,
     /// `"gift"` | `"like"` | `"comment"` | `"donation"` | `"any"`.
     pub event_kind: String,
-    /// Gift name / text to match ("" = everything).
+    /// Gift name / text to match ("" = everything). Under
+    /// `match_mode="gift_id"` this stores the numeric gift id.
     pub match_value: String,
     /// Minimum amount to trigger (0 = no threshold).
     pub min_amount: i32,
-    /// Game command to emit, e.g. `spawn_enemy`.
+    /// Game command to emit, e.g. `spawn_enemy`. Ignored when `spinner`
+    /// names a pool (the wheel decides the action instead).
     pub action: String,
     /// Multiplies the emitted `amount` (default 1.0).
+    #[serde(default = "default_one_f32")]
     pub multiplier: f32,
+    /// Off-switch that keeps the rule in the profile.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Human-readable action label for overlays/posters («Спавн зомби»).
+    #[serde(default)]
+    pub label: String,
+    /// Description used by the "text" overlay template.
+    #[serde(default)]
+    pub description: String,
+    /// Action artwork for the preset overlay (media-library reference).
+    #[serde(default)]
+    pub image: Option<MediaRef>,
+    /// `"contains"` (legacy substring), `"exact"` or `"gift_id"`.
+    #[serde(default = "default_contains")]
+    pub match_mode: String,
+    /// `"once"` per event or `"per_unit"` — N items → N firings.
+    #[serde(default = "default_once")]
+    pub repeat: String,
+    /// Cap on `per_unit` firings produced by one event.
+    #[serde(default = "default_max_repeat")]
+    pub max_repeat: u32,
+    /// Accumulator: fire once per `every_n` collected units (0 = off).
+    #[serde(default)]
+    pub every_n: u32,
+    /// Per-rule cooldown — the rule skips events while cooling.
+    #[serde(default)]
+    pub cooldown_ms: u64,
+    /// Cooldown applied per viewer (`user`).
+    #[serde(default)]
+    pub user_cooldown_ms: u64,
+    /// Alert-queue priority (higher first; FIFO inside a priority).
+    #[serde(default)]
+    pub priority: i32,
+    /// Paid interrupt — jumps the alert queue, can swap the preset (§3.3).
+    #[serde(default)]
+    pub interrupt: bool,
+    /// Preset temporarily activated while this interrupt runs.
+    #[serde(default)]
+    pub interrupt_preset: Option<String>,
+    /// How long the interrupt preset stays active.
+    #[serde(default = "default_interrupt_ms")]
+    pub interrupt_duration_ms: u64,
+    /// On-screen alert (text/sound/media) shown with the action.
+    #[serde(default)]
+    pub alert: Option<AlertSpec>,
+    /// Speak the event through TTS.
+    #[serde(default)]
+    pub tts: Option<TtsRuleSpec>,
+    /// Spinner pool name — replaces `action` with a weighted segment (§7).
+    #[serde(default)]
+    pub spinner: Option<String>,
+    /// Delay before the action dispatches.
+    #[serde(default)]
+    pub delay_ms: u64,
+    /// Keep evaluating later rules after this one matches.
+    #[serde(default)]
+    pub continue_matching: bool,
+}
+
+impl Default for TriggerRule {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            source: "any".into(),
+            event_kind: "any".into(),
+            match_value: String::new(),
+            min_amount: 0,
+            action: String::new(),
+            multiplier: 1.0,
+            enabled: true,
+            label: String::new(),
+            description: String::new(),
+            image: None,
+            match_mode: default_contains(),
+            repeat: default_once(),
+            max_repeat: default_max_repeat(),
+            every_n: 0,
+            cooldown_ms: 0,
+            user_cooldown_ms: 0,
+            priority: 0,
+            interrupt: false,
+            interrupt_preset: None,
+            interrupt_duration_ms: default_interrupt_ms(),
+            alert: None,
+            tts: None,
+            spinner: None,
+            delay_ms: 0,
+            continue_matching: false,
+        }
+    }
 }
 
 /// The full trigger profile for one game, persisted as JSON.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TriggerProfile {
     pub game_slug: String,
     /// Name of the preset this profile was last applied from — `None` for
     /// the seeded default or a hand-built profile.
     #[serde(default)]
     pub preset: Option<String>,
+    /// Overlay look for this profile's cheat-sheet (§5.2).
+    #[serde(default)]
+    pub overlay: OverlayStyle,
+    /// Minimum gap between any two fired actions of this profile.
+    #[serde(default)]
+    pub global_cooldown_ms: u64,
+    #[serde(default)]
     pub rules: Vec<TriggerRule>,
 }
 
@@ -79,7 +397,7 @@ pub struct TriggerProfile {
 /// profile in one click. A preset is usually built *for* a game
 /// (`game_slug` = its action vocabulary); `None` marks universal presets
 /// offered for every game.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TriggerPreset {
     /// Unique key, e.g. `steal-the-stream` or the streamer's own name.
     pub name: String,
@@ -93,6 +411,16 @@ pub struct TriggerPreset {
     /// deleted; the flag is always cleared for streamer-saved presets.
     #[serde(default)]
     pub builtin: bool,
+    /// Overlay look applied to the profile along with the rules.
+    #[serde(default)]
+    pub overlay: OverlayStyle,
+    /// Minimum gap between actions when this preset is active.
+    #[serde(default)]
+    pub global_cooldown_ms: u64,
+    /// Schema version — bumped when the share format changes (§1.5).
+    #[serde(default = "default_version")]
+    pub version: u32,
+    #[serde(default)]
     pub rules: Vec<TriggerRule>,
 }
 

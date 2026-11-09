@@ -33,6 +33,87 @@ export interface RawStreamEvent {
   avatar_url: string;
   raw_name: string;
   amount: number;
+  /** Item count (gift repeatCount / like batch size); default 1. */
+  count?: number;
+  /** TikTok-coin value of the event — feeds the earn limit. */
+  coins?: number;
+  /** Stable TikTok gift id (locale-independent matching). */
+  gift_id?: number | null;
+  /** Unix ms the event reached the launcher (filled at ingest). */
+  ts_ms?: number;
+}
+
+/** Reference to a media-library file (Settings.media). */
+export interface MediaRef {
+  id: string;
+}
+
+/** Sound attachment for an alert. */
+export interface SoundRef {
+  id: string;
+  volume?: number;
+}
+
+/** Video/GIF/image attachment for an alert. */
+export interface MediaPlayRef {
+  id: string;
+  fit?: string;
+  volume?: number;
+}
+
+/** On-overlay alert attached to a rule fire. */
+export interface AlertSpec {
+  /** Template — placeholders {user} {gift} {count} {coins} {action} {label}. */
+  text?: string;
+  duration_ms?: number;
+  sound?: SoundRef | null;
+  media?: MediaPlayRef | null;
+  position?: 'top' | 'center' | 'bottom' | string;
+  style?: 'default' | 'minimal' | 'big' | string;
+}
+
+/** TTS voice-over attached to a rule. */
+export interface TtsRuleSpec {
+  template?: string;
+  voice?: string | null;
+}
+
+/** Look & layout of the preset cheat-sheet overlay (/overlay/preset). */
+export interface OverlayStyle {
+  template?: 'cards' | 'list' | 'text' | string;
+  accent_color?: string;
+  bg_opacity?: number;
+  font_scale?: number;
+  border?: 'none' | 'thin' | 'glow' | string;
+  columns?: number;
+  max_rows?: number;
+  rotate_ms?: number;
+}
+
+/** One segment of a gift spinner wheel. */
+export interface SpinnerSegment {
+  label: string;
+  action: string;
+  weight?: number;
+  color?: string;
+  alert?: AlertSpec | null;
+}
+
+/** A named wheel of fortune — rules reference it by name. */
+export interface SpinnerPool {
+  name: string;
+  segments: SpinnerSegment[];
+  spin_ms?: number;
+}
+
+/** Media-library index row (file at /media/<id>). */
+export interface MediaItem {
+  id: string;
+  name: string;
+  kind: 'video' | 'gif' | 'image' | 'audio' | string;
+  ext: string;
+  size?: number;
+  duration_ms?: number | null;
 }
 
 /** One trigger rule in a streamer profile. */
@@ -40,10 +121,42 @@ export interface TriggerRule {
   id: string;
   source: string;
   event_kind: string;
+  /** Match text — or the numeric gift id when match_mode='gift_id'. */
   match_value: string;
   min_amount: number;
+  /** Game command (ignored when spinner names a pool). */
   action: string;
   multiplier: number;
+  /** Off-switch that keeps the rule in the profile (default true). */
+  enabled?: boolean;
+  /** Human-readable action label for overlays/posters. */
+  label?: string;
+  /** Description used by the 'text' overlay template. */
+  description?: string;
+  /** Action artwork for the preset overlay. */
+  image?: MediaRef | null;
+  /** 'contains' (default) | 'exact' | 'gift_id'. */
+  match_mode?: string;
+  /** 'once' (default) | 'per_unit' — N items → N firings. */
+  repeat?: string;
+  /** Cap on per-unit firings from one event (default 20). */
+  max_repeat?: number;
+  /** Fire once per every_n collected units (0 = off). */
+  every_n?: number;
+  cooldown_ms?: number;
+  user_cooldown_ms?: number;
+  priority?: number;
+  /** Paid interrupt — jumps the alert queue. */
+  interrupt?: boolean;
+  interrupt_preset?: string | null;
+  interrupt_duration_ms?: number;
+  alert?: AlertSpec | null;
+  tts?: TtsRuleSpec | null;
+  /** Spinner pool name — replaces action with a weighted segment. */
+  spinner?: string | null;
+  delay_ms?: number;
+  /** Keep evaluating later rules after this one matches. */
+  continue_matching?: boolean;
 }
 
 /** Full trigger profile for a game. */
@@ -51,6 +164,10 @@ export interface TriggerProfile {
   game_slug: string;
   /** Name of the preset last applied to this profile (absent = hand-built). */
   preset?: string;
+  /** Overlay look for this profile's cheat-sheet. */
+  overlay?: OverlayStyle;
+  /** Minimum gap between any two fired actions of this profile. */
+  global_cooldown_ms?: number;
   rules: TriggerRule[];
 }
 
@@ -62,6 +179,10 @@ export interface TriggerPreset {
   description?: string;
   /** Built-ins ship with the launcher and can't be overwritten/deleted. */
   builtin?: boolean;
+  /** Overlay look applied to the profile along with the rules. */
+  overlay?: OverlayStyle;
+  global_cooldown_ms?: number;
+  version?: number;
   rules: TriggerRule[];
 }
 

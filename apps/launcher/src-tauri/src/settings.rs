@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
-use crate::types::{TriggerPreset, TriggerProfile, WindowOptions};
+use crate::types::{MediaItem, SpinnerPool, TriggerPreset, TriggerProfile, WindowOptions};
 
 /// Everything the launcher persists between restarts.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -41,6 +41,124 @@ pub struct Settings {
     /// Roblox/cloud relay: forward mapped StreamEvents over HTTP.
     #[serde(default)]
     pub forward: ForwardSettings,
+    /// Alert queue + master switches (parity spec §3/§4).
+    #[serde(default)]
+    pub alerts: AlertSettings,
+    /// Chat-to-speech configuration (§6.2).
+    #[serde(default)]
+    pub tts: TtsSettings,
+    /// Named spinner pools for the gift wheel (§7).
+    #[serde(default)]
+    pub spinners: HashMap<String, SpinnerPool>,
+    /// Media-library index; files live in `<app-data>/media/` (§4.1).
+    #[serde(default)]
+    pub media: Vec<MediaItem>,
+    /// Token guarding overlay pages (`?t=…`) — generated on first launch.
+    #[serde(default)]
+    pub overlay_token: String,
+    /// DA→coin exchange rate: coins credited per 1 RUB of donation.
+    /// 0 (default) = donations don't count toward the earn limit (§8.4).
+    #[serde(default)]
+    pub da_coins_per_rub: f32,
+    /// Fixed overlay port — 0 lets the OS pick a fresh one per launch.
+    #[serde(default)]
+    pub overlay_port: u16,
+}
+
+/// Alert queue + playback settings (parity spec §3.1–§3.2, §4.3).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AlertSettings {
+    /// Master switch — off = rules fire actions but show no overlay alerts.
+    pub enabled: bool,
+    /// Max queued alert jobs before the lowest-priority one drops (§2.4).
+    pub queue_max: u32,
+    /// Default on-screen time when a rule's `AlertSpec` doesn't say.
+    pub default_duration_ms: u64,
+    /// Master volume multiplied into every sound/media play.
+    pub volume: f32,
+    /// Gifts worth ≥ N coins get a default alert even without a rule
+    /// `AlertSpec` (0 = off).
+    pub default_for_gifts_from_coins: i64,
+    /// `"overlay"` — sound captured by the Browser Source (default);
+    /// `"device"` — played by the launcher on the output device.
+    pub audio_output: String,
+}
+
+impl Default for AlertSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            queue_max: 200,
+            default_duration_ms: 4_000,
+            volume: 1.0,
+            default_for_gifts_from_coins: 0,
+            audio_output: "overlay".into(),
+        }
+    }
+}
+
+/// Chat-to-speech settings (parity spec §6.2). `read_comments` selects the
+/// comment-reading mode: `"off"` | `"all"` | `"prefix"` | `"gifters"`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TtsSettings {
+    /// Master switch.
+    pub enabled: bool,
+    /// System voice id (empty = OS default voice).
+    pub voice: String,
+    pub rate: f32,
+    pub volume: f32,
+    /// `"off"` | `"all"` | `"prefix"` | `"gifters"`.
+    pub read_comments: String,
+    /// Prefix that marks a comment for reading in `"prefix"` mode.
+    pub comment_prefix: String,
+    /// In `"gifters"` mode, read comments only from viewers who donated
+    /// ≥ this many coins this session.
+    pub gifters_min_coins: i64,
+    /// Speak "{user} подарил {gift} ×{count}" for gift events.
+    pub read_gifts: bool,
+    pub gift_template: String,
+    /// Prefix comments with "{user} пишет: ".
+    pub read_nickname: bool,
+    /// Max characters spoken per phrase (rest is cut).
+    pub max_chars: u32,
+    pub cooldown_ms: u64,
+    pub user_cooldown_ms: u64,
+    /// Phrases queued before the oldest drop.
+    pub queue_max: u32,
+    /// Words/regexes that mute a phrase entirely.
+    pub blocklist: Vec<String>,
+    pub strip_links: bool,
+    pub strip_emoji: bool,
+    /// Global mute hotkey — also flushes the speech queue (§6.3).
+    pub mute_hotkey: String,
+    /// Where synthesized audio goes: `"device"` (default) or `"overlay"`.
+    pub output: String,
+}
+
+impl Default for TtsSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            voice: String::new(),
+            rate: 1.0,
+            volume: 0.9,
+            read_comments: "off".into(),
+            comment_prefix: "!say ".into(),
+            gifters_min_coins: 1,
+            read_gifts: false,
+            gift_template: "{user} подарил {gift}".into(),
+            read_nickname: true,
+            max_chars: 200,
+            cooldown_ms: 3_000,
+            user_cooldown_ms: 15_000,
+            queue_max: 20,
+            blocklist: Vec::new(),
+            strip_links: true,
+            strip_emoji: true,
+            mute_hotkey: "Ctrl+Shift+M".into(),
+            output: "device".into(),
+        }
+    }
 }
 
 /// HTTP-forward configuration for cloud games (Roblox relay).
@@ -66,13 +184,24 @@ pub struct SettingsStore {
 
 impl SettingsStore {
     /// Loads settings from `dir/settings.json`; missing/corrupt files fall
-    /// back to defaults.
+    /// back to defaults. Generates `overlay_token` on first launch.
     pub fn load(dir: &std::path::Path) -> Self {
         let path = dir.join("settings.json");
-        let data = fs::read_to_string(&path)
+        let mut data: Settings = fs::read_to_string(&path)
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
             .unwrap_or_default();
+        if data.overlay_token.is_empty() {
+            // 64 hex chars = 32 random bytes — used as the `?t=` overlay key.
+            data.overlay_token = format!(
+                "{}{}",
+                uuid::Uuid::new_v4().simple(),
+                uuid::Uuid::new_v4().simple()
+            );
+            let store = Self { path, data };
+            let _ = store.save();
+            return store;
+        }
         Self { path, data }
     }
 
@@ -85,5 +214,70 @@ impl SettingsStore {
         fs::write(&tmp, serde_json::to_string_pretty(&self.data)?)?;
         fs::rename(&tmp, &self.path)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `settings.json` as written before the StreamToEarn-parity data model
+    /// — must deserialize with all new sections defaulted, not fail.
+    const OLD_SETTINGS_JSON: &str = r#"{
+        "server_url": "http://localhost:8787",
+        "auth_token": "jwt-token",
+        "email": "streamer@example.com",
+        "role": "user",
+        "tiktok_username": "my_stream",
+        "donationalerts_token": "da-token",
+        "streamer_mode": false,
+        "window_options": {
+            "width": 540, "height": 960, "borderless": true,
+            "always_on_top": true, "chroma_key": false
+        },
+        "trigger_profiles": {
+            "mock-game": {
+                "game_slug": "mock-game",
+                "preset": "steal-the-stream",
+                "rules": [
+                    {
+                        "id": "r1", "source": "tiktok", "event_kind": "gift",
+                        "match_value": "Rose", "min_amount": 0,
+                        "action": "spawn_enemy", "multiplier": 1.0
+                    }
+                ]
+            }
+        },
+        "trigger_presets": {},
+        "forward": {
+            "enabled": false, "forward_url": null,
+            "stream_key": null, "relay_admin_secret": null
+        }
+    }"#;
+
+    #[test]
+    fn old_settings_deserialize() {
+        let s: Settings = serde_json::from_str(OLD_SETTINGS_JSON).unwrap();
+        assert_eq!(s.tiktok_username.as_deref(), Some("my_stream"));
+        // New sections get spec defaults.
+        assert!(s.alerts.enabled);
+        assert_eq!(s.alerts.queue_max, 200);
+        assert!(!s.tts.enabled);
+        assert_eq!(s.tts.comment_prefix, "!say ");
+        assert!(s.spinners.is_empty());
+        assert!(s.media.is_empty());
+        assert!(s.overlay_token.is_empty()); // filled by SettingsStore::load
+        assert_eq!(s.da_coins_per_rub, 0.0);
+        // Old rule deserializes with the new defaults applied.
+        let rule = &s.trigger_profiles["mock-game"].rules[0];
+        assert!(rule.enabled);
+        assert_eq!(rule.match_mode, "contains");
+        assert_eq!(rule.repeat, "once");
+        assert_eq!(rule.max_repeat, 20);
+        assert!(!rule.interrupt);
+        assert!(!rule.continue_matching);
+        let profile = &s.trigger_profiles["mock-game"];
+        assert_eq!(profile.overlay.template, "cards");
+        assert_eq!(profile.global_cooldown_ms, 0);
     }
 }

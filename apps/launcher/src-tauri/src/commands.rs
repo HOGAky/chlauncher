@@ -523,7 +523,11 @@ pub async fn get_integration_status(state: State<'_, AppState>) -> Result<Value,
 /// Connect DonationAlerts with an OAuth access token.
 #[tauri::command]
 pub async fn da_connect(token_input: String, state: State<'_, AppState>) -> Result<(), String> {
-    state.integrations.da_connect(token_input.clone()).await?;
+    let coins_per_rub = state.settings.lock().await.data.da_coins_per_rub;
+    state
+        .integrations
+        .da_connect(token_input.clone(), coins_per_rub)
+        .await?;
     let mut s = state.settings.lock().await;
     s.data.donationalerts_token = Some(token_input);
     let _ = s.save();
@@ -672,10 +676,87 @@ pub async fn delete_trigger_preset(name: String, state: State<'_, AppState>) -> 
     Ok(())
 }
 
+/// Serializes a preset (built-in or custom) into the portable share format
+/// `{ "format": "chlauncher-preset", "version": 1, "preset": …, "media": [] }`.
+/// Media embedding lands with the media library (spec stage 6) — for now
+/// rules keep their `MediaRef` ids and `media` stays empty.
+#[tauri::command]
+pub async fn export_trigger_preset(
+    name: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let preset = {
+        let s = state.settings.lock().await;
+        TriggerMapper::find_preset(&name, &s.data.trigger_presets)
+            .ok_or_else(|| format!("пресет «{name}» не найден"))?
+    };
+    serde_json::to_string_pretty(&json!({
+        "format": "chlauncher-preset",
+        "version": 1,
+        "preset": preset,
+        "media": [],
+    }))
+    .map_err(|e| e.to_string())
+}
+
+/// Imports a preset exported by `export_trigger_preset`. Name collisions
+/// (with built-ins or existing customs) get a `" (2)"` suffix rather than
+/// an overwrite. Returns the stored preset.
+#[tauri::command]
+pub async fn import_trigger_preset(
+    json_str: String,
+    state: State<'_, AppState>,
+) -> Result<TriggerPreset, String> {
+    let v: Value =
+        serde_json::from_str(&json_str).map_err(|_| "невалидный JSON пресета".to_string())?;
+    if v["format"].as_str() != Some("chlauncher-preset") {
+        return Err("это не файл пресета chlauncher".into());
+    }
+    let mut preset: TriggerPreset = serde_json::from_value(v["preset"].clone())
+        .map_err(|e| format!("битый preset в файле: {e}"))?;
+    preset.name = preset.name.trim().to_string();
+    if preset.name.is_empty() {
+        return Err("у пресета пустое имя".into());
+    }
+    preset.builtin = false;
+
+    let mut s = state.settings.lock().await;
+    if TriggerMapper::is_builtin_preset(&preset.name)
+        || s.data.trigger_presets.contains_key(&preset.name)
+    {
+        let base = preset.name.clone();
+        let mut n = 2;
+        loop {
+            let candidate = format!("{base} ({n})");
+            if !TriggerMapper::is_builtin_preset(&candidate)
+                && !s.data.trigger_presets.contains_key(&candidate)
+            {
+                preset.name = candidate;
+                break;
+            }
+            n += 1;
+        }
+    }
+    s.data
+        .trigger_presets
+        .insert(preset.name.clone(), preset.clone());
+    let _ = s.save();
+    Ok(preset)
+}
+
 /// Injects a raw event into the mapping pipeline — the event simulator.
 /// Works even with no game running (still reaches overlay + feed).
 #[tauri::command]
-pub async fn simulate_event(raw: RawStreamEvent, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn simulate_event(
+    mut raw: RawStreamEvent,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    if raw.ts_ms == 0 {
+        raw.ts_ms = now_ms();
+    }
+    if raw.count < 1 {
+        raw.count = 1;
+    }
     state
         .raw_tx
         .send(raw)

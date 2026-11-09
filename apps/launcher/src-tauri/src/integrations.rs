@@ -29,7 +29,7 @@ use tokio::io::AsyncBufReadExt;
 use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
 
-use crate::types::{IntegrationStatus, RawStreamEvent};
+use crate::types::{now_ms, IntegrationStatus, RawStreamEvent};
 
 /// Tauri event emitted whenever an integration's status changes.
 pub const STATUS_EVENT: &str = "integration-status";
@@ -126,8 +126,10 @@ impl IntegrationManager {
     }
 
     /// Connects DonationAlerts realtime donations via Centrifugo.
-    /// `token` is the streamer's OAuth access token.
-    pub async fn da_connect(&self, token: String) -> Result<(), String> {
+    /// `token` is the streamer's OAuth access token; `coins_per_rub`
+    /// converts donation value into the coin currency the earn limit
+    /// counts (0 = donations are "free" events for the limit).
+    pub async fn da_connect(&self, token: String, coins_per_rub: f32) -> Result<(), String> {
         self.da_disconnect().await;
         self.set_status("da", IntegrationStatus::Connecting).await;
 
@@ -135,7 +137,7 @@ impl IntegrationManager {
         let app = self.app.clone();
         let raw_tx = self.raw_tx.clone();
         let handle = tokio::spawn(async move {
-            if let Err(e) = run_da(token, raw_tx, status.clone()).await {
+            if let Err(e) = run_da(token, raw_tx, status.clone(), coins_per_rub).await {
                 *status.lock().await = IntegrationStatus::Error(e.clone());
                 let _ = app.emit(
                     STATUS_EVENT,
@@ -172,6 +174,7 @@ async fn run_da(
     token: String,
     raw_tx: mpsc::Sender<RawStreamEvent>,
     status: Arc<Mutex<IntegrationStatus>>,
+    coins_per_rub: f32,
 ) -> Result<(), String> {
     let http = reqwest::Client::new();
 
@@ -259,6 +262,10 @@ async fn run_da(
                 avatar_url: String::new(),
                 raw_name: message,
                 amount: (amount * 100.0) as i32, // minor units
+                count: 1,
+                coins: (amount * coins_per_rub.max(0.0) as f64) as i64,
+                gift_id: None,
+                ts_ms: now_ms(),
             })
             .await;
     }
@@ -481,6 +488,10 @@ async fn run_tiktok(
                     avatar_url: v["avatar_url"].as_str().unwrap_or_default().into(),
                     raw_name: v["raw_name"].as_str().unwrap_or_default().into(),
                     amount: v["amount"].as_i64().unwrap_or(0) as i32,
+                    count: v["count"].as_i64().unwrap_or(1).max(1) as i32,
+                    coins: v["coins"].as_i64().unwrap_or(0),
+                    gift_id: v["gift_id"].as_i64(),
+                    ts_ms: now_ms(),
                 };
                 let _ = raw_tx.send(ev).await;
             }

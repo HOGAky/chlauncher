@@ -94,15 +94,30 @@ impl TriggerMapper {
         Some(Self::apply(rule, raw))
     }
 
-    /// Whether one rule matches a raw event.
+    /// Whether one rule matches a raw event. Disabled rules never match;
+    /// `match_mode` picks the comparison — `"contains"` (legacy),
+    /// `"exact"` (case-insensitive whole name) or `"gift_id"` (stable id).
     fn matches(rule: &TriggerRule, raw: &RawStreamEvent) -> bool {
+        if !rule.enabled {
+            return false;
+        }
         let source_ok = rule.source == "any" || rule.source == raw.source;
         let kind_ok = rule.event_kind == "any" || rule.event_kind == raw.event_kind;
-        let name_ok = rule.match_value.is_empty()
-            || raw
-                .raw_name
-                .to_lowercase()
-                .contains(&rule.match_value.to_lowercase());
+        let name_ok = if rule.match_value.is_empty() {
+            true
+        } else {
+            match rule.match_mode.as_str() {
+                "exact" => raw.raw_name.eq_ignore_ascii_case(&rule.match_value),
+                "gift_id" => raw
+                    .gift_id
+                    .map(|id| id.to_string() == rule.match_value)
+                    .unwrap_or(false),
+                _ => raw
+                    .raw_name
+                    .to_lowercase()
+                    .contains(&rule.match_value.to_lowercase()),
+            }
+        };
         let amount_ok = raw.amount >= rule.min_amount;
         source_ok && kind_ok && name_ok && amount_ok
     }
@@ -131,11 +146,10 @@ impl TriggerMapper {
                 match_value: match_value.into(),
                 min_amount: min,
                 action: action.into(),
-                multiplier: 1.0,
+                ..Default::default()
             };
         TriggerProfile {
             game_slug: game_slug.into(),
-            preset: None,
             rules: vec![
                 mk("tiktok", "gift", "Rose", 0, "spawn_enemy"),
                 mk("donationalerts", "donation", "", 100, "spawn_boss"),
@@ -143,6 +157,7 @@ impl TriggerMapper {
                 // Catch-all so unmapped traffic still shows up in-game.
                 mk("any", "any", "", 0, "log_only"),
             ],
+            ..Default::default()
         }
     }
 
@@ -158,7 +173,7 @@ impl TriggerMapper {
                 match_value: match_value.into(),
                 min_amount: min,
                 action: action.into(),
-                multiplier: 1.0,
+                ..Default::default()
             };
         vec![TriggerPreset {
             name: "steal-the-stream".into(),
@@ -196,6 +211,7 @@ impl TriggerMapper {
                 mk("donationalerts", "donation", "", 10000, "yeet"),
                 mk("any", "any", "", 0, "log_only"),
             ],
+            ..Default::default()
         }]
     }
 
@@ -215,11 +231,14 @@ impl TriggerMapper {
         Self::builtin_presets().iter().any(|p| p.name == name)
     }
 
-    /// Applies a preset over a game's profile — records the preset name.
+    /// Applies a preset over a game's profile — records the preset name
+    /// and inherits its overlay style / global cooldown.
     pub fn profile_from_preset(game_slug: &str, preset: &TriggerPreset) -> TriggerProfile {
         TriggerProfile {
             game_slug: game_slug.into(),
             preset: Some(preset.name.clone()),
+            overlay: preset.overlay.clone(),
+            global_cooldown_ms: preset.global_cooldown_ms,
             rules: preset.rules.clone(),
         }
     }
@@ -236,17 +255,15 @@ mod tests {
             TriggerPreset {
                 name: "my-mix".into(),
                 game_slug: Some("mock-game".into()),
-                description: String::new(),
-                builtin: false,
                 rules: vec![TriggerRule {
                     id: "r1".into(),
                     source: "tiktok".into(),
                     event_kind: "gift".into(),
                     match_value: "Lion".into(),
-                    min_amount: 0,
                     action: "spawn_boss".into(),
-                    multiplier: 1.0,
+                    ..Default::default()
                 }],
+                ..Default::default()
             },
         );
         m
@@ -281,6 +298,10 @@ mod tests {
             avatar_url: String::new(),
             amount: 1,
             raw_name: "Whale".into(),
+            count: 1,
+            coins: 0,
+            gift_id: None,
+            ts_ms: 0,
         };
         let ev = TriggerMapper::map(&whale, &profile).unwrap();
         assert_eq!(ev.action_command, "yeet");

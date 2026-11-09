@@ -160,6 +160,14 @@ export const saveTriggerPreset = (preset: TriggerPreset) =>
 export const deleteTriggerPreset = (name: string) =>
   cmd<void>('delete_trigger_preset', { name });
 
+/** Exports a preset (built-in or custom) as portable JSON for sharing. */
+export const exportTriggerPreset = (name: string) =>
+  cmd<string>('export_trigger_preset', { name });
+
+/** Imports an exported preset; renames on collision. Returns the stored preset. */
+export const importTriggerPreset = (jsonStr: string) =>
+  cmd<TriggerPreset>('import_trigger_preset', { jsonStr });
+
 /** Injects a raw event into the mapping pipeline (simulator). */
 export const simulateEvent = (raw: RawStreamEvent) => cmd<void>('simulate_event', { raw });
 

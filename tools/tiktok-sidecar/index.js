@@ -119,7 +119,7 @@ const avatarOf = (d) => {
   return (Array.isArray(p?.url) ? p.url[0] : p?.url) || p?.uri || '';
 };
 
-const ev = (event_kind, d, raw_name, amount = 0) =>
+const ev = (event_kind, d, raw_name, amount = 0, extra = {}) =>
   out({
     type: 'event',
     event_kind,
@@ -127,6 +127,11 @@ const ev = (event_kind, d, raw_name, amount = 0) =>
     avatar_url: avatarOf(d),
     raw_name: String(raw_name ?? ''),
     amount: amount | 0,
+    // Item count (gift repeatCount / like batch size) and the coin value
+    // feed per-unit rules and the earn limit; both default sanely.
+    count: extra.count ?? 1,
+    coins: extra.coins ?? 0,
+    gift_id: extra.gift_id ?? null,
   });
 
 const main = async () => {
@@ -151,13 +156,19 @@ const main = async () => {
   );
 
   conn.on(WebcastEvent.CHAT, (d) => ev('comment', d, d.comment));
-  conn.on(WebcastEvent.LIKE, (d) =>
-    ev('like', d, `${d.likeCount} likes`, Number(d.likeCount) || 0)
-  );
+  conn.on(WebcastEvent.LIKE, (d) => {
+    const likes = Number(d.likeCount) || 0;
+    ev('like', d, `${d.likeCount} likes`, likes, { count: likes });
+  });
   conn.on(WebcastEvent.GIFT, (d) => {
     if (d.giftType === 1 && !d.repeatEnd) return; // streak in progress — wait for final
-    const diamonds = (Number(d.diamondCount) || 0) * (Number(d.repeatCount) || 1);
-    ev('gift', d, d.giftName || `gift#${d.giftId}`, diamonds);
+    const repeats = Number(d.repeatCount) || 1;
+    const diamonds = (Number(d.diamondCount) || 0) * repeats;
+    ev('gift', d, d.giftName || `gift#${d.giftId}`, diamonds, {
+      count: repeats,
+      coins: diamonds,
+      gift_id: d.giftId ?? null,
+    });
   });
   conn.on(WebcastEvent.MEMBER, (d) => ev('join', d, 'joined'));
   conn.on(WebcastEvent.FOLLOW, (d) => ev('follow', d, 'followed'));
