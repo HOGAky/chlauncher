@@ -6,7 +6,8 @@
  * in-game action it triggers (glyph + name).
  */
 
-import type { GiftEntry, TriggerProfile, TriggerRule } from '../types';
+import type { GiftEntry, TriggerProfile } from '../types';
+import { findGift } from './gifts';
 
 /** Emoji glyph per action command — drawn big on canvas next to the name. */
 const ACTION_GLYPHS: Record<string, string> = {
@@ -53,14 +54,12 @@ const loadImage = (src: string) =>
   });
 
 /** Finds the catalog gift a rule's match_value names (exact → substring). */
-function matchGift(rule: TriggerRule, gifts: GiftEntry[]): GiftEntry | null {
-  const m = rule.match_value.trim().toLowerCase();
-  if (!m) return null;
-  return (
-    gifts.find((g) => g.name.toLowerCase() === m) ??
-    gifts.find((g) => g.name.toLowerCase().includes(m)) ??
-    null
-  );
+function matchGift(
+  rule: { match_value: string; event_kind: string },
+  gifts: GiftEntry[]
+): GiftEntry | null {
+  if (rule.event_kind !== 'gift') return null;
+  return findGift(rule.match_value, gifts);
 }
 
 /**
