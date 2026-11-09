@@ -4,7 +4,7 @@
  * Pages: Library, Subscription, Integrations, Trigger mapper, Simulator.
  */
 import React, { useState } from 'react';
-import { Gamepad2, CreditCard, Radio, SlidersHorizontal, FlaskConical, Wrench, FolderOpen, MonitorPlay } from 'lucide-react';
+import { Gamepad2, CreditCard, Radio, SlidersHorizontal, FlaskConical, Wrench, FolderOpen, MonitorPlay, Mic } from 'lucide-react';
 import { cn } from '../lib/utils';
 import Header from '../components/Header';
 import { useApp } from '../App';
@@ -15,9 +15,10 @@ import MapperPage from '../pages/MapperPage';
 import SimulatorPage from '../pages/SimulatorPage';
 import MediaPage from '../pages/MediaPage';
 import OverlaysPage from '../pages/OverlaysPage';
+import TtsPage from '../pages/TtsPage';
 import AdminPage from '../pages/AdminPage';
 
-type Page = 'library' | 'subscription' | 'integrations' | 'mapper' | 'overlays' | 'media' | 'simulator' | 'admin';
+type Page = 'library' | 'subscription' | 'integrations' | 'mapper' | 'overlays' | 'tts' | 'media' | 'simulator' | 'admin';
 
 const NAV: { id: Page; label: string; icon: React.ReactNode }[] = [
   { id: 'library', label: 'Библиотека', icon: <Gamepad2 size={16} /> },
@@ -25,6 +26,7 @@ const NAV: { id: Page; label: string; icon: React.ReactNode }[] = [
   { id: 'integrations', label: 'Интеграции', icon: <Radio size={16} /> },
   { id: 'mapper', label: 'Маппер триггеров', icon: <SlidersHorizontal size={16} /> },
   { id: 'overlays', label: 'Оверлеи', icon: <MonitorPlay size={16} /> },
+  { id: 'tts', label: 'TTS', icon: <Mic size={16} /> },
   { id: 'media', label: 'Медиатека', icon: <FolderOpen size={16} /> },
   { id: 'simulator', label: 'Симулятор', icon: <FlaskConical size={16} /> },
 ];
@@ -80,6 +82,7 @@ export default function MainScreen() {
           {page === 'integrations' && <IntegrationsPage />}
           {page === 'mapper' && <MapperPage />}
           {page === 'overlays' && <OverlaysPage />}
+          {page === 'tts' && <TtsPage />}
           {page === 'media' && <MediaPage />}
           {page === 'simulator' && <SimulatorPage />}
           {page === 'admin' && isAdmin && <AdminPage />}

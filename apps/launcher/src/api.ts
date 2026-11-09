@@ -25,6 +25,7 @@ import type {
   Subscription,
   TriggerPreset,
   TriggerProfile,
+  TtsSettings,
   WindowOptions,
 } from './types';
 
@@ -235,6 +236,22 @@ export const mediaRename = (id: string, name: string) =>
   cmd<void>('media_rename', { id, name });
 
 /** Persists alert settings; the master switch applies live. */
+/** TTS settings block (§6.2). */
+export const getTtsSettings = () => cmd<TtsSettings>('get_tts_settings');
+export const setTtsSettings = (tts: TtsSettings) =>
+  cmd<void>('set_tts_settings', { tts });
+/** Installed SAPI voice names. */
+export const ttsVoices = () => cmd<string[]>('tts_voices');
+/** Speaks a test phrase (bypasses read_* modes, obeys mute). */
+export const ttsSay = (text: string, voice?: string) =>
+  cmd<void>('tts_say', { text, voice: voice ?? null });
+/** Mute/unmute — drains the speech queue instantly (§6.3). */
+export const ttsSetMuted = (muted: boolean) => cmd<void>('tts_set_muted', { muted });
+export const getTtsMuted = () => cmd<boolean>('get_tts_muted');
+/** Fired by the global mute hotkey and the mute button. */
+export const onTtsMuted = (cb: (muted: boolean) => void): Promise<UnlistenFn> =>
+  listen<boolean>('tts-muted', (e) => cb(e.payload));
+
 export const setAlertsSettings = (
   enabled: boolean,
   defaultForGiftsFromCoins: number,

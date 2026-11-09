@@ -313,6 +313,22 @@ OBS, preview and download always agree. Saving the profile emits a
 `preset` frame and every open Browser Source re-renders without reload;
 the PNG export now honors the profile's accent/scale too.
 
+The **TTS service** (`src-tauri/src/tts.rs` + «TTS» page, spec §6)
+speaks chat through Windows SAPI voices — spawned via PowerShell
+`-EncodedCommand` so viewer text never reaches a command line.
+`read_comments` modes (`off`/`all`/`prefix`/`gifters` with per-viewer
+session coins), `read_gifts` templates, `{user} пишет:` prefix,
+blocklist words+regexes, link/emoji stripping, global + per-user
+cooldowns and a drop-oldest `queue_max` all live behind the
+`TtsEngine` trait so a cloud engine can replace SAPI later. Rule-level
+`tts:` voice-overs fire independently of `read_*` modes on their own
+queue — never stuck behind a 4-second alert. Output goes to the audio
+device or to `/overlay/tts` (`output = "overlay"`) where the Browser
+Source plays `/tts/<id>.wav` into the OBS mix. `Ctrl+Shift+M`
+(configurable, `tauri-plugin-global-shortcut`) or the page's mute
+button kills the running synthesis and drains the queue instantly —
+the overlay shows a red MUTED badge.
+
 The **media library** (`src-tauri/src/media.rs` + «Медиатека» page,
 spec §4) stores alert assets under `<app-data>/media/` — import via the
 native picker (`media_import`, magic-byte sniffed:

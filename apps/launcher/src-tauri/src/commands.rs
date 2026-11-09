@@ -52,6 +52,8 @@ pub struct AppState {
     pub scheduler: Arc<crate::scheduler::ActionScheduler>,
     /// Broadcast of overlay frames (alerts/spinner/progress/takeover).
     pub overlay_tx: tokio::sync::broadcast::Sender<OverlayFrame>,
+    /// Chat-to-speech service (§6) — queue, filters, SAPI engine, mute.
+    pub tts: Arc<crate::tts::Tts>,
     /// Last seen slug→version snapshot for catalog-change detection (§6.3).
     pub catalog_seen: Arc<Mutex<Option<std::collections::BTreeMap<String, String>>>>,
     /// Actual OS-assigned overlay port (None until bound / on bind failure).
@@ -972,6 +974,74 @@ pub async fn set_alerts_settings(
     drop(s);
     state.scheduler.set_alerts_enabled(enabled);
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Chat-to-speech (§6)
+// ---------------------------------------------------------------------------
+
+/// Current TTS settings (§6.2).
+#[tauri::command]
+pub async fn get_tts_settings(
+    state: State<'_, AppState>,
+) -> Result<crate::settings::TtsSettings, String> {
+    Ok(state.settings.lock().await.data.tts.clone())
+}
+
+/// Persists the whole `TtsSettings` block; takes effect from the next
+/// dequeued phrase (the queue re-reads settings per job).
+#[tauri::command]
+pub async fn set_tts_settings(
+    tts: crate::settings::TtsSettings,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut s = state.settings.lock().await;
+    s.data.tts = tts;
+    let _ = s.save();
+    Ok(())
+}
+
+/// Installed SAPI voices — cached by the engine after first lookup.
+#[tauri::command]
+pub async fn tts_voices(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let engine = state.tts.engine();
+    tokio::task::spawn_blocking(move || engine.voices())
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Test phrase from the TTS page — bypasses `read_*` modes and
+/// cooldowns, still obeys mute/filters.
+#[tauri::command]
+pub async fn tts_say(
+    text: String,
+    voice: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    if text.trim().is_empty() {
+        return Err("пустая фраза".into());
+    }
+    state.tts.speak_rule("streamer".into(), text, voice);
+    Ok(())
+}
+
+/// Mute/unmute (§6.3) — muting kills the running synthesis and drains
+/// the queue instantly. Also emits `tts-muted` for the UI.
+#[tauri::command]
+pub async fn tts_set_muted(
+    muted: bool,
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    state.tts.set_muted(muted);
+    let _ = app.emit("tts-muted", muted);
+    Ok(())
+}
+
+/// Current mute flag — the hotkey path flips it without a command.
+#[tauri::command]
+pub async fn get_tts_muted(state: State<'_, AppState>) -> Result<bool, String> {
+    Ok(state.tts.is_muted())
 }
 
 // ---------------------------------------------------------------------------

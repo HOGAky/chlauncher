@@ -518,8 +518,11 @@ pub enum OverlayFrame {
     Tts {
         id: String,
         text: String,
-        /// `"start"` | `"end"`.
+        /// `"start"` | `"end"` | `"muted"`.
         state: String,
+        /// `"/tts/<id>.wav"` for `output = "overlay"` — the page plays it.
+        #[serde(default)]
+        audio_url: Option<String>,
     },
     /// Accumulator progress (`every_n` rules) for `/overlay/progress`.
     Progress { items: Vec<ProgressItem> },

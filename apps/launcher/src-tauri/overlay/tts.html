@@ -19,15 +19,34 @@
   #badge .icon { font-size: 11px; text-transform: uppercase; letter-spacing: .1em;
                  color: #a78bfa; margin-bottom: 4px; }
   #badge .text { font-size: 16px; font-weight: 500; }
+  #muted {
+    position: absolute; top: 12px; right: 12px; display: none;
+    background: rgba(200,30,30,.9); border-radius: 6px;
+    padding: 3px 10px; font-size: 11px; font-weight: 700; letter-spacing: .1em;
+  }
 </style>
 </head>
 <body>
+<div id="muted">MUTED</div>
 <div id="badge"><div class="icon">tts</div><div class="text"></div></div>
 <script>
 const token = new URLSearchParams(location.search).get('t') || '';
 const badge = document.getElementById('badge');
+const muted = document.getElementById('muted');
 const txt = badge.querySelector('.text');
 const shown = {};
+let player = null;
+
+function playAudio(url) {
+  if (!url) return;
+  if (player) { try { player.pause(); } catch (e) {} }
+  player = new Audio(url + (url.includes('?') ? '&' : '?') + 't=' + encodeURIComponent(token));
+  // Badge stays until playback finishes — subtitles track the speech.
+  player.onended = () => {
+    if (!Object.keys(shown).length) badge.style.display = 'none';
+  };
+  player.play().catch(() => {});
+}
 
 function connect() {
   const ws = new WebSocket(`ws://${location.host}/ws?t=${encodeURIComponent(token)}`);
@@ -36,13 +55,25 @@ function connect() {
     try {
       const f = JSON.parse(m.data);
       if (f.type !== 'tts') return;
+      if (f.state === 'muted') {
+        muted.style.display = 'block';
+        badge.style.display = 'none';
+        if (player) { try { player.pause(); } catch (e) {} }
+        for (const k of Object.keys(shown)) delete shown[k];
+        return;
+      }
+      muted.style.display = 'none';
       if (f.state === 'start') {
         txt.textContent = f.text || '';
         badge.style.display = 'block';
         shown[f.id] = true;
       } else if (f.state === 'end') {
         delete shown[f.id];
-        if (!Object.keys(shown).length) badge.style.display = 'none';
+        if (f.audio_url) {
+          playAudio(f.audio_url);
+        } else if (!Object.keys(shown).length) {
+          badge.style.display = 'none';
+        }
       }
     } catch (e) {}
   };

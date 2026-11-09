@@ -61,3 +61,6 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # In-app self-updates (signed artifacts verified against plugins.updater.pubkey).
 tauri-plugin-updater = "2"
+base64 = "0.23.1"
+tauri-plugin-global-shortcut = "2.4.1"
+regex = "1.13.1"

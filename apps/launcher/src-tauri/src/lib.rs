@@ -30,6 +30,7 @@ pub mod overlay;
 pub mod process;
 pub mod scheduler;
 pub mod settings;
+pub mod tts;
 pub mod types;
 
 use std::sync::Arc;
@@ -56,6 +57,21 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        // Global TTS-mute hotkey (§6.2 `mute_hotkey`) — flips the flag,
+        // drains the speech queue and notifies the UI.
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        if let Some(state) = app.try_state::<AppState>() {
+                            let muted = !state.tts.is_muted();
+                            state.tts.set_muted(muted);
+                            let _ = app.emit("tts-muted", muted);
+                        }
+                    }
+                })
+                .build(),
+        )
         .setup(|app| {
             // --- filesystem roots -------------------------------------
             let data_dir = app.path().app_data_dir().unwrap_or_else(|_| {
@@ -107,6 +123,15 @@ pub fn run() {
             // overlay server relays these to /ws subscribers (§5.3).
             // Created before the server so it can relay from day one.
             let (overlay_tx, _) = broadcast::channel::<OverlayFrame>(256);
+
+            // TTS service (§6) — created before the overlay server so
+            // its WavStore can serve `/tts/<id>.wav`.
+            let tts = tts::Tts::new(settings.clone(), overlay_tx.clone(), data_dir.join("tts"));
+            {
+                let t = tts.clone();
+                tauri::async_runtime::spawn(async move { t.run().await });
+            }
+
             let (overlay_token, overlay_port_cfg) = settings
                 .try_lock()
                 .map(|s| (s.data.overlay_token.clone(), s.data.overlay_port))
@@ -118,6 +143,7 @@ pub fn run() {
                 overlay_port_cfg,
                 media::media_dir(&data_dir),
                 settings.clone(),
+                tts.wavs.clone(),
             )) {
                 Ok((port, fell_back)) => {
                     if fell_back {
@@ -169,6 +195,7 @@ pub fn run() {
             let forwarder = forwarder::Forwarder::start(&hub, settings.clone(), api.clone());
 
             let scheduler = Arc::new(ActionScheduler::new(hub.clone(), overlay_tx.clone()));
+            scheduler.set_tts(tts.clone());
             scheduler.set_alerts_enabled(
                 settings
                     .try_lock()
@@ -206,6 +233,7 @@ pub fn run() {
                 active_game_slug: active_game_slug.clone(),
                 scheduler: scheduler.clone(),
                 overlay_tx: overlay_tx.clone(),
+                tts: tts.clone(),
                 catalog_seen: Arc::new(Mutex::new(None)),
                 overlay_port: Mutex::new(overlay_port),
                 service_error: Mutex::new(service_error),
@@ -218,6 +246,7 @@ pub fn run() {
                     settings.clone(),
                     scheduler.clone(),
                     active_game_slug.clone(),
+                    tts.clone(),
                 ));
             }
 
@@ -246,6 +275,23 @@ pub fn run() {
             tauri::async_runtime::spawn(catalog_poller_loop(app.handle().clone()));
 
             app.manage(state);
+
+            // Register the configured TTS-mute hotkey (§6.2). The
+            // configured string is `Ctrl+Shift+M`-style; on parse failure
+            // we log and continue — hotkey stays unbound.
+            if let Some(state) = app.try_state::<AppState>() {
+                let hotkey = {
+                    let s = state.settings.try_lock();
+                    s.map(|s| s.data.tts.mute_hotkey.clone())
+                        .unwrap_or_default()
+                };
+                if !hotkey.is_empty() {
+                    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+                    if let Err(e) = app.global_shortcut().register(hotkey.as_str()) {
+                        tracing::warn!(hotkey, error = %e, "tts mute hotkey not registered");
+                    }
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -292,6 +338,12 @@ pub fn run() {
             commands::rotate_overlay_token,
             commands::get_alerts_settings,
             commands::set_alerts_settings,
+            commands::get_tts_settings,
+            commands::set_tts_settings,
+            commands::tts_voices,
+            commands::tts_say,
+            commands::tts_set_muted,
+            commands::get_tts_muted,
             commands::media_list,
             commands::media_import,
             commands::media_delete,
@@ -407,8 +459,12 @@ async fn mapper_loop(
     settings: Arc<Mutex<SettingsStore>>,
     scheduler: Arc<ActionScheduler>,
     active_slug: Arc<Mutex<Option<String>>>,
+    tts: Arc<tts::Tts>,
 ) {
     while let Some(raw) = raw_rx.recv().await {
+        // Chat-to-speech sees every event — gifter tracking, comment and
+        // gift reading per `read_*` modes (§6.2).
+        tts.note_event(&raw).await;
         let slug = active_slug
             .lock()
             .await

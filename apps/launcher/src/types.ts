@@ -109,6 +109,31 @@ export interface PresetRow {
   image?: string;
 }
 
+/** Chat-to-speech configuration (parity spec §6.2). */
+export interface TtsSettings {
+  enabled: boolean;
+  voice: string;
+  rate: number;
+  volume: number;
+  /** "off" | "all" | "prefix" | "gifters". */
+  read_comments: string;
+  comment_prefix: string;
+  gifters_min_coins: number;
+  read_gifts: boolean;
+  gift_template: string;
+  read_nickname: boolean;
+  max_chars: number;
+  cooldown_ms: number;
+  user_cooldown_ms: number;
+  queue_max: number;
+  blocklist: string[];
+  strip_links: boolean;
+  strip_emoji: boolean;
+  mute_hotkey: string;
+  /** "device" | "overlay". */
+  output: string;
+}
+
 /** A named wheel of fortune — rules reference it by name. */
 export interface SpinnerPool {
   name: string;

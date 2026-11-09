@@ -67,6 +67,8 @@ struct ActionJob {
     /// `delay_ms` still pending — absolute deadline.
     not_before: Option<Instant>,
     alert_id: String,
+    /// Rule voice-over — spoken independently of `read_*` modes (§6.2).
+    tts: Option<TtsRuleSpec>,
 }
 
 /// Max-heap wrapper: higher `priority` first, FIFO (lower seq) inside a
@@ -182,6 +184,9 @@ pub struct ActionScheduler {
     overlay_tx: broadcast::Sender<OverlayFrame>,
     /// When false, alert frames are skipped (actions still dispatch).
     alerts_enabled: std::sync::atomic::AtomicBool,
+    /// Rule voice-overs go here — its own queue, so phrases never wait
+    /// behind a 4-second alert (§6.1). Set via `set_tts`.
+    tts: Mutex<Option<Arc<crate::tts::Tts>>>,
 }
 
 fn next_seq(st: &mut SchedState) -> u64 {
@@ -276,7 +281,13 @@ impl ActionScheduler {
             hub,
             overlay_tx,
             alerts_enabled: std::sync::atomic::AtomicBool::new(true),
+            tts: Mutex::new(None),
         }
+    }
+
+    /// Wires the TTS service for rule voice-overs (§6.2).
+    pub fn set_tts(&self, tts: Arc<crate::tts::Tts>) {
+        *self.tts.lock().unwrap_or_else(|p| p.into_inner()) = Some(tts);
     }
 
     /// Master alert switch (§3.1) — mirrored from `AlertSettings`.
@@ -496,6 +507,7 @@ impl ActionScheduler {
                     not_before: (rule.delay_ms > 0)
                         .then(|| now + Duration::from_millis(rule.delay_ms)),
                     alert_id: uuid::Uuid::new_v4().to_string(),
+                    tts: rule.tts.clone(),
                 };
                 // Usage meter (§8.4): the event's coins count once — when
                 // its first job enqueues (per_unit ×N bills once).
@@ -634,6 +646,20 @@ impl ActionScheduler {
         // The action fires exactly when its alert appears (§2.4) — for
         // jobs without alerts, that's immediately.
         self.hub.dispatch(job.event.clone());
+
+        // Rule TTS — independent queue, enqueued right at dispatch so it
+        // doesn't wait for the alert duration (§6.1).
+        if let Some(spec) = &job.tts {
+            if let Some(tts) = self.tts.lock().unwrap_or_else(|p| p.into_inner()).clone() {
+                let tpl = if spec.template.is_empty() {
+                    "{user} — {label}"
+                } else {
+                    &spec.template
+                };
+                let text = render_template(tpl, &job.event.action_command, &job.label, &job.raw);
+                tts.speak_rule(job.raw.user.clone(), text, spec.voice.clone());
+            }
+        }
 
         // Alert on screen — sequential; a paid interrupt cuts it short.
         if self

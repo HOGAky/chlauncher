@@ -80,6 +80,8 @@ struct OverlayState {
     /// Last frame per channel — replayed to late-joining subscribers so a
     /// newly opened preset/progress page isn't blank until the next event.
     last_frames: Arc<Mutex<HashMap<&'static str, OverlayFrame>>>,
+    /// Synthesized TTS WAVs for `output = "overlay"` (`/tts/<id>.wav`, §6).
+    wavs: crate::tts::WavStore,
 }
 
 /// Query-param extractor shared by all guarded routes.
@@ -239,6 +241,7 @@ pub async fn start_overlay_server(
     port_cfg: u16,
     media_dir: PathBuf,
     settings: Arc<tokio::sync::Mutex<SettingsStore>>,
+    wavs: crate::tts::WavStore,
 ) -> std::io::Result<(u16, bool)> {
     let state = OverlayState {
         hub,
@@ -248,6 +251,7 @@ pub async fn start_overlay_server(
         media_dir,
         settings,
         last_frames: Arc::new(Mutex::new(HashMap::new())),
+        wavs,
     };
 
     // Recorder: remember the last frame per channel for late joiners.
@@ -279,6 +283,7 @@ pub async fn start_overlay_server(
         .route("/overlay/progress", get(page_route(PROGRESS_HTML)))
         .route("/gifts/:file", get(serve_gift))
         .route("/media/:id", get(serve_media))
+        .route("/tts/:file", get(serve_tts))
         .route("/health", get(|| async { "ok" }))
         .route("/ws", get(ws_upgrade))
         .with_state(state);
@@ -384,6 +389,26 @@ async fn serve_media(
     match tower_http::services::ServeFile::new(&path).call(req).await {
         Ok(res) => res.into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// `/tts/<id>.wav` — synthesized phrase for `output = "overlay"` (§6).
+/// The id is a uuid → `WavStore` lookup; nothing filesystem-derived.
+async fn serve_tts(
+    Path(file): Path<String>,
+    Query(q): Query<HashMap<String, String>>,
+    State(st): State<OverlayState>,
+) -> Response {
+    if q.get("t").map(|t| t == st.token.as_str()) != Some(true) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let id = file.strip_suffix(".wav").unwrap_or("");
+    if id.len() != 36 || !id.chars().all(|c| c.is_ascii_hexdigit() || c == '-') {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    match st.wavs.get(id) {
+        Some(wav) => ([("content-type", "audio/wav")], wav).into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
     }
 }
 
