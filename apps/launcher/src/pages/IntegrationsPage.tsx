@@ -183,12 +183,12 @@ export default function IntegrationsPage() {
         </CardContent>
       </Card>
 
-      {/* Roblox / cloud relay forward */}
+      {/* Cloud servers — Roblox / Minecraft via relay */}
       <Card>
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
-              <Cloud size={18} /> Roblox (облачный релей)
+              <Cloud size={18} /> Облачные серверы (Roblox · Minecraft)
             </CardTitle>
             {fwdStatus?.last_error ? (
               <Badge variant="destructive">{fwdStatus.last_error}</Badge>
@@ -201,8 +201,9 @@ export default function IntegrationsPage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <p className="text-xs text-muted-foreground">
-            События уходят HTTP-POST'ом на облачный релей — Roblox-игра забирает
-            их поллингом. Ключ стримера = пропуск в руму (вводится в игре).
+            События уходят HTTP-POST'ом на облачный релей — внешние серверы
+            забирают их поллингом по ключу. Работает с TikTok и DonationAlerts
+            одинаково. Ключ стримера = пропуск в руму.
           </p>
           <div className="flex gap-2 items-center">
             <code className="flex-1 text-xs bg-secondary/60 rounded-md px-3 py-2 select-all truncate">
@@ -249,6 +250,33 @@ export default function IntegrationsPage() {
             </p>
           )}
           {fwdErr && <p className="text-[11px] text-destructive">{fwdErr}</p>}
+
+          {fwdEnabled && streamKey && (
+            <div className="rounded-md border border-border/60 bg-secondary/30 p-3 flex flex-col gap-2">
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                Как подключить сервер
+              </span>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-medium">Roblox</span>
+                <p className="text-[11px] text-muted-foreground">
+                  Введите ключ стримера в игре — сервер румы сам провалидирует
+                  его через релей и заберёт события.
+                </p>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs font-medium">Minecraft</span>
+                <p className="text-[11px] text-muted-foreground">
+                  Запустите RCON-мост рядом с сервером (enable-rcon=true в
+                  server.properties):
+                </p>
+                <code className="text-[10px] bg-secondary/60 rounded px-2 py-1.5 select-all break-all">
+                  node mc-bridge --relay {fwdUrl || '<url-релея>'} --key{' '}
+                  {streamerMode ? maskSecret(streamKey) : streamKey} --rcon-pass
+                  {' <пароль>'} --player {'<ваш-ник>'}
+                </code>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

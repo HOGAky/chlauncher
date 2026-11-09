@@ -1,0 +1,13 @@
+{
+  "name": "mc-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "chlauncher → Minecraft bridge: polls the stream-event relay and sends RCON commands",
+  "bin": {
+    "mc-bridge": "./index.js"
+  },
+  "engines": {
+    "node": ">=18.17"
+  }
+}
