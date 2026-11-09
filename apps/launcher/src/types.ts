@@ -57,6 +57,8 @@ export interface TriggerProfile {
 /** A named, shareable set of trigger rules — the streamer's preset. */
 export interface TriggerPreset {
   name: string;
+  /** Game this preset was built for (absent = universal, offered everywhere). */
+  game_slug?: string | null;
   description?: string;
   /** Built-ins ship with the launcher and can't be overwritten/deleted. */
   builtin?: boolean;

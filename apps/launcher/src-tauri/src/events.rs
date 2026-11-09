@@ -162,6 +162,7 @@ impl TriggerMapper {
             };
         vec![TriggerPreset {
             name: "steal-the-stream".into(),
+            game_slug: None,
             description: "Обстрел подарками: дорогие — хаос, бесплатные действия — помощь".into(),
             builtin: true,
             rules: vec![
@@ -234,6 +235,7 @@ mod tests {
             "my-mix".into(),
             TriggerPreset {
                 name: "my-mix".into(),
+                game_slug: Some("mock-game".into()),
                 description: String::new(),
                 builtin: false,
                 rules: vec![TriggerRule {

@@ -76,11 +76,16 @@ pub struct TriggerProfile {
 
 /// A named, shareable rule set — the streamer's preset. Presets are the
 /// reusable unit: build one gift/event mapping once, apply it to any game's
-/// profile in one click.
+/// profile in one click. A preset is usually built *for* a game
+/// (`game_slug` = its action vocabulary); `None` marks universal presets
+/// offered for every game.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TriggerPreset {
     /// Unique key, e.g. `steal-the-stream` or the streamer's own name.
     pub name: String,
+    /// Game this preset was built for; `None` = universal.
+    #[serde(default)]
+    pub game_slug: Option<String>,
     /// One-line description shown in the preset picker.
     #[serde(default)]
     pub description: String,

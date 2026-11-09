@@ -558,6 +558,29 @@ pub async fn get_triggers(
     Ok(profile)
 }
 
+/// Which slug's profile currently maps live events (normally the last
+/// launched game). `None` → the mapper falls back to "default".
+#[tauri::command]
+pub async fn get_active_trigger_profile(
+    state: State<'_, AppState>,
+) -> Result<Option<String>, String> {
+    Ok(state.active_game_slug.lock().await.clone())
+}
+
+/// Manually selects which profile maps live events — the streamer's
+/// "activate this preset for the stream" control (cloud-only streams set
+/// it without launching a local game). `play_game` re-points routing at
+/// the launched game's profile.
+#[tauri::command]
+pub async fn set_active_trigger_profile(
+    slug: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let slug = slug.trim().to_string();
+    *state.active_game_slug.lock().await = if slug.is_empty() { None } else { Some(slug) };
+    Ok(())
+}
+
 /// Persists an edited trigger profile.
 #[tauri::command]
 pub async fn save_triggers(

@@ -27,6 +27,15 @@ const ACTIONS = [
   'speed_boost', 'checkpoint', 'coin_rain', 'fireworks',
 ];
 
+/** Per-game action vocabularies — the command list a game understands
+ *  (StE's per-game trigger library). Unknown slugs get the full list;
+ *  free text is always allowed anyway. */
+const GAME_ACTIONS: Record<string, string[]> = {
+  'mock-game': ['spawn_enemy', 'spawn_boss', 'heal_player', 'log_only'],
+};
+const actionsFor = (slug: string) => GAME_ACTIONS[slug] ?? ACTIONS;
+const DEFAULT_SLUG = 'default'; // profile used when no game is active (cloud servers)
+
 /** Creates a fresh editable rule row. */
 function newRule(): TriggerRule {
   return {
@@ -41,12 +50,29 @@ function newRule(): TriggerRule {
 }
 
 export default function MapperPage() {
-  const [slug, setSlug] = useState('mock-game');
+  const [slug, setSlug] = useState(DEFAULT_SLUG);
+  const [gameSlugs, setGameSlugs] = useState<string[]>([DEFAULT_SLUG]);
+  const [activeSlug, setActiveSlug] = useState<string | null>(null);
   const [profile, setProfile] = useState<TriggerProfile | null>(null);
   const [presets, setPresets] = useState<TriggerPreset[]>([]);
   const [presetSel, setPresetSel] = useState('');
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Game selector: catalog games + the "default" routing profile.
+  // Initial selection = the profile currently mapping live events.
+  useEffect(() => {
+    api.listGames().then((r) => {
+      const slugs = [DEFAULT_SLUG, ...r.games.map((g) => g.slug)];
+      setGameSlugs((old) => [...new Set([...old, ...slugs])]);
+    }).catch(() => {});
+    api.getActiveTriggerProfile().then((s) => {
+      if (s) {
+        setActiveSlug(s);
+        setSlug(s);
+      }
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     api.getTriggers(slug).then(setProfile).catch((e) => setError(humanError(e)));
@@ -96,14 +122,19 @@ export default function MapperPage() {
       .catch((e) => setError(humanError(e)));
   };
 
-  /** Saves the current rules as a named streamer preset. */
+  /** Saves the current rules as a named preset tagged for this game
+   *  ("default" → universal preset, offered for every game). */
   const saveAsPreset = () => {
     if (!profile) return;
-    const name = window.prompt('Имя пресета (например, «мой-осадок»):')?.trim();
+    const name = window.prompt(`Имя пресета для «${slug}»:`)?.trim();
     if (!name) return;
     setError(null);
     api
-      .saveTriggerPreset({ name, rules: profile.rules })
+      .saveTriggerPreset({
+        name,
+        game_slug: slug === DEFAULT_SLUG ? null : slug,
+        rules: profile.rules,
+      })
       .then(() => {
         setPresetSel(name);
         reloadPresets();
@@ -160,9 +191,31 @@ export default function MapperPage() {
             className="h-8 rounded-md border border-input bg-secondary/40 px-2 text-sm"
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
+            title="Игра, чей профиль редактируется — пресеты фильтруются под неё"
           >
-            <option value="mock-game">mock-game</option>
+            {gameSlugs.map((s) => (
+              <option key={s} value={s}>
+                {s === DEFAULT_SLUG ? 'default · облако/без игры' : s}
+              </option>
+            ))}
           </select>
+          {activeSlug === slug ? (
+            <Badge variant="success">маппит события</Badge>
+          ) : (
+            <Button
+              size="sm"
+              variant="ghost"
+              title="Сделать этот профиль активным — живые события будут мапиться по нему"
+              onClick={() =>
+                api
+                  .setActiveTriggerProfile(slug)
+                  .then(() => setActiveSlug(slug))
+                  .catch((e) => setError(humanError(e)))
+              }
+            >
+              ● сделать активным
+            </Button>
+          )}
           <Button size="sm" variant="secondary" onClick={addRule}>
             <Plus size={14} /> Правило
           </Button>
@@ -180,12 +233,15 @@ export default function MapperPage() {
           onChange={(e) => setPresetSel(e.target.value)}
         >
           <option value="">— выбрать —</option>
-          {presets.map((p) => (
-            <option key={p.name} value={p.name}>
-              {p.name}
-              {p.builtin ? ' (встроенный)' : ''}
-            </option>
-          ))}
+          {presets
+            .filter((p) => p.game_slug == null || p.game_slug === slug)
+            .map((p) => (
+              <option key={p.name} value={p.name}>
+                {p.name}
+                {p.builtin ? ' (встроенный)' : ''}
+                {p.game_slug && p.game_slug !== slug ? ` → ${p.game_slug}` : ''}
+              </option>
+            ))}
         </select>
         <Button
           size="sm"
@@ -300,7 +356,7 @@ export default function MapperPage() {
                 onChange={(e) => patchRule(r.id, { action: e.target.value })}
               />
               <datalist id="action-commands">
-                {ACTIONS.map((a) => (
+                {actionsFor(slug).map((a) => (
                   <option key={a} value={a} />
                 ))}
               </datalist>

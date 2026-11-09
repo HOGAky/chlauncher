@@ -133,6 +133,14 @@ export const getTriggers = (gameSlug: string) =>
 export const saveTriggers = (profile: TriggerProfile) =>
   cmd<void>('save_triggers', { profile });
 
+/** Which slug's profile currently maps live events (null = "default"). */
+export const getActiveTriggerProfile = () =>
+  cmd<string | null>('get_active_trigger_profile');
+
+/** Selects which profile maps live events — the "activate for stream" control. */
+export const setActiveTriggerProfile = (slug: string) =>
+  cmd<void>('set_active_trigger_profile', { slug });
+
 /** Applies a named preset (e.g. 'steal-the-stream') to a game's profile. */
 export const applyTriggerTemplate = (gameSlug: string, template: string) =>
   cmd<TriggerProfile>('apply_trigger_template', { gameSlug, template });

@@ -194,6 +194,8 @@ pub fn run() {
             commands::da_disconnect,
             commands::get_triggers,
             commands::save_triggers,
+            commands::get_active_trigger_profile,
+            commands::set_active_trigger_profile,
             commands::apply_trigger_template,
             commands::apply_trigger_preset,
             commands::list_trigger_presets,
