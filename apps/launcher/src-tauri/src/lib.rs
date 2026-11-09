@@ -331,6 +331,8 @@ pub fn run() {
             commands::get_scheduler_status,
             commands::scheduler_reset_counters,
             commands::list_spinners,
+            commands::save_spinner,
+            commands::delete_spinner,
             commands::test_rule,
             commands::set_streamer_mode,
             commands::set_chroma_key,

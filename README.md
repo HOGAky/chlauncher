@@ -313,6 +313,16 @@ OBS, preview and download always agree. Saving the profile emits a
 `preset` frame and every open Browser Source re-renders without reload;
 the PNG export now honors the profile's accent/scale too.
 
+The **Gift Spinner** («Спиннер» page, spec §7) edits named weighted
+wheel pools: segments carry a game action + label + weight + color, the
+editor shows live percentages and a canvas preview, and deletion is
+refused while rules reference the pool. A rule's 🎡 field swaps its
+direct action for a spin: the scheduler picks `result_index`
+deterministically (seedable RNG — `spin_dispatches_segment_action` e2e
+covers it), `/overlay/spinner` only animates the wheel and lands
+exactly on the picked segment, then the segment's own action dispatches
+after `spin_ms`.
+
 The **TTS service** (`src-tauri/src/tts.rs` + «TTS» page, spec §6)
 speaks chat through Windows SAPI voices — spawned via PowerShell
 `-EncodedCommand` so viewer text never reaches a command line.

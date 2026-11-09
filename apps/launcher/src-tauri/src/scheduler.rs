@@ -1181,4 +1181,81 @@ mod tests {
             .count();
         assert_eq!(takeovers, 2, "both interrupts should take over");
     }
+
+    // ---- gift spinner e2e (§7) -------------------------------------------
+
+    /// Rule → spinner frame → wheel lands → the *segment's* action (not
+    /// the rule's) is what actually dispatches to the game.
+    #[tokio::test]
+    async fn spin_dispatches_segment_action_after_spin_ms() {
+        let (hub_, mut rx, otx, mut orx) = hub();
+        let sched = Arc::new(ActionScheduler::with_seed(hub_.clone(), otx, 42));
+        let driver = sched.clone();
+        let handle = tokio::spawn(async move { driver.run().await });
+
+        let mut r = rule("rose", "Rose");
+        r.spinner = Some("chaos".into());
+        let p = profile(vec![r]);
+        let mut sp = HashMap::new();
+        sp.insert(
+            "chaos".to_string(),
+            SpinnerPool {
+                name: "chaos".into(),
+                spin_ms: 60, // fast for the test
+                segments: vec![
+                    SpinnerSegment {
+                        label: "ничего".into(),
+                        action: "log_only".into(),
+                        weight: 1,
+                        color: "#333".into(),
+                        alert: None,
+                    },
+                    SpinnerSegment {
+                        label: "босс".into(),
+                        action: "spawn_boss".into(),
+                        weight: 1,
+                        color: "#f00".into(),
+                        alert: None,
+                    },
+                ],
+            },
+        );
+        let al = alerts();
+
+        sched.ingest(&input(&p, raw("gift", "Rose", 1, 1, 1), &sp, &al));
+
+        // Spinner frame goes out immediately with the picked index.
+        let frames = collect_frames(&mut orx, 200).await;
+        handle.abort();
+        let spin = frames
+            .iter()
+            .find_map(|f| match f {
+                OverlayFrame::Spinner {
+                    pool,
+                    result_index,
+                    segments,
+                    ..
+                } => Some((pool.clone(), *result_index, segments.len())),
+                _ => None,
+            })
+            .expect("spinner frame");
+        assert_eq!(spin.0, "chaos");
+        assert_eq!(spin.2, 2);
+
+        // The dispatched game event carries the segment's action.
+        let ev = rx.try_recv().expect("dispatched event");
+        let expected = ["log_only", "spawn_boss"];
+        assert!(
+            expected.contains(&ev.action_command.as_str()),
+            "segment action dispatched: {}",
+            ev.action_command
+        );
+        // And it matches the index the overlay was told to land on.
+        let want = if spin.1 == 0 {
+            "log_only"
+        } else {
+            "spawn_boss"
+        };
+        assert_eq!(ev.action_command, want);
+    }
 }

@@ -885,6 +885,56 @@ pub async fn list_spinners(state: State<'_, AppState>) -> Result<Vec<SpinnerPool
         .collect())
 }
 
+/// Creates/updates a spinner pool (§7). Validates name, at least one
+/// segment and non-empty actions.
+#[tauri::command]
+pub async fn save_spinner(pool: SpinnerPool, state: State<'_, AppState>) -> Result<(), String> {
+    let name = pool.name.trim();
+    if name.is_empty() || name.len() > 64 {
+        return Err("имя пула: 1–64 символа".into());
+    }
+    if pool.segments.is_empty() {
+        return Err("у колеса должен быть хотя бы один сегмент".into());
+    }
+    if pool.segments.len() > 64 {
+        return Err("максимум 64 сегмента".into());
+    }
+    if pool.segments.iter().any(|s| s.action.trim().is_empty()) {
+        return Err("у каждого сегмента должно быть действие".into());
+    }
+    let mut s = state.settings.lock().await;
+    s.data.spinners.insert(name.to_string(), pool);
+    let _ = s.save();
+    Ok(())
+}
+
+/// Deletes a spinner pool — refused while rules still reference it
+/// (same contract as media deletion).
+#[tauri::command]
+pub async fn delete_spinner(name: String, state: State<'_, AppState>) -> Result<(), String> {
+    let mut s = state.settings.lock().await;
+    let users: Vec<String> = s
+        .data
+        .trigger_profiles
+        .iter()
+        .flat_map(|(slug, p)| {
+            let slug = slug.clone();
+            let name = name.clone();
+            p.rules
+                .iter()
+                .filter(move |r| r.spinner.as_deref() == Some(name.as_str()))
+                .map(move |r| format!("{slug}: {}", r.display_label()))
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    if !users.is_empty() {
+        return Err(format!("пул используется в правилах: {}", users.join(", ")));
+    }
+    s.data.spinners.remove(&name);
+    let _ = s.save();
+    Ok(())
+}
+
 /// Runs one rule through the whole pipeline bypassing cooldowns and the
 /// earn limit — the ▶ test button (§2.5). Uses a synthetic event shaped
 /// after the rule so `match_all` picks exactly it.

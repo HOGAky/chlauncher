@@ -197,6 +197,11 @@ export const testRule = (gameSlug: string, ruleId: string) =>
 
 /** Spinner pools for the 🎡 pool picker in the mapper. */
 export const listSpinners = () => cmd<SpinnerPool[]>('list_spinners');
+export const saveSpinner = (pool: SpinnerPool) =>
+  cmd<void>('save_spinner', { pool });
+/** Refused while rules reference the pool (error lists them). */
+export const deleteSpinner = (name: string) =>
+  cmd<void>('delete_spinner', { name });
 
 // ---- settings --------------------------------------------------------------
 
