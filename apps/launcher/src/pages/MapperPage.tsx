@@ -5,9 +5,29 @@
  * commands. Profiles persist per-game as JSON in launcher settings.
  */
 import React, { useEffect, useState } from 'react';
-import { ImageDown, Plus, Save, Trash2, Wand2 } from 'lucide-react';
+import {
+  ChevronDown,
+  ChevronUp,
+  ImageDown,
+  Pause,
+  Play,
+  Plus,
+  Save,
+  Trash2,
+  Upload,
+  Download,
+  Wand2,
+  Zap,
+} from 'lucide-react';
 import * as api from '../api';
-import type { GiftEntry, TriggerPreset, TriggerProfile, TriggerRule } from '../types';
+import type {
+  GiftEntry,
+  SchedulerStatus,
+  SpinnerPool,
+  TriggerPreset,
+  TriggerProfile,
+  TriggerRule,
+} from '../types';
 import { renderPresetPoster } from '../lib/presetPoster';
 import GiftPicker from '../components/GiftPicker';
 import GiftIcon from '../components/GiftIcon';
@@ -19,6 +39,15 @@ import { Badge } from '../components/ui/badge';
 import { humanError } from '../errorMessages';
 const SOURCES = ['any', 'tiktok', 'donationalerts', 'simulator'];
 const KINDS = ['any', 'gift', 'like', 'comment', 'donation', 'follow', 'share', 'subscribe', 'join'];
+const MATCH_MODES = [
+  { v: 'contains', t: 'содержит' },
+  { v: 'exact', t: 'точно' },
+  { v: 'gift_id', t: 'gift id' },
+];
+const REPEAT_MODES = [
+  { v: 'once', t: 'один раз' },
+  { v: 'per_unit', t: 'за штуку' },
+];
 const ACTIONS = [
   'spawn_enemy', 'spawn_boss', 'heal_player', 'log_only',
   // Steal the Stream whitelist (docs/roblox-integration.md §C)
@@ -46,6 +75,7 @@ function newRule(): TriggerRule {
     min_amount: 0,
     action: 'spawn_enemy',
     multiplier: 1,
+    enabled: true,
   };
 }
 
@@ -58,6 +88,36 @@ export default function MapperPage() {
   const [presetSel, setPresetSel] = useState('');
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sched, setSched] = useState<SchedulerStatus | null>(null);
+  const [spinners, setSpinners] = useState<SpinnerPool[]>([]);
+  const [openIds, setOpenIds] = useState<Set<string>>(new Set());
+
+  // Scheduler status — polled only while this page is open (§2.6).
+  useEffect(() => {
+    let alive = true;
+    const poll = () =>
+      api
+        .getSchedulerStatus()
+        .then((s) => alive && setSched(s))
+        .catch(() => {});
+    poll();
+    const t = setInterval(poll, 1500);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, []);
+
+  useEffect(() => {
+    api.listSpinners().then(setSpinners).catch(() => {});
+  }, []);
+
+  const toggleOpen = (id: string) =>
+    setOpenIds((s) => {
+      const n = new Set(s);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
 
   // Game selector: catalog games + the "default" routing profile.
   // Initial selection = the profile currently mapping live events.
@@ -159,6 +219,56 @@ export default function MapperPage() {
 
   const selBuiltin = presets.find((p) => p.name === presetSel)?.builtin;
 
+  /** ▶ — saves the profile, then runs this rule through the pipeline
+   *  bypassing cooldowns/limits (§2.5 test button). */
+  const runTest = async (ruleId: string) => {
+    if (!profile) return;
+    setError(null);
+    try {
+      await api.saveTriggers(profile);
+      await api.testRule(slug, ruleId);
+    } catch (e) {
+      setError(humanError(e));
+    }
+  };
+
+  /** Exports the selected preset as a downloadable JSON file. */
+  const exportPreset = async () => {
+    if (!presetSel) return;
+    setError(null);
+    try {
+      const json = await api.exportTriggerPreset(presetSel);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+      a.download = `preset-${presetSel}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      setError(humanError(e));
+    }
+  };
+
+  /** Imports a preset JSON file (renames on collision). */
+  const importPreset = () => {
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = '.json,application/json';
+    inp.onchange = async () => {
+      const f = inp.files?.[0];
+      if (!f) return;
+      setError(null);
+      try {
+        const text = await f.text();
+        const p = await api.importTriggerPreset(text);
+        setPresetSel(p.name);
+        reloadPresets();
+      } catch (e) {
+        setError(humanError(e));
+      }
+    };
+    inp.click();
+  };
+
   /** Renders the profile as a PNG cheat sheet and downloads it. */
   const [busyPng, setBusyPng] = useState(false);
   const downloadPoster = async () => {
@@ -225,6 +335,68 @@ export default function MapperPage() {
         </div>
       </div>
 
+      {sched && (
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-border/60 bg-secondary/20 px-3 py-1.5 text-xs">
+          <Button
+            size="sm"
+            variant={sched.paused ? 'default' : 'outline'}
+            className="h-7"
+            title="Перерыв: действия стоп, события копятся в очереди"
+            onClick={() =>
+              api
+                .schedulerPause(!sched.paused)
+                .then(() => setSched({ ...sched, paused: !sched.paused }))
+                .catch((e) => setError(humanError(e)))
+            }
+          >
+            {sched.paused ? <Play size={13} /> : <Pause size={13} />}
+            {sched.paused ? ' Продолжить' : ' Пауза'}
+          </Button>
+          <span className="text-muted-foreground">
+            очередь: <b className="text-foreground">{sched.queued}</b>
+          </span>
+          {sched.dropped > 0 && (
+            <span className="text-muted-foreground">
+              дропнуто: <b className="text-amber-300">{sched.dropped}</b>
+            </span>
+          )}
+          {sched.skipped_cooldown > 0 && (
+            <span className="text-muted-foreground">
+              кулдаун: <b className="text-foreground">{sched.skipped_cooldown}</b>
+            </span>
+          )}
+          {sched.skipped_limit > 0 && (
+            <span className="text-muted-foreground">
+              лимит: <b className="text-amber-300">{sched.skipped_limit}</b>
+            </span>
+          )}
+          {sched.takeover && (
+            <Badge variant="destructive">
+              <Zap size={11} className="mr-1" /> прерывание: {sched.takeover.preset}
+            </Badge>
+          )}
+          {sched.accumulators.map((a) => (
+            <span key={a.rule_id} className="text-muted-foreground">
+              {a.label || a.rule_id.slice(0, 6)}:{' '}
+              <b className="text-foreground">
+                {a.value}/{a.target || '…'}
+              </b>
+            </span>
+          ))}
+          {sched.accumulators.length > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2"
+              title="Сбросить счётчики накопителей"
+              onClick={() => api.schedulerResetCounters().catch(() => {})}
+            >
+              сброс счётчиков
+            </Button>
+          )}
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-muted-foreground">Пресет:</span>
         <select
@@ -271,6 +443,23 @@ export default function MapperPage() {
             <Trash2 size={14} />
           </Button>
         )}
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={!presetSel}
+          title="Экспорт пресета в JSON-файл (поделиться)"
+          onClick={exportPreset}
+        >
+          <Upload size={14} />
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          title="Импорт пресета из JSON-файла"
+          onClick={importPreset}
+        >
+          <Download size={14} />
+        </Button>
         {profile?.preset && (
           <Badge variant="outline" className="ml-auto">
             применён: {profile.preset}
@@ -301,85 +490,265 @@ export default function MapperPage() {
       )}
 
       <div className="flex flex-col gap-2">
-        {profile?.rules.map((r) => (
-          <Card key={r.id}>
-            <CardContent className="pt-3 flex flex-wrap items-center gap-2 text-sm">
-              <Badge variant="outline">ЕСЛИ</Badge>
-              <select
-                className="h-8 rounded-md border border-input bg-secondary/40 px-2 text-sm"
-                value={r.source}
-                onChange={(e) => patchRule(r.id, { source: e.target.value })}
-              >
-                {SOURCES.map((s) => (
-                  <option key={s}>{s}</option>
-                ))}
-              </select>
-              <select
-                className="h-8 rounded-md border border-input bg-secondary/40 px-2 text-sm"
-                value={r.event_kind}
-                onChange={(e) => patchRule(r.id, { event_kind: e.target.value })}
-              >
-                {KINDS.map((k) => (
-                  <option key={k}>{k}</option>
-                ))}
-              </select>
-              <GiftIcon matchValue={r.match_value} kind={r.event_kind} />
-              <Input
-                className="w-32"
-                placeholder="совпадение (Rose)"
-                value={r.match_value}
-                onChange={(e) => patchRule(r.id, { match_value: e.target.value })}
-              />
-              <GiftPicker
-                onPick={(name) =>
-                  patchRule(r.id, {
-                    source: 'tiktok',
-                    event_kind: 'gift',
-                    match_value: name,
-                  })
-                }
-              />
-              <span className="text-muted-foreground text-xs">≥</span>
-              <Input
-                className="w-20"
-                type="number"
-                min={0}
-                value={r.min_amount}
-                onChange={(e) => patchRule(r.id, { min_amount: Number(e.target.value) || 0 })}
-              />
-              <Badge variant="default">ТО</Badge>
-              <Input
-                className="w-40"
-                list="action-commands"
-                placeholder="action_command"
-                value={r.action}
-                onChange={(e) => patchRule(r.id, { action: e.target.value })}
-              />
-              <datalist id="action-commands">
-                {actionsFor(slug).map((a) => (
-                  <option key={a} value={a} />
-                ))}
-              </datalist>
-              <span className="text-muted-foreground text-xs">×</span>
-              <Input
-                className="w-16"
-                type="number"
-                step="0.5"
-                min={0}
-                value={r.multiplier}
-                onChange={(e) => patchRule(r.id, { multiplier: Number(e.target.value) || 0 })}
-              />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="ml-auto"
-                onClick={() => removeRule(r.id)}
-              >
-                <Trash2 size={14} />
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
+        {profile?.rules.map((r) => {
+          const open = openIds.has(r.id);
+          return (
+            <Card key={r.id} className={r.enabled === false ? 'opacity-55' : ''}>
+              <CardContent className="pt-3 flex flex-wrap items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-primary"
+                  checked={r.enabled !== false}
+                  title={r.enabled === false ? 'Правило выключено' : 'Правило включено'}
+                  onChange={(e) => patchRule(r.id, { enabled: e.target.checked })}
+                />
+                <Badge variant="outline">ЕСЛИ</Badge>
+                <select
+                  className="h-8 rounded-md border border-input bg-secondary/40 px-2 text-sm"
+                  value={r.source}
+                  onChange={(e) => patchRule(r.id, { source: e.target.value })}
+                >
+                  {SOURCES.map((s) => (
+                    <option key={s}>{s}</option>
+                  ))}
+                </select>
+                <select
+                  className="h-8 rounded-md border border-input bg-secondary/40 px-2 text-sm"
+                  value={r.event_kind}
+                  onChange={(e) => patchRule(r.id, { event_kind: e.target.value })}
+                >
+                  {KINDS.map((k) => (
+                    <option key={k}>{k}</option>
+                  ))}
+                </select>
+                <GiftIcon matchValue={r.match_value} kind={r.event_kind} />
+                <Input
+                  className="w-32"
+                  placeholder="совпадение (Rose)"
+                  value={r.match_value}
+                  onChange={(e) => patchRule(r.id, { match_value: e.target.value })}
+                />
+                <GiftPicker
+                  onPick={(name) =>
+                    patchRule(r.id, {
+                      source: 'tiktok',
+                      event_kind: 'gift',
+                      match_value: name,
+                    })
+                  }
+                />
+                <span className="text-muted-foreground text-xs">≥</span>
+                <Input
+                  className="w-20"
+                  type="number"
+                  min={0}
+                  value={r.min_amount}
+                  onChange={(e) => patchRule(r.id, { min_amount: Number(e.target.value) || 0 })}
+                />
+                <Badge variant="default">ТО</Badge>
+                <Input
+                  className="w-40"
+                  list="action-commands"
+                  placeholder="action_command"
+                  value={r.action}
+                  onChange={(e) => patchRule(r.id, { action: e.target.value })}
+                />
+                <datalist id="action-commands">
+                  {actionsFor(slug).map((a) => (
+                    <option key={a} value={a} />
+                  ))}
+                </datalist>
+                <span className="text-muted-foreground text-xs">×</span>
+                <Input
+                  className="w-16"
+                  type="number"
+                  step="0.5"
+                  min={0}
+                  value={r.multiplier}
+                  onChange={(e) => patchRule(r.id, { multiplier: Number(e.target.value) || 0 })}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title="Тест: прогнать правило минуя кулдауны"
+                  onClick={() => runTest(r.id)}
+                >
+                  <Play size={14} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title="Дополнительно: кулдауны, приоритет, повторы"
+                  onClick={() => toggleOpen(r.id)}
+                >
+                  {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="ml-auto"
+                  onClick={() => removeRule(r.id)}
+                >
+                  <Trash2 size={14} />
+                </Button>
+              </CardContent>
+              {open && (
+                <CardContent className="border-t border-border/50 pt-3 grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 text-xs">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-muted-foreground">Подпись действия</span>
+                    <Input
+                      value={r.label ?? ''}
+                      placeholder={r.action}
+                      onChange={(e) => patchRule(r.id, { label: e.target.value })}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-muted-foreground">Совпадение</span>
+                    <select
+                      className="h-8 rounded-md border border-input bg-secondary/40 px-2 text-sm"
+                      value={r.match_mode ?? 'contains'}
+                      onChange={(e) => patchRule(r.id, { match_mode: e.target.value })}
+                    >
+                      {MATCH_MODES.map((m) => (
+                        <option key={m.v} value={m.v}>
+                          {m.t}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-muted-foreground">Срабатывание</span>
+                    <select
+                      className="h-8 rounded-md border border-input bg-secondary/40 px-2 text-sm"
+                      value={r.repeat ?? 'once'}
+                      onChange={(e) => patchRule(r.id, { repeat: e.target.value })}
+                    >
+                      {REPEAT_MODES.map((m) => (
+                        <option key={m.v} value={m.v}>
+                          {m.t}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-muted-foreground">Каждые N (лайки/счётчик)</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={r.every_n ?? 0}
+                      onChange={(e) => patchRule(r.id, { every_n: Number(e.target.value) || 0 })}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-muted-foreground">Кулдаун, мс</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={500}
+                      value={r.cooldown_ms ?? 0}
+                      onChange={(e) => patchRule(r.id, { cooldown_ms: Number(e.target.value) || 0 })}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-muted-foreground">Кулдаун зрителя, мс</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={500}
+                      value={r.user_cooldown_ms ?? 0}
+                      onChange={(e) =>
+                        patchRule(r.id, { user_cooldown_ms: Number(e.target.value) || 0 })
+                      }
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-muted-foreground">Задержка, мс</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={100}
+                      value={r.delay_ms ?? 0}
+                      onChange={(e) => patchRule(r.id, { delay_ms: Number(e.target.value) || 0 })}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-muted-foreground">Приоритет (больше — раньше)</span>
+                    <Input
+                      type="number"
+                      value={r.priority ?? 0}
+                      onChange={(e) => patchRule(r.id, { priority: Number(e.target.value) || 0 })}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-muted-foreground">Макс. повторов за событие</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={r.max_repeat ?? 20}
+                      onChange={(e) => patchRule(r.id, { max_repeat: Number(e.target.value) || 1 })}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-muted-foreground">Спиннер (пул)</span>
+                    <select
+                      className="h-8 rounded-md border border-input bg-secondary/40 px-2 text-sm"
+                      value={r.spinner ?? ''}
+                      onChange={(e) =>
+                        patchRule(r.id, { spinner: e.target.value || null })
+                      }
+                    >
+                      <option value="">— нет —</option>
+                      {spinners.map((p) => (
+                        <option key={p.name} value={p.name}>
+                          🎡 {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2 pt-5">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-primary"
+                      checked={r.continue_matching ?? false}
+                      onChange={(e) => patchRule(r.id, { continue_matching: e.target.checked })}
+                    />
+                    <span className="text-muted-foreground">не останавливать перебор</span>
+                  </label>
+                  <label className="flex items-center gap-2 pt-5">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-primary"
+                      checked={r.interrupt ?? false}
+                      onChange={(e) => patchRule(r.id, { interrupt: e.target.checked })}
+                    />
+                    <span className="text-muted-foreground">прерывание (обрывает очередь)</span>
+                  </label>
+                  {r.interrupt && (
+                    <label className="flex flex-col gap-1">
+                      <span className="text-muted-foreground">Пресет прерывания</span>
+                      <select
+                        className="h-8 rounded-md border border-input bg-secondary/40 px-2 text-sm"
+                        value={r.interrupt_preset ?? ''}
+                        onChange={(e) =>
+                          patchRule(r.id, { interrupt_preset: e.target.value || null })
+                        }
+                      >
+                        <option value="">— без смены пресета —</option>
+                        {presets
+                          .filter((p) => p.game_slug == null || p.game_slug === slug)
+                          .map((p) => (
+                            <option key={p.name} value={p.name}>
+                              {p.name}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  )}
+                </CardContent>
+              )}
+            </Card>
+          );
+        })}
         {!profile && <p className="text-sm text-muted-foreground">Загрузка профиля…</p>}
       </div>
     </div>

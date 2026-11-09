@@ -814,6 +814,20 @@ pub async fn scheduler_reset_counters(state: State<'_, AppState>) -> Result<(), 
     Ok(())
 }
 
+/// Spinner pools from settings — the mapper's 🎡 pool picker (§7).
+#[tauri::command]
+pub async fn list_spinners(state: State<'_, AppState>) -> Result<Vec<SpinnerPool>, String> {
+    Ok(state
+        .settings
+        .lock()
+        .await
+        .data
+        .spinners
+        .values()
+        .cloned()
+        .collect())
+}
+
 /// Runs one rule through the whole pipeline bypassing cooldowns and the
 /// earn limit — the ▶ test button (§2.5). Uses a synthetic event shaped
 /// after the rule so `match_all` picks exactly it.

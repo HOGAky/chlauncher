@@ -19,6 +19,7 @@ import type {
   LibraryEntry,
   RawStreamEvent,
   SchedulerStatus,
+  SpinnerPool,
   StreamEvent,
   Subscription,
   TriggerPreset,
@@ -191,6 +192,9 @@ export const schedulerResetCounters = () => cmd<void>('scheduler_reset_counters'
 /** Runs one rule through the pipeline bypassing cooldowns/limit — the ▶ button. */
 export const testRule = (gameSlug: string, ruleId: string) =>
   cmd<void>('test_rule', { gameSlug, ruleId });
+
+/** Spinner pools for the 🎡 pool picker in the mapper. */
+export const listSpinners = () => cmd<SpinnerPool[]>('list_spinners');
 
 // ---- settings --------------------------------------------------------------
 

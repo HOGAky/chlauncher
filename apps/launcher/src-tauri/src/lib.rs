@@ -238,6 +238,7 @@ pub fn run() {
             commands::scheduler_pause,
             commands::get_scheduler_status,
             commands::scheduler_reset_counters,
+            commands::list_spinners,
             commands::test_rule,
             commands::set_streamer_mode,
             commands::set_chroma_key,
