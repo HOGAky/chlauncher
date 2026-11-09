@@ -49,7 +49,25 @@ export interface TriggerRule {
 /** Full trigger profile for a game. */
 export interface TriggerProfile {
   game_slug: string;
+  /** Name of the preset last applied to this profile (absent = hand-built). */
+  preset?: string;
   rules: TriggerRule[];
+}
+
+/** A named, shareable set of trigger rules — the streamer's preset. */
+export interface TriggerPreset {
+  name: string;
+  description?: string;
+  /** Built-ins ship with the launcher and can't be overwritten/deleted. */
+  builtin?: boolean;
+  rules: TriggerRule[];
+}
+
+/** One row of the bundled TikTok gift catalog (public/gifts.json). */
+export interface GiftEntry {
+  name: string;
+  coins: number;
+  image: string;
 }
 
 /** Catalog game merged with local install/runtime state. */

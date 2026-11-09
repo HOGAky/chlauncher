@@ -85,7 +85,10 @@ fn valid_slug(slug: &str) -> bool {
 
 /// Helper: usable hardware id or `HWID_UNAVAILABLE` — never a sentinel.
 fn require_hwid(state: &AppState) -> Result<&str, String> {
-    state.hwid.as_deref().ok_or_else(|| "HWID_UNAVAILABLE".to_string())
+    state
+        .hwid
+        .as_deref()
+        .ok_or_else(|| "HWID_UNAVAILABLE".to_string())
 }
 
 /// Helper: current auth token or an error the UI sends back to login.
@@ -258,7 +261,9 @@ pub async fn list_games(state: State<'_, AppState>) -> Result<Value, String> {
         .await
         .map_err(|e| e.to_string())?;
     let installed: std::collections::HashMap<String, InstalledGame> =
-        downloads::all_installed(&state.data_dir).into_iter().collect();
+        downloads::all_installed(&state.data_dir)
+            .into_iter()
+            .collect();
     let running = state.processes.running_slugs();
 
     let mut entries = Vec::new();
@@ -356,7 +361,8 @@ fn verify_install(
         }
     }
     if let Some(expected_sha) = installed.exe_sha256.as_deref() {
-        let actual = downloads::sha256_file(&canon_exe).map_err(|_| "INSTALL_FAILED".to_string())?;
+        let actual =
+            downloads::sha256_file(&canon_exe).map_err(|_| "INSTALL_FAILED".to_string())?;
         if !actual.eq_ignore_ascii_case(expected_sha) {
             return Err("HASH_MISMATCH".into());
         }
@@ -390,16 +396,11 @@ pub async fn play_game(
         return Err("LICENSE_DENIED".into());
     }
 
-    let catalog_exe = state
-        .api
-        .games(&token)
-        .await
-        .ok()
-        .and_then(|g| {
-            g.iter()
-                .find(|x| x.slug == slug)
-                .map(|x| x.executable_name.clone())
-        });
+    let catalog_exe = state.api.games(&token).await.ok().and_then(|g| {
+        g.iter()
+            .find(|x| x.slug == slug)
+            .map(|x| x.executable_name.clone())
+    });
 
     let installed = downloads::installed_info(&state.data_dir, &slug)
         .ok_or_else(|| "NOT_INSTALLED".to_string())?;
@@ -550,30 +551,87 @@ pub async fn save_triggers(
     Ok(())
 }
 
-/// Applies a named preset (e.g. `steal-the-stream`) over a game's profile.
+/// Applies a named preset (built-in or custom) over a game's profile.
 #[tauri::command]
 pub async fn apply_trigger_template(
     game_slug: String,
     template: String,
     state: State<'_, AppState>,
 ) -> Result<TriggerProfile, String> {
-    let profile = TriggerMapper::template_profile(&game_slug, &template)
-        .ok_or_else(|| format!("неизвестный шаблон: {template}"))?;
+    apply_trigger_preset(game_slug, template, state).await
+}
+
+/// Applies a named preset over a game's profile — built-in or streamer-defined.
+#[tauri::command]
+pub async fn apply_trigger_preset(
+    game_slug: String,
+    preset: String,
+    state: State<'_, AppState>,
+) -> Result<TriggerProfile, String> {
     let mut s = state.settings.lock().await;
-    s.data
-        .trigger_profiles
-        .insert(game_slug, profile.clone());
+    let p = TriggerMapper::find_preset(&preset, &s.data.trigger_presets)
+        .ok_or_else(|| format!("неизвестный пресет: {preset}"))?;
+    let profile = TriggerMapper::profile_from_preset(&game_slug, &p);
+    s.data.trigger_profiles.insert(game_slug, profile.clone());
     let _ = s.save();
     Ok(profile)
+}
+
+/// Lists built-in and streamer-defined presets (built-ins first, customs sorted).
+#[tauri::command]
+pub async fn list_trigger_presets(
+    state: State<'_, AppState>,
+) -> Result<Vec<TriggerPreset>, String> {
+    let s = state.settings.lock().await;
+    let mut out = TriggerMapper::builtin_presets();
+    let mut customs: Vec<TriggerPreset> = s.data.trigger_presets.values().cloned().collect();
+    customs.sort_by(|a, b| a.name.cmp(&b.name));
+    out.extend(customs);
+    Ok(out)
+}
+
+/// Saves a streamer-defined preset. Built-in names are reserved — a preset
+/// named like a built-in is rejected rather than shadowing it.
+#[tauri::command]
+pub async fn save_trigger_preset(
+    mut preset: TriggerPreset,
+    state: State<'_, AppState>,
+) -> Result<TriggerPreset, String> {
+    preset.name = preset.name.trim().to_string();
+    if preset.name.is_empty() {
+        return Err("имя пресета пусто".into());
+    }
+    if TriggerMapper::is_builtin_preset(&preset.name) {
+        return Err(format!(
+            "{name} — встроенный пресет, имя занято",
+            name = preset.name
+        ));
+    }
+    preset.builtin = false;
+    let mut s = state.settings.lock().await;
+    s.data
+        .trigger_presets
+        .insert(preset.name.clone(), preset.clone());
+    let _ = s.save();
+    Ok(preset)
+}
+
+/// Deletes a streamer-defined preset. Built-ins can't be deleted.
+#[tauri::command]
+pub async fn delete_trigger_preset(name: String, state: State<'_, AppState>) -> Result<(), String> {
+    if TriggerMapper::is_builtin_preset(&name) {
+        return Err(format!("{name} — встроенный пресет, удалить нельзя"));
+    }
+    let mut s = state.settings.lock().await;
+    s.data.trigger_presets.remove(&name);
+    let _ = s.save();
+    Ok(())
 }
 
 /// Injects a raw event into the mapping pipeline — the event simulator.
 /// Works even with no game running (still reaches overlay + feed).
 #[tauri::command]
-pub async fn simulate_event(
-    raw: RawStreamEvent,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+pub async fn simulate_event(raw: RawStreamEvent, state: State<'_, AppState>) -> Result<(), String> {
     state
         .raw_tx
         .send(raw)
@@ -675,8 +733,7 @@ pub async fn set_forward_config(
             s.data.forward.relay_admin_secret = Some(relay_admin_secret.trim().to_string());
         }
         if s.data.forward.stream_key.is_none() {
-            s.data.forward.stream_key =
-                Some(format!("sk_{}", uuid::Uuid::new_v4().simple()));
+            s.data.forward.stream_key = Some(format!("sk_{}", uuid::Uuid::new_v4().simple()));
         }
         let _ = s.save();
     }
@@ -846,14 +903,13 @@ pub async fn admin_rollback(slug: String, state: State<'_, AppState>) -> Result<
 }
 
 #[tauri::command]
-pub async fn admin_list_users(
-    query: String,
-    state: State<'_, AppState>,
-) -> Result<Value, String> {
+pub async fn admin_list_users(query: String, state: State<'_, AppState>) -> Result<Value, String> {
     let enc: String = query
         .bytes()
         .map(|b| match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => (b as char).to_string(),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
             _ => format!("%{b:02X}"),
         })
         .collect();
@@ -928,12 +984,10 @@ pub async fn services_health(state: State<'_, AppState>) -> Result<Value, String
         false
     };
     let overlay = match *state.overlay_port.lock().await {
-        Some(p) => {
-            reqwest::get(format!("http://127.0.0.1:{p}/health"))
-                .await
-                .map(|r| r.status().is_success())
-                .unwrap_or(false)
-        }
+        Some(p) => reqwest::get(format!("http://127.0.0.1:{p}/health"))
+            .await
+            .map(|r| r.status().is_success())
+            .unwrap_or(false),
         None => false,
     };
     Ok(json!({

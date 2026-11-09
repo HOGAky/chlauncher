@@ -67,6 +67,27 @@ pub struct TriggerRule {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TriggerProfile {
     pub game_slug: String,
+    /// Name of the preset this profile was last applied from — `None` for
+    /// the seeded default or a hand-built profile.
+    #[serde(default)]
+    pub preset: Option<String>,
+    pub rules: Vec<TriggerRule>,
+}
+
+/// A named, shareable rule set — the streamer's preset. Presets are the
+/// reusable unit: build one gift/event mapping once, apply it to any game's
+/// profile in one click.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TriggerPreset {
+    /// Unique key, e.g. `steal-the-stream` or the streamer's own name.
+    pub name: String,
+    /// One-line description shown in the preset picker.
+    #[serde(default)]
+    pub description: String,
+    /// Built-in presets ship with the launcher and can't be overwritten or
+    /// deleted; the flag is always cleared for streamer-saved presets.
+    #[serde(default)]
+    pub builtin: bool,
     pub rules: Vec<TriggerRule>,
 }
 

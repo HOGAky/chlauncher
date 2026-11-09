@@ -48,7 +48,9 @@ fn embed_test_manifest() {
     let manifest_rc_path = manifest_path.display().to_string().replace('\\', "/");
     fs::write(
         &rc_path,
-        format!("#include <winuser.h>\n1 RT_MANIFEST \"{manifest_rc_path}\"\n"),
+        // 24 = RT_MANIFEST; written numerically so windres does not need a
+        // C preprocessor (no #include <winuser.h>) to compile this file.
+        format!("1 24 \"{manifest_rc_path}\"\n"),
     )
     .unwrap();
 

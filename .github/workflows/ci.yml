@@ -37,6 +37,8 @@ jobs:
       - run: npm ci
       - run: npm run build --workspace @chlauncher/launcher
       - run: npm run test:server
+      - name: Gift catalog integrity
+        run: node tools/fetch-gifts.mjs --check
       - name: Launcher unit tests (error contract)
         working-directory: apps/launcher
         run: node --test src/errorMessages.test.ts

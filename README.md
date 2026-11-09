@@ -230,6 +230,28 @@ Streamer setup lives in the launcher's *Integrations → Облачные
 registered on the relay while the subscription is active), delivery
 stats and per-game connect instructions.
 
+## Trigger presets & the gift catalog
+
+The mapper's reusable unit is the **preset** — a named set of trigger
+rules a streamer applies to any game's profile in one click (the same
+concept as StreamToEarn's "привяжи события к пресету"). Built-in:
+`steal-the-stream` (the Roblox whitelist from
+`docs/roblox-integration.md`). Streamer-defined presets live in
+`settings.trigger_presets` — *Маппер → Как пресет* saves the current
+rules under a name, the dropdown applies one to the selected game, and
+`profile.preset` records which preset a game currently runs. Built-in
+names are reserved server-side; deleting a preset never touches game
+profiles already applied from it.
+
+The bundled **gift catalog** (`apps/launcher/public/gifts.json` +
+`public/gifts/*.webp`, ~1.7k entries) backs the 🎁 picker next to each
+rule's match field — icon, display name and coin price for every public
+TikTok gift. Icons are TikTok's public CDN images mirrored locally so
+the picker works offline and never pings a CDN from the webview.
+Refresh with `node tools/fetch-gifts.mjs` (re-scrapes the community
+list at streamtoearn.io); CI validates the committed catalog with
+`--check`.
+
 ## Where the real keys go
 
 See [`.env.example`](.env.example):

@@ -19,6 +19,7 @@ import type {
   RawStreamEvent,
   StreamEvent,
   Subscription,
+  TriggerPreset,
   TriggerProfile,
   WindowOptions,
 } from './types';
@@ -128,6 +129,21 @@ export const saveTriggers = (profile: TriggerProfile) =>
 /** Applies a named preset (e.g. 'steal-the-stream') to a game's profile. */
 export const applyTriggerTemplate = (gameSlug: string, template: string) =>
   cmd<TriggerProfile>('apply_trigger_template', { gameSlug, template });
+
+/** Applies a named preset (built-in or custom) to a game's profile. */
+export const applyTriggerPreset = (gameSlug: string, preset: string) =>
+  cmd<TriggerProfile>('apply_trigger_preset', { gameSlug, preset });
+
+/** Lists built-in and streamer-defined trigger presets. */
+export const listTriggerPresets = () => cmd<TriggerPreset[]>('list_trigger_presets');
+
+/** Saves a streamer-defined preset (built-in names are reserved). */
+export const saveTriggerPreset = (preset: TriggerPreset) =>
+  cmd<TriggerPreset>('save_trigger_preset', { preset });
+
+/** Deletes a streamer-defined preset. */
+export const deleteTriggerPreset = (name: string) =>
+  cmd<void>('delete_trigger_preset', { name });
 
 /** Injects a raw event into the mapping pipeline (simulator). */
 export const simulateEvent = (raw: RawStreamEvent) => cmd<void>('simulate_event', { raw });
