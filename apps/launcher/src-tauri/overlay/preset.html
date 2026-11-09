@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>chlauncher · preset</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: transparent; overflow: hidden;
+    font-family: 'Segoe UI', system-ui, sans-serif; color: #fff;
+  }
+  #name { font-size: 13px; font-weight: 700; opacity: .8; margin: 8px 0 6px;
+          text-transform: uppercase; letter-spacing: .06em; }
+  .row { display: flex; align-items: center; gap: 10px;
+         background: rgba(15,17,26,.85); border-radius: 12px; padding: 8px 12px; }
+  .row img.gift { width: 34px; height: 34px; object-fit: contain; }
+  .row .gift-fb { width: 34px; height: 34px; display: flex; align-items: center;
+                  justify-content: center; font-size: 20px; }
+  .row .cnt { font-weight: 700; font-size: 15px; }
+  .row .arrow { opacity: .6; }
+  .row img.act { width: 30px; height: 30px; object-fit: contain; border-radius: 8px; }
+  .row .label { font-size: 14px; font-weight: 600; }
+  .row .coins { font-size: 11px; opacity: .6; }
+
+  /* template: cards — a grid of cells */
+  .cards #rows { display: grid; gap: 8px; padding: 0 8px 8px; }
+  .cards .row { flex-direction: column; text-align: center; gap: 4px; }
+  /* template: list — stacked full-width rows */
+  .list #rows { display: flex; flex-direction: column; gap: 6px; padding: 0 8px 8px; }
+  /* template: text — one compact line per rule */
+  .text #rows { display: flex; flex-direction: column; gap: 3px; padding: 0 10px 8px; }
+  .text .row { background: none; padding: 0; border-radius: 0; }
+  .text img.gift, .text .gift-fb, .text img.act { display: none; }
+  /* border styles */
+  .thin .row { border: 1px solid rgba(255,255,255,.15); }
+  .glow .row { box-shadow: 0 0 14px var(--accent); border: 1px solid var(--accent); }
+</style>
+</head>
+<body class="cards">
+<div id="name"></div>
+<div id="rows"></div>
+<script>
+const token = new URLSearchParams(location.search).get('t') || '';
+const rowsEl = document.getElementById('rows');
+const nameEl = document.getElementById('name');
+let pageIdx = 0, rotTimer = null, curRows = [], curStyle = null;
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function mediaUrl(u) {
+  return u ? u + (u.includes('?') ? '&' : '?') + 't=' + encodeURIComponent(token) : u;
+}
+
+function renderPage() {
+  const s = curStyle || {};
+  const per = s.max_rows > 0 ? s.max_rows : curRows.length;
+  const start = (pageIdx * per) % Math.max(1, curRows.length);
+  const slice = curRows.slice(start, start + per);
+  rowsEl.innerHTML = slice.map(r => {
+    const gift = r.gift_image
+      ? `<img class="gift" src="${mediaUrl(r.gift_image)}" alt="">`
+      : `<div class="gift-fb">🎁</div>`;
+    const act = r.image ? `<img class="act" src="${mediaUrl(r.image)}" alt="">` : '';
+    const cnt = r.count > 1 ? `x${r.count}` : '';
+    const coins = r.coins > 0 ? `<div class="coins">${r.coins} ◉</div>` : '';
+    return `<div class="row">${gift}<div class="cnt">${esc(cnt)}</div>` +
+           `<div class="arrow">→</div>${act}<div class="label">${esc(r.label)}</div>${coins}</div>`;
+  }).join('');
+}
+
+function apply(f) {
+  curRows = f.rows || [];
+  curStyle = f.style || {};
+  const s = curStyle;
+  nameEl.textContent = f.name || '';
+  document.body.className = (s.template || 'cards') + ' ' + (s.border || '');
+  document.body.style.setProperty('--accent', s.accent_color || '#a78bfa');
+  document.body.style.fontSize = `${14 * (s.font_scale || 1)}px`;
+  const bg = Math.max(0, Math.min(1, s.bg_opacity ?? .85));
+  document.body.style.background = `rgba(15,17,26,${bg * .4})`;
+  if (s.template === 'cards') {
+    rowsEl.style.gridTemplateColumns = `repeat(${Math.max(1, s.columns || 3)}, 1fr)`;
+  }
+  pageIdx = 0;
+  clearInterval(rotTimer);
+  const pages = s.max_rows > 0 ? Math.ceil(curRows.length / s.max_rows) : 1;
+  if (pages > 1 && (s.rotate_ms || 8000) > 0) {
+    rotTimer = setInterval(() => { pageIdx++; renderPage(); }, s.rotate_ms || 8000);
+  }
+  renderPage();
+}
+
+function connect() {
+  const ws = new WebSocket(`ws://${location.host}/ws?t=${encodeURIComponent(token)}`);
+  ws.onopen = () => ws.send(JSON.stringify({ type: 'subscribe', channels: ['preset'] }));
+  ws.onmessage = (m) => {
+    try { const f = JSON.parse(m.data); if (f.type === 'preset') apply(f); } catch (e) {}
+  };
+  ws.onclose = () => setTimeout(connect, 2000);
+}
+connect();
+</script>
+</body>
+</html>

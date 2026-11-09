@@ -277,9 +277,24 @@ alert and temporarily swap the preset (in-memory only), the earn-limit
 gate (wired to plans in stage 10) and a usage meter. IPC:
 `scheduler_pause`, `get_scheduler_status`, `scheduler_reset_counters`,
 `test_rule` — and `get_event_feed_items` exposes a statusful feed
-(`done`/`cooldown`/`limit`/`dropped`). Overlay frames
-(`alert`/`spinner`/`progress`/`takeover`) flow on a broadcast channel
-the overlay server will relay in stage 4.
+(`done`/`cooldown`/`limit`/`dropped`).
+
+The **overlay server** (`src-tauri/src/overlay.rs` + `src-tauri/overlay/*.html`,
+spec §5) is now a multi-page Browser Source host. Every page takes
+`?t=<overlay_token>` (generated on first launch, rotatable from the UI —
+without it the routes return 403) and `/ws` speaks the `subscribe`
+protocol (`{"type":"subscribe","channels":[…]}` with `events`, `alerts`,
+`preset`, `spinner`, `tts`, `progress`); unsubscribed legacy clients keep
+the old snapshot+event stream. Pages: `/overlay` (all-in-one),
+`/overlay/alerts` (alert cards + sound/media + takeover),
+`/overlay/preset` (live cheat sheet — re-renders on every profile
+save/apply via `preset` frames), `/overlay/spinner` (weighted wheel,
+lands on the scheduler-picked `result_index`), `/overlay/tts` (badge +
+subtitle), `/overlay/progress` (accumulator bars), `/gifts/*.webp`
+(bundled catalog icons). `overlay_port` in settings pins the port for
+stable OBS URLs (`set_overlay_port`, 0 = OS-assigned with fallback); the
+Integrations page lists every URL with copy buttons and can rotate the
+token (`rotate_overlay_token`).
 
 The bundled **gift catalog** (`apps/launcher/public/gifts.json` +
 `public/gifts/*.webp`, ~1.7k entries) backs the 🎁 picker next to each

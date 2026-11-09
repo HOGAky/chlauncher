@@ -17,7 +17,7 @@ use crate::events::{EventHub, TriggerMapper};
 use crate::forwarder::Forwarder;
 use crate::game_ws::GameServer;
 use crate::integrations::IntegrationManager;
-use crate::overlay::overlay_url;
+use crate::overlay::{overlay_page, overlay_url};
 use crate::process::ProcessManager;
 use crate::settings::SettingsStore;
 use crate::types::*;
@@ -132,7 +132,20 @@ pub async fn get_bootstrap(state: State<'_, AppState>) -> Result<Value, String> 
         "tiktok_username": settings.tiktok_username,
         "integrations": state.integrations.snapshot().await,
         "running": state.processes.running_slugs(),
-        "overlay_url": state.overlay_port.lock().await.map(overlay_url),
+        "overlay_url": state.overlay_port.lock().await.map(|p| {
+            overlay_url(p, &settings.overlay_token)
+        }),
+        "overlay_pages": state.overlay_port.lock().await.map(|p| {
+            let t = &settings.overlay_token;
+            json!({
+                "main": overlay_page(p, t, "/overlay"),
+                "alerts": overlay_page(p, t, "/overlay/alerts"),
+                "preset": overlay_page(p, t, "/overlay/preset"),
+                "spinner": overlay_page(p, t, "/overlay/spinner"),
+                "tts": overlay_page(p, t, "/overlay/tts"),
+                "progress": overlay_page(p, t, "/overlay/progress"),
+            })
+        }),
         "game_ws_port": state.game_server.port(),
         "service_error": state.service_error.lock().await.clone(),
         "server_url": state.api.base(),
@@ -585,9 +598,27 @@ pub async fn set_active_trigger_profile(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let slug = slug.trim().to_string();
+    // Preset cheat-sheet follows the active profile (§5.2) — resolve the
+    // slug before `active_game_slug` consumes it.
+    let effective = if slug.is_empty() {
+        "default".to_string()
+    } else {
+        slug.clone()
+    };
     *state.active_game_slug.lock().await = if slug.is_empty() { None } else { Some(slug) };
     // Switching the active profile resets runtime cooldowns/accumulators.
     state.scheduler.reset_runtime();
+    let profile = {
+        let s = state.settings.lock().await;
+        s.data
+            .trigger_profiles
+            .get(&effective)
+            .cloned()
+            .unwrap_or_else(|| TriggerMapper::default_profile(&effective))
+    };
+    let _ = state
+        .overlay_tx
+        .send(crate::overlay::preset_frame(&profile));
     Ok(())
 }
 
@@ -600,10 +631,21 @@ pub async fn save_triggers(
     let mut s = state.settings.lock().await;
     s.data
         .trigger_profiles
-        .insert(profile.game_slug.clone(), profile);
+        .insert(profile.game_slug.clone(), profile.clone());
     let _ = s.save();
     drop(s);
     state.scheduler.reset_runtime();
+    // Live-update the cheat sheet when the saved profile is on air (§5.2).
+    let active = state.active_game_slug.lock().await.clone();
+    let on_air = match &active {
+        Some(slug) => slug == &profile.game_slug,
+        None => profile.game_slug == "default",
+    };
+    if on_air {
+        let _ = state
+            .overlay_tx
+            .send(crate::overlay::preset_frame(&profile));
+    }
     Ok(())
 }
 
@@ -628,11 +670,24 @@ pub async fn apply_trigger_preset(
     let p = TriggerMapper::find_preset(&preset, &s.data.trigger_presets)
         .ok_or_else(|| format!("неизвестный пресет: {preset}"))?;
     let profile = TriggerMapper::profile_from_preset(&game_slug, &p);
-    s.data.trigger_profiles.insert(game_slug, profile.clone());
+    s.data
+        .trigger_profiles
+        .insert(game_slug.clone(), profile.clone());
     let _ = s.save();
     drop(s);
     // Profile switch resets runtime cooldowns/accumulators (§2.2).
     state.scheduler.reset_runtime();
+    // Preset cheat-sheet follows the newly applied profile when on air.
+    let active = state.active_game_slug.lock().await.clone();
+    let on_air = match &active {
+        Some(slug) => slug == &game_slug,
+        None => game_slug == "default",
+    };
+    if on_air {
+        let _ = state
+            .overlay_tx
+            .send(crate::overlay::preset_frame(&profile));
+    }
     Ok(profile)
 }
 
@@ -882,6 +937,35 @@ pub async fn test_rule(
 // ---------------------------------------------------------------------------
 // Misc settings
 // ---------------------------------------------------------------------------
+
+/// Pins the overlay server to a fixed port (§5.4). `0` = OS-assigned.
+/// The server binds at startup only, so the change applies on the next
+/// launch — the UI warns accordingly.
+#[tauri::command]
+pub async fn set_overlay_port(port: u16, state: State<'_, AppState>) -> Result<(), String> {
+    if port != 0 && port < 1024 {
+        return Err("Порт должен быть 0 (авто) или ≥1024".into());
+    }
+    let mut s = state.settings.lock().await;
+    s.data.overlay_port = port;
+    let _ = s.save();
+    Ok(())
+}
+
+/// Rotates the overlay access token — every `/overlay*` URL changes and
+/// previously copied Browser Source URLs stop working (§5.4).
+#[tauri::command]
+pub async fn rotate_overlay_token(state: State<'_, AppState>) -> Result<(), String> {
+    let mut s = state.settings.lock().await;
+    // Same 64-hex shape `SettingsStore::load` generates on first launch.
+    s.data.overlay_token = format!(
+        "{}{}",
+        uuid::Uuid::new_v4().simple(),
+        uuid::Uuid::new_v4().simple()
+    );
+    let _ = s.save();
+    Ok(())
+}
 
 /// Toggles streamer mode (masks personal data in the UI).
 #[tauri::command]

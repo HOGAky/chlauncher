@@ -339,6 +339,15 @@ export interface Bootstrap {
   running: string[];
   /** null when the overlay failed to bind — see service_error. */
   overlay_url: string | null;
+  /** All overlay page URLs (token already appended), §5.4. */
+  overlay_pages?: {
+    main: string;
+    alerts: string;
+    preset: string;
+    spinner: string;
+    tts: string;
+    progress: string;
+  } | null;
   /** Actual OS-assigned game WS port (0 = service failed to bind). */
   game_ws_port: number;
   /** Startup failure of a local service, if any — shown as a banner. */

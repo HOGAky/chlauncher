@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>chlauncher · spinner</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: transparent; overflow: hidden;
+    font-family: 'Segoe UI', system-ui, sans-serif; color: #fff;
+  }
+  #wrap {
+    position: absolute; inset: 0; display: none;
+    align-items: center; justify-content: center; flex-direction: column;
+  }
+  canvas { filter: drop-shadow(0 8px 24px rgba(0,0,0,.6)); }
+  #user { margin-top: 10px; font-size: 15px; font-weight: 600;
+          background: rgba(15,17,26,.85); padding: 4px 14px; border-radius: 999px; }
+  #result { font-size: 18px; font-weight: 700; margin-top: 6px; opacity: 0;
+            transition: opacity .3s; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="wheel" width="360" height="360"></canvas>
+  <div id="result"></div>
+  <div id="user"></div>
+</div>
+<script>
+const token = new URLSearchParams(location.search).get('t') || '';
+const wrap = document.getElementById('wrap');
+const cv = document.getElementById('wheel');
+const ctx = cv.getContext('2d');
+const userEl = document.getElementById('user');
+const resEl = document.getElementById('result');
+const D = 360, R = D / 2 - 8, CX = D / 2, CY = D / 2;
+
+function draw(segs, angle) {
+  ctx.clearRect(0, 0, D, D);
+  const total = segs.reduce((a, s) => a + (s.weight || 1), 0) || 1;
+  let a = angle;
+  for (const s of segs) {
+    const sweep = (s.weight || 1) / total * Math.PI * 2;
+    ctx.beginPath(); ctx.moveTo(CX, CY); ctx.arc(CX, CY, R, a, a + sweep); ctx.closePath();
+    ctx.fillStyle = s.color || '#7c3aed'; ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.stroke();
+    // label along the bisector
+    const mid = a + sweep / 2;
+    ctx.save(); ctx.translate(CX, CY); ctx.rotate(mid);
+    ctx.textAlign = 'right'; ctx.fillStyle = '#fff';
+    ctx.font = '600 13px Segoe UI, sans-serif';
+    ctx.fillText(String(s.label || '').slice(0, 18), R - 10, 5);
+    ctx.restore();
+    a += sweep;
+  }
+  // pointer at top
+  ctx.beginPath(); ctx.moveTo(CX - 12, 4); ctx.lineTo(CX + 12, 4); ctx.lineTo(CX, 26);
+  ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill();
+  ctx.beginPath(); ctx.arc(CX, CY, 14, 0, Math.PI * 2); ctx.fillStyle = '#0f111a'; ctx.fill();
+}
+
+function spin(f) {
+  const segs = f.segments || [];
+  if (!segs.length) return;
+  wrap.style.display = 'flex';
+  resEl.style.opacity = 0; resEl.textContent = '';
+  userEl.textContent = f.user || '';
+  // Landing: point the result segment's bisector to the top (-90°),
+  // plus 4–5 full turns of wind-up.
+  const total = segs.reduce((a, s) => a + (s.weight || 1), 0) || 1;
+  let a0 = 0;
+  for (let i = 0; i < f.result_index; i++) a0 += (segs[i].weight || 1) / total * Math.PI * 2;
+  const sweep = (segs[f.result_index].weight || 1) / total * Math.PI * 2;
+  const target = -Math.PI / 2 - (a0 + sweep / 2);
+  const turns = 4 + Math.random();
+  const from = target - turns * Math.PI * 2;
+  const dur = Math.max(500, f.spin_ms || 4500);
+  const t0 = performance.now();
+  function frame(t) {
+    const p = Math.min(1, (t - t0) / dur);
+    const e = 1 - Math.pow(1 - p, 3); // ease-out cubic
+    draw(segs, from + (target - from) * e);
+    if (p < 1) requestAnimationFrame(frame);
+    else {
+      resEl.textContent = segs[f.result_index].label || '';
+      resEl.style.opacity = 1;
+      setTimeout(() => wrap.style.display = 'none', 2500);
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+function connect() {
+  const ws = new WebSocket(`ws://${location.host}/ws?t=${encodeURIComponent(token)}`);
+  ws.onopen = () => ws.send(JSON.stringify({ type: 'subscribe', channels: ['spinner'] }));
+  ws.onmessage = (m) => {
+    try { const f = JSON.parse(m.data); if (f.type === 'spinner') spin(f); } catch (e) {}
+  };
+  ws.onclose = () => setTimeout(connect, 2000);
+}
+connect();
+</script>
+</body>
+</html>

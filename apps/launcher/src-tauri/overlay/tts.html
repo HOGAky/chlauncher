@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>chlauncher · tts</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: transparent; overflow: hidden;
+    font-family: 'Segoe UI', system-ui, sans-serif; color: #fff;
+  }
+  #badge {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    background: rgba(15,17,26,.88); border: 1px solid rgba(255,255,255,.12);
+    border-radius: 12px; padding: 10px 20px; max-width: 80vw;
+    display: none; text-align: center;
+  }
+  #badge .icon { font-size: 11px; text-transform: uppercase; letter-spacing: .1em;
+                 color: #a78bfa; margin-bottom: 4px; }
+  #badge .text { font-size: 16px; font-weight: 500; }
+</style>
+</head>
+<body>
+<div id="badge"><div class="icon">tts</div><div class="text"></div></div>
+<script>
+const token = new URLSearchParams(location.search).get('t') || '';
+const badge = document.getElementById('badge');
+const txt = badge.querySelector('.text');
+const shown = {};
+
+function connect() {
+  const ws = new WebSocket(`ws://${location.host}/ws?t=${encodeURIComponent(token)}`);
+  ws.onopen = () => ws.send(JSON.stringify({ type: 'subscribe', channels: ['tts'] }));
+  ws.onmessage = (m) => {
+    try {
+      const f = JSON.parse(m.data);
+      if (f.type !== 'tts') return;
+      if (f.state === 'start') {
+        txt.textContent = f.text || '';
+        badge.style.display = 'block';
+        shown[f.id] = true;
+      } else if (f.state === 'end') {
+        delete shown[f.id];
+        if (!Object.keys(shown).length) badge.style.display = 'none';
+      }
+    } catch (e) {}
+  };
+  ws.onclose = () => setTimeout(connect, 2000);
+}
+connect();
+</script>
+</body>
+</html>

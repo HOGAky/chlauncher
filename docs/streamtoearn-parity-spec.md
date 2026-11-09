@@ -727,10 +727,10 @@ mock-game и Minecraft, без зависаний очереди.
 
 | # | Этап | Файлы | Готово, когда |
 |---|---|---|---|
-| 1 | Модель данных §1 + sidecar `count/coins/gift_id` + TS-зеркала | `types.rs`, `types.ts`, `settings.rs`, `tiktok-sidecar/index.js` | старые settings грузятся; CI зелёный |
-| 2 | `ActionScheduler`: match_all, кулдауны, накопители, per_unit, очередь, пауза, `test_rule` | `scheduler.rs`, `lib.rs`, `commands.rs` | unit-тесты §13 |
-| 3 | Маппер-UI: новые колонки, ▶ тест, статусы в ленте | `MapperPage.tsx`, `EventFeed.tsx`, `api.ts` | ручной прогон через симулятор |
-| 4 | Оверлей-сервер: файлы, `subscribe`-протокол, токен, фикс-порт, `/overlay/alerts` | `overlay.rs`, `overlay/*.html`, `docs/protocol.md` | `/overlay` старый работает; алерты идут |
+| 1 ✅ | Модель данных §1 + sidecar `count/coins/gift_id` + TS-зеркала | `types.rs`, `types.ts`, `settings.rs`, `tiktok-sidecar/index.js` | старые settings грузятся; CI зелёный |
+| 2 ✅ | `ActionScheduler`: match_all, кулдауны, накопители, per_unit, очередь, пауза, `test_rule` | `scheduler.rs`, `lib.rs`, `commands.rs` | unit-тесты §13 |
+| 3 ✅ | Маппер-UI: новые колонки, ▶ тест, статусы в ленте | `MapperPage.tsx`, `EventFeed.tsx`, `api.ts` | ручной прогон через симулятор |
+| 4 ✅ | Оверлей-сервер: файлы, `subscribe`-протокол, токен, фикс-порт, `/overlay/alerts` | `overlay.rs`, `overlay/*.html`, `docs/protocol.md` | `/overlay` старый работает; алерты идут |
 | 5 | Алерты + прерывания | `scheduler.rs`, drawer в маппере | тесты прерываний; e2e |
 | 6 | Медиатека + видео/GIF/звук | `media.rs`, `MediaPage.tsx`, `overlay.rs` | mp4/gif/mp3 играют в TikTok LIVE Studio |
 | 7 | Оверлей пресета (3 шаблона, live-update), общий рендер с PNG | `overlay/preset.html`, `OverlaysPage.tsx` | правка → перерисовка |
@@ -751,11 +751,12 @@ README/`docs/` в той же ветке.
 
 1. **Тарифы**: список планов, цены в ₽, лимиты из §8.2, будет ли Free с
    бесплатными играми, нужен ли «лимит заработка» вообще (это модель
-   StreamToEarn; можно обойтись только лимитами функций).
+   StreamToEarn; можно обойтись только лимитами функций). лимитов нет фри тира тоже
 2. **TTS**: хватит ли системных голосов Windows или нужен облачный
-   (Yandex SpeechKit / Azure / ElevenLabs — платно, нужен ключ и серверный прокси).
+   (Yandex SpeechKit / Azure / ElevenLabs — платно, нужен ключ и серверный прокси). нужен наверное
 3. **Облачная ссылка на оверлей** через relay (для стрима с другого ПК) — делать ли в v1.
-4. **Пилотная сторонняя игра** (§10.2).
-5. **Мини-игры Minecraft**: кто пишет Java-плагины (отдельная работа), какие первыми.
-6. **Источник каталога подарков** вместо скрейпа streamtoearn.io (§12).
-7. **Серверный учёт лимита** для relay-пути (§8.4) — v1 или v2.
+4. **Пилотная сторонняя игра** (§10.2). роблокс
+5. **Мини-игры Minecraft**: кто пишет Java-плагины (отдельная работа), какие первыми. будут добавляться сервера свои по идее с плагинами, либо мы свои будем постить
+6. **Источник каталога подарков** вместо скрейпа streamtoearn.io (§12). каталог подарков взять из streamtoearn
+7. **Серверный учёт лимита** для relay-пути (§8.4) — v1 или v2. не знаю
+

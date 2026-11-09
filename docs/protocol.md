@@ -56,17 +56,49 @@ Tokens are minted per launch (`issue_token`) and **consumed on first use**.
 The game replies to transport-level `ping` with `pong` and otherwise stays
 silent after `hello`.
 
-## Overlay feed (`ws://127.0.0.1:<dynamic port>/ws`)
+## Overlay feed (`ws://127.0.0.1:<port>/ws?t=<overlay_token>`)
 
-The overlay page is served on the same OS-assigned port as `/overlay`
-(the exact URL comes from `get_bootstrap`). The page derives the socket
-address from `location.host` — no hardcoded port.
+The overlay server hosts one Browser Source page per widget
+(`/overlay`, `/overlay/alerts`, `/overlay/preset`, `/overlay/spinner`,
+`/overlay/tts`, `/overlay/progress`) plus `/gifts/*.webp` icons. Every
+HTTP route and the socket require `?t=<overlay_token>` — the exact URLs
+come from `get_bootstrap().overlay_pages`. The port is OS-assigned unless
+`overlay_port` pins it (`set_overlay_port`).
+
+```jsonc
+// client → server, once after connect:
+{ "type": "subscribe", "channels": ["alerts", "preset"] }
+// channels: events | alerts | preset | spinner | tts | progress
+```
+
+Without `subscribe` the client gets the legacy stream (overlay v1):
 
 ```jsonc
 // on connect:
 { "type": "snapshot", "recent": [StreamEvent…], "top": [["user", total]…] }
 // then live:
 { "type": "event", "event": { …StreamEvent… } }
+```
+
+Subscribed clients receive `OverlayFrame`s for their channels; the last
+`preset`/`progress`/`alerts` frame is replayed on subscribe so pages
+aren't blank on open:
+
+```jsonc
+{ "type": "alert",  "id": "…", "text": "…", "duration_ms": 3000,
+  "sound": {"url": "/media/x", "volume": 1}, "media": null,
+  "position": "top", "style": "default", "user": "…" }
+{ "type": "alert_cancel", "id": "…" }
+{ "type": "takeover", "user": "…", "preset": "…", "until_ms": 0 }
+{ "type": "preset", "name": "…", "style": {…OverlayStyle…},
+  "rows": [{"gift":"Rose","gift_image":"/gifts/rose.webp","count":1,
+            "coins":1,"label":"spawn_enemy","image":null}] }
+{ "type": "spinner", "id": "…", "pool": "…",
+  "segments": [SpinnerSegment…], "result_index": 3,
+  "spin_ms": 4500, "user": "…" }
+{ "type": "tts", "id": "…", "text": "…", "state": "start" }
+{ "type": "progress", "items": [{"rule_id":"…","label":"лайки",
+                                 "value":63,"target":100}] }
 ```
 
 ## Trigger rules

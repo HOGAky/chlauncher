@@ -205,6 +205,12 @@ export const setStreamerMode = (enabled: boolean) =>
 /** Broadcasts a chroma-key toggle to connected games. */
 export const setChromaKey = (enabled: boolean) => cmd<void>('set_chroma_key', { enabled });
 
+/** Pins the overlay port (0 = OS-assigned); applies on next launch. */
+export const setOverlayPort = (port: number) => cmd<void>('set_overlay_port', { port });
+
+/** Rotates the overlay token — all copied Browser Source URLs expire. */
+export const rotateOverlayToken = () => cmd<void>('rotate_overlay_token');
+
 /** Backend base URL currently in use. */
 export const getServerUrl = () => cmd<string>('get_server_url');
 

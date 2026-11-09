@@ -29,11 +29,15 @@ function statusBadge(st: IntegrationStatus | undefined) {
 }
 
 export default function IntegrationsPage() {
-  const { boot, streamerMode, overlayUrl } = useApp();
+  const { boot, streamerMode } = useApp();
   const [username, setUsername] = useState(boot?.tiktok_username ?? '');
   const [daToken, setDaToken] = useState('');
   const [statuses, setStatuses] = useState(boot?.integrations);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  // Overlay pages (§5.4) — refreshed from bootstrap after token rotation.
+  const [pages, setPages] = useState(boot?.overlay_pages ?? null);
+  const [port, setPort] = useState('');
+  const [overlayMsg, setOverlayMsg] = useState('');
 
   // Roblox cloud-relay forward
   const fwd = boot?.forward;
@@ -99,12 +103,44 @@ export default function IntegrationsPage() {
   // минуты при открытой сессии обычно означает мёртвую комнату/зависание.
   const stale = ttConnected && actAgeSec !== null && actAgeSec > 60;
 
-  const copyOverlay = () => {
-    navigator.clipboard.writeText(overlayUrl).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+  const copyUrl = (key: string, url: string) => {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(key);
+      setTimeout(() => setCopied(null), 1500);
     });
   };
+
+  const savePort = () => {
+    const p = port.trim() === '' ? 0 : Number(port);
+    if (!Number.isInteger(p) || p < 0 || p > 65535) {
+      setOverlayMsg('Порт: 0 (авто) или 1024–65535');
+      return;
+    }
+    api
+      .setOverlayPort(p)
+      .then(() => setOverlayMsg('Сохранено — применится после перезапуска лаунчера'))
+      .catch((e) => setOverlayMsg(humanError(e)));
+  };
+
+  const rotateToken = () => {
+    api
+      .rotateOverlayToken()
+      .then(() => api.getBootstrap())
+      .then((b) => {
+        setPages(b.overlay_pages ?? null);
+        setOverlayMsg('Токен обновлён — старые URL оверлеев больше не работают');
+      })
+      .catch((e) => setOverlayMsg(humanError(e)));
+  };
+
+  const overlayPages: [string, string, string][] = [
+    ['main', 'Всё в одном', 'лента + алерты + топ дарителей'],
+    ['alerts', 'Алерты', 'карточки событий, звук и медиа'],
+    ['preset', 'Пресет', 'живая шпаргалка подарок → действие'],
+    ['spinner', 'Розыгрыш', 'колесо Gift Spinner'],
+    ['tts', 'TTS', 'озвучка + субтитры'],
+    ['progress', 'Прогресс', 'накопители «лайки 63/100»'],
+  ];
 
   return (
     <div className="max-w-2xl flex flex-col gap-4">
@@ -311,21 +347,56 @@ export default function IntegrationsPage() {
       {/* Overlay */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Web-оверлей для TikTok Live Studio</CardTitle>
+          <CardTitle className="text-sm">Web-оверлеи для TikTok Live Studio / OBS</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-2">
+        <CardContent className="flex flex-col gap-3">
           <p className="text-xs text-muted-foreground">
-            Добавьте этот URL как «Browser Source» в TikTok Live Studio — последние
-            донаты, алерты и топ дарителей отобразятся поверх стрима.
+            Каждый оверлей — отдельный Browser Source: добавляйте только нужные.
+            URL уже содержит токен доступа — не публикуйте его.
           </p>
-          <div className="flex gap-2 items-center">
-            <code className="flex-1 text-xs bg-secondary/60 rounded-md px-3 py-2 select-all">
-              {overlayUrl}
-            </code>
-            <Button variant="outline" size="sm" onClick={copyOverlay}>
-              <Copy size={14} /> {copied ? 'Скопировано' : 'Копировать'}
+          {pages ? (
+            <div className="flex flex-col gap-1.5">
+              {overlayPages.map(([key, title, hint]) => (
+                <div key={key} className="flex items-center gap-2">
+                  <div className="w-20 text-xs font-medium shrink-0">{title}</div>
+                  <code className="flex-1 text-[10px] bg-secondary/60 rounded px-2 py-1.5 select-all truncate">
+                    {pages[key as keyof typeof pages]}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => copyUrl(key, pages[key as keyof typeof pages])}
+                  >
+                    <Copy size={12} /> {copied === key ? 'OK' : ''}
+                  </Button>
+                  <span className="text-[10px] text-muted-foreground w-40 hidden xl:block">
+                    {hint}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-amber-400">Оверлей-сервер не запустился — см. ошибку сервиса.</p>
+          )}
+          <div className="flex gap-2 items-center border-t border-border pt-3">
+            <Input
+              className="w-32"
+              placeholder="Порт (0=авто)"
+              value={port}
+              onChange={(e) => setPort(e.target.value)}
+            />
+            <Button variant="outline" size="sm" onClick={savePort}>
+              Фиксировать порт
+            </Button>
+            <Button variant="outline" size="sm" onClick={rotateToken}>
+              <RefreshCw size={12} /> Новый токен
             </Button>
           </div>
+          {overlayMsg && <p className="text-[11px] text-amber-400">{overlayMsg}</p>}
+          <p className="text-[10px] text-muted-foreground">
+            Фиксированный порт делает URL стабильным между запусками (удобно для OBS).
+            «Новый токен» инвалидирует все скопированные URL.
+          </p>
         </CardContent>
       </Card>
     </div>

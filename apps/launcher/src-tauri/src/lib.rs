@@ -101,22 +101,48 @@ pub fn run() {
                     }
                 });
             }
-            let overlay_port =
-                match tauri::async_runtime::block_on(overlay::start_overlay_server(hub.clone())) {
-                    Ok(port) => Some(port),
-                    Err(e) => {
+            // Overlay frames (alerts/spinner/progress/takeover) — the
+            // overlay server relays these to /ws subscribers (§5.3).
+            // Created before the server so it can relay from day one.
+            let (overlay_tx, _) = broadcast::channel::<OverlayFrame>(256);
+            let (overlay_token, overlay_port_cfg) = settings
+                .try_lock()
+                .map(|s| (s.data.overlay_token.clone(), s.data.overlay_port))
+                .unwrap_or_default();
+            let overlay_port = match tauri::async_runtime::block_on(overlay::start_overlay_server(
+                hub.clone(),
+                overlay_tx.clone(),
+                overlay_token,
+                overlay_port_cfg,
+            )) {
+                Ok((port, fell_back)) => {
+                    if fell_back {
                         let msg = format!(
-                            "Не удалось открыть локальный сервис (overlay): {e}. \
-                             Возможно, запущена другая копия chlauncher или порт заблокирован."
+                            "Фиксированный порт оверлея {overlay_port_cfg} занят — \
+                                 оверлей запущен на случайном порту {port}. \
+                                 Обновите URL в OBS или освободите порт."
                         );
-                        tracing::error!("{msg}");
+                        tracing::warn!("{msg}");
                         service_error = Some(match service_error {
                             Some(prev) => format!("{prev}\n{msg}"),
                             None => msg,
                         });
-                        None
                     }
-                };
+                    Some(port)
+                }
+                Err(e) => {
+                    let msg = format!(
+                        "Не удалось открыть локальный сервис (overlay): {e}. \
+                             Возможно, запущена другая копия chlauncher или порт заблокирован."
+                    );
+                    tracing::error!("{msg}");
+                    service_error = Some(match service_error {
+                        Some(prev) => format!("{prev}\n{msg}"),
+                        None => msg,
+                    });
+                    None
+                }
+            };
 
             let integrations = Arc::new(IntegrationManager::new(
                 raw_tx.clone(),
@@ -138,9 +164,6 @@ pub fn run() {
             // (Roblox-side games poll the relay; see docs/roblox-integration.md).
             let forwarder = forwarder::Forwarder::start(&hub, settings.clone(), api.clone());
 
-            // Overlay frames (alerts/spinner/progress/takeover) — the
-            // overlay server relays these to /ws subscribers (§5.3).
-            let (overlay_tx, _) = broadcast::channel::<OverlayFrame>(256);
             let scheduler = Arc::new(ActionScheduler::new(hub.clone(), overlay_tx.clone()));
             scheduler.set_alerts_enabled(
                 settings
@@ -194,6 +217,24 @@ pub fn run() {
                 ));
             }
 
+            // Seed the preset cheat-sheet so a late-joining /overlay/preset
+            // page renders immediately (replayed from last_frames).
+            {
+                let settings2 = settings.clone();
+                let otx = overlay_tx.clone();
+                tauri::async_runtime::spawn(async move {
+                    let s = settings2.lock().await;
+                    let profile = s
+                        .data
+                        .trigger_profiles
+                        .get("default")
+                        .cloned()
+                        .unwrap_or_else(|| TriggerMapper::default_profile("default"));
+                    drop(s);
+                    let _ = otx.send(overlay::preset_frame(&profile));
+                });
+            }
+
             // --- watchdog: reap exited game processes -------------------
             tauri::async_runtime::spawn(watchdog_loop(app.handle().clone()));
 
@@ -235,6 +276,7 @@ pub fn run() {
             commands::import_trigger_preset,
             commands::simulate_event,
             commands::get_event_feed,
+            commands::get_event_feed_items,
             commands::scheduler_pause,
             commands::get_scheduler_status,
             commands::scheduler_reset_counters,
@@ -242,6 +284,8 @@ pub fn run() {
             commands::test_rule,
             commands::set_streamer_mode,
             commands::set_chroma_key,
+            commands::set_overlay_port,
+            commands::rotate_overlay_token,
             commands::get_hwid,
             commands::get_server_url,
             commands::set_server_url,

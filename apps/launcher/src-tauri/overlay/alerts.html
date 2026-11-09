@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>chlauncher · alerts</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: transparent; overflow: hidden;
+    font-family: 'Segoe UI', system-ui, sans-serif; color: #fff;
+    width: 100vw; height: 100vh;
+  }
+  .alert {
+    position: absolute; left: 50%; transform: translateX(-50%) scale(.85);
+    opacity: 0; transition: all .22s ease; pointer-events: none;
+    background: linear-gradient(135deg,#7c3aed,#db2777);
+    border-radius: 16px; padding: 14px 28px; text-align: center;
+    box-shadow: 0 8px 32px rgba(0,0,0,.55); max-width: 90vw;
+  }
+  .alert.show { opacity: 1; transform: translateX(-50%) scale(1); }
+  .alert.top { top: 24px; }
+  .alert.center { top: 50%; transform: translate(-50%, -50%) scale(.9); }
+  .alert.center.show { transform: translate(-50%, -50%) scale(1); }
+  .alert.bottom { bottom: 40px; top: auto; }
+  .alert .text { font-size: 22px; font-weight: 700; }
+  .alert .user { font-size: 13px; font-weight: 400; opacity: .85; margin-top: 4px; }
+  .alert.minimal { background: rgba(15,17,26,.85); padding: 8px 18px; border: 1px solid rgba(255,255,255,.15); }
+  .alert.minimal .text { font-size: 16px; font-weight: 500; }
+  .alert.big .text { font-size: 34px; }
+  .alert img.media, .alert video.media {
+    display: block; margin: 8px auto 0; max-width: 420px; max-height: 40vh;
+    border-radius: 12px;
+  }
+  #takeover {
+    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    background: rgba(219,39,119,.92); border-radius: 999px;
+    padding: 4px 16px; font-size: 12px; font-weight: 600;
+    display: none; z-index: 10;
+  }
+</style>
+</head>
+<body>
+<div id="takeover"></div>
+<script>
+const token = new URLSearchParams(location.search).get('t') || '';
+const takeover = document.getElementById('takeover');
+const timers = {};
+const els = {};
+
+function mediaUrl(u) {
+  if (!u) return u;
+  return u + (u.includes('?') ? '&' : '?') + 't=' + encodeURIComponent(token);
+}
+
+function showAlert(f) {
+  hideAlert(f.id); // re-fires replace, never stack
+  const el = document.createElement('div');
+  el.className = 'alert ' + (f.position || 'top') + ' ' + (f.style === 'default' ? '' : f.style || '');
+  const text = document.createElement('div');
+  text.className = 'text'; text.textContent = f.text || '';
+  el.appendChild(text);
+  if (f.user) {
+    const u = document.createElement('div');
+    u.className = 'user'; u.textContent = f.user;
+    el.appendChild(u);
+  }
+  if (f.media && f.media.url) {
+    const url = mediaUrl(f.media.url);
+    const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(f.media.url);
+    const m = document.createElement(isVideo ? 'video' : 'img');
+    m.className = 'media';
+    m.src = url;
+    m.style.objectFit = f.media.fit === 'cover' ? 'cover' : 'contain';
+    if (isVideo) { m.autoplay = true; m.loop = true; m.volume = f.media.volume ?? 1; m.playsInline = true; }
+    el.appendChild(m);
+  }
+  document.body.appendChild(el);
+  els[f.id] = el;
+  requestAnimationFrame(() => el.classList.add('show'));
+  if (f.sound && f.sound.url) {
+    const a = new Audio(mediaUrl(f.sound.url));
+    a.volume = Math.max(0, Math.min(1, f.sound.volume ?? 1));
+    a.play().catch(() => {});
+  }
+  timers[f.id] = setTimeout(() => hideAlert(f.id), Math.max(500, f.duration_ms || 3000));
+}
+
+function hideAlert(id) {
+  const el = els[id];
+  if (!el) return;
+  clearTimeout(timers[id]); delete timers[id]; delete els[id];
+  el.classList.remove('show');
+  setTimeout(() => el.remove(), 250);
+}
+
+function showTakeover(f) {
+  const secs = Math.max(0, Math.round((f.until_ms - Date.now()) / 1000));
+  takeover.textContent = `${f.user} захватил эфир — пресет «${f.preset}»`;
+  takeover.style.display = 'block';
+  setTimeout(() => takeover.style.display = 'none', Math.max(1000, secs * 1000));
+}
+
+function connect() {
+  const ws = new WebSocket(`ws://${location.host}/ws?t=${encodeURIComponent(token)}`);
+  ws.onopen = () => ws.send(JSON.stringify({ type: 'subscribe', channels: ['alerts'] }));
+  ws.onmessage = (m) => {
+    try {
+      const f = JSON.parse(m.data);
+      if (f.type === 'alert') showAlert(f);
+      else if (f.type === 'alert_cancel') hideAlert(f.id);
+      else if (f.type === 'takeover') showTakeover(f);
+    } catch (e) {}
+  };
+  ws.onclose = () => setTimeout(connect, 2000);
+}
+connect();
+</script>
+</body>
+</html>
