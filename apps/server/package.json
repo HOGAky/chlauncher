@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
-    "test": "node --env-file=test/test.env --test test/"
+    "test": "node --env-file=test/test.env --test"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.0",
