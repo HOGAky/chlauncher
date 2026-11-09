@@ -499,6 +499,27 @@ pub async fn tiktok_disconnect(state: State<'_, AppState>) -> Result<(), String>
     Ok(())
 }
 
+/// Reconnects TikTok to the saved username — the «Обновить связь» button.
+#[tauri::command]
+pub async fn tiktok_reconnect(state: State<'_, AppState>) -> Result<(), String> {
+    let username = state
+        .settings
+        .lock()
+        .await
+        .data
+        .tiktok_username
+        .clone()
+        .ok_or("ник TikTok не сохранён — подключитесь вручную")?;
+    tiktok_connect(username, state).await
+}
+
+/// Lightweight status snapshot (statuses + last activity) for UI polling —
+/// cheaper than `get_bootstrap` for a 5 s freshness loop.
+#[tauri::command]
+pub async fn get_integration_status(state: State<'_, AppState>) -> Result<Value, String> {
+    Ok(state.integrations.snapshot().await)
+}
+
 /// Connect DonationAlerts with an OAuth access token.
 #[tauri::command]
 pub async fn da_connect(token_input: String, state: State<'_, AppState>) -> Result<(), String> {

@@ -188,6 +188,8 @@ pub fn run() {
             commands::kill_game,
             commands::tiktok_connect,
             commands::tiktok_disconnect,
+            commands::tiktok_reconnect,
+            commands::get_integration_status,
             commands::da_connect,
             commands::da_disconnect,
             commands::get_triggers,

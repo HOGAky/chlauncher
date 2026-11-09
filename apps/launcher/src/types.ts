@@ -180,6 +180,8 @@ export interface Bootstrap {
   integrations: {
     tiktok: IntegrationStatus;
     tiktok_username: string | null;
+    /** Unix seconds of the last sidecar heartbeat/event — staleness signal. */
+    tiktok_last_activity?: number | null;
     donationalerts: IntegrationStatus;
   };
   running: string[];

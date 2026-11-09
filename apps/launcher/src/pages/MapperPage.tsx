@@ -5,9 +5,10 @@
  * commands. Profiles persist per-game as JSON in launcher settings.
  */
 import React, { useEffect, useState } from 'react';
-import { Plus, Save, Trash2, Wand2 } from 'lucide-react';
+import { ImageDown, Plus, Save, Trash2, Wand2 } from 'lucide-react';
 import * as api from '../api';
-import type { TriggerPreset, TriggerProfile, TriggerRule } from '../types';
+import type { GiftEntry, TriggerPreset, TriggerProfile, TriggerRule } from '../types';
+import { renderPresetPoster } from '../lib/presetPoster';
 import GiftPicker from '../components/GiftPicker';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -126,6 +127,29 @@ export default function MapperPage() {
 
   const selBuiltin = presets.find((p) => p.name === presetSel)?.builtin;
 
+  /** Renders the profile as a PNG cheat sheet and downloads it. */
+  const [busyPng, setBusyPng] = useState(false);
+  const downloadPoster = async () => {
+    if (!profile || busyPng) return;
+    setBusyPng(true);
+    setError(null);
+    try {
+      const gifts: GiftEntry[] = await fetch('/gifts.json')
+        .then((r) => (r.ok ? r.json() : []))
+        .catch(() => []);
+      const blob = await renderPresetPoster(profile, gifts);
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `preset-${profile.preset ?? profile.game_slug}.png`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      setError(humanError(e));
+    } finally {
+      setBusyPng(false);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -195,6 +219,15 @@ export default function MapperPage() {
             применён: {profile.preset}
           </Badge>
         )}
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={!profile || busyPng}
+          title="Скачать PNG-табличку: подарок ×N → действие (для зрителей/закрепа)"
+          onClick={downloadPoster}
+        >
+          <ImageDown size={14} /> PNG
+        </Button>
       </div>
 
       <p className="text-xs text-muted-foreground">

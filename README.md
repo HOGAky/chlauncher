@@ -210,6 +210,16 @@ atomically as `static/games/<slug>/<version>.zip` and recorded as an
 immutable `game_builds` row — a `(slug, version)` can never be
 overwritten; rollbacks produce a new patch version.
 
+## Stream connection status
+
+The header always shows the TikTok link state (`LIVE` / `связь…` /
+`оффлайн`), and the Integrations card shows whether the room is on air
+plus the age of the last sidecar heartbeat (`tiktok_last_activity` —
+pings arrive every ~30 s). Staleness > 60 s flags «связь устарела» and
+**Обновить связь** (`tiktok_reconnect`) respawns the sidecar with the
+saved username; `get_integration_status` is the lightweight snapshot the
+UI polls every 5 s.
+
 ## Cloud servers (Roblox · Minecraft)
 
 External game servers can't connect to the launcher's local WebSocket,
@@ -241,7 +251,9 @@ concept as StreamToEarn's "привяжи события к пресету"). Bu
 rules under a name, the dropdown applies one to the selected game, and
 `profile.preset` records which preset a game currently runs. Built-in
 names are reserved server-side; deleting a preset never touches game
-profiles already applied from it.
+profiles already applied from it. The **PNG** button renders the profile
+as a cheat-sheet poster (gift icon × quantity → action glyph + name) for
+viewer pin/print.
 
 The bundled **gift catalog** (`apps/launcher/public/gifts.json` +
 `public/gifts/*.webp`, ~1.7k entries) backs the 🎁 picker next to each
