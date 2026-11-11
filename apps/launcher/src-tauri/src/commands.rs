@@ -66,6 +66,8 @@ pub struct AppState {
     pub subathon: Arc<crate::subathon::Subathon>,
     /// Viewer queue (!join) — `queue_next` injects a `queue` event.
     pub queue: Arc<crate::queue::ViewerQueue>,
+    /// Hype meter - sliding-window coins for /overlay/hype.
+    pub hype: Arc<crate::hype::HypeTracker>,
     /// Managed Paper server lifecycle (§9).
     pub mc: Arc<crate::minecraft::MinecraftManager>,
     /// Shared adapter key for `hello_adapter` validation (§10.1).
@@ -1560,6 +1562,50 @@ pub async fn queue_set_open(open: bool, state: State<'_, AppState>) -> Result<()
 pub async fn queue_clear(state: State<'_, AppState>) -> Result<(), String> {
     state.queue.clear().await;
     Ok(())
+}
+
+/// Live hype-meter status (coins in window + 0-100 level).
+#[tauri::command]
+pub async fn hype_status(state: State<'_, AppState>) -> Result<Value, String> {
+    Ok(json!(state.hype.status().await))
+}
+
+/// Saves the hype-meter knobs (window seconds + 100% target).
+#[tauri::command]
+pub async fn save_hype_cfg(
+    cfg: crate::types::HypeCfg,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut s = state.settings.lock().await;
+    s.data.hype = cfg;
+    s.save().map_err(|e| e.to_string())
+}
+
+/// Timed auto-events list (id/label/interval/enabled).
+#[tauri::command]
+pub async fn get_timed_events(state: State<'_, AppState>) -> Result<Value, String> {
+    Ok(json!(state.settings.lock().await.data.timed_events))
+}
+
+/// Replaces the timed-event list (UI edits locally then saves).
+#[tauri::command]
+pub async fn save_timed_events(
+    mut events: Vec<crate::types::TimedEvent>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    if events.len() > 20 {
+        return Err("Не больше 20 автособытий".into());
+    }
+    for e in events.iter_mut() {
+        e.label = e.label.trim().chars().take(120).collect();
+        if e.id.is_empty() {
+            e.id = uuid::Uuid::new_v4().to_string();
+        }
+        e.interval_min = e.interval_min.clamp(1, 24 * 60);
+    }
+    let mut s = state.settings.lock().await;
+    s.data.timed_events = events;
+    s.save().map_err(|e| e.to_string())
 }
 
 /// Toggles streamer mode (masks personal data in the UI).

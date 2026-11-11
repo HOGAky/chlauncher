@@ -325,6 +325,51 @@ impl Default for SubathonCfg {
     }
 }
 
+/// Hype-meter config — the overlay bar fills as paid events pour in.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct HypeCfg {
+    /// Sliding window the meter sums, seconds.
+    pub window_s: u32,
+    /// Coins inside the window that mean "100% hype".
+    pub target_coins: u32,
+}
+
+impl Default for HypeCfg {
+    fn default() -> Self {
+        Self {
+            window_s: 60,
+            target_coins: 500,
+        }
+    }
+}
+
+/// Timed auto-event («каждые N минут → действие»): a synthetic
+/// `timer` event re-enters the ingest pipeline, so a rule
+/// (`kind=timer`, `match=label`) runs the action like any trigger.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TimedEvent {
+    pub id: String,
+    /// Overlay/match label ("напоминание о подписке").
+    pub label: String,
+    /// Fire interval in minutes.
+    pub interval_min: u32,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+impl Default for TimedEvent {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            label: String::new(),
+            interval_min: 10,
+            enabled: true,
+        }
+    }
+}
+
 impl Default for StreamGoal {
     fn default() -> Self {
         Self {

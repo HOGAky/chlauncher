@@ -571,3 +571,25 @@ export interface QueueStatus {
   entries: QueueEntry[];
   last_called: string;
 }
+
+/** Hype-meter knobs — persisted in settings (`save_hype_cfg`). */
+export interface HypeCfg {
+  window_s: number;
+  target_coins: number;
+}
+
+/** Live hype state — `hype_status` / `/hype.json`. */
+export interface HypeStatus {
+  coins: number;
+  level: number;
+  target_coins: number;
+  window_s: number;
+}
+
+/** Timed auto-event («каждые N минут → действие»). */
+export interface TimedEvent {
+  id: string;
+  label: string;
+  interval_min: number;
+  enabled: boolean;
+}

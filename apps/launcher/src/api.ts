@@ -296,6 +296,21 @@ export const queueSetOpen = (open: boolean) =>
 /** Empties the queue. */
 export const queueClear = () => cmd<void>('queue_clear');
 
+/** Live hype-meter status. */
+export const hypeStatus = () => cmd<import('./types').HypeStatus>('hype_status');
+
+/** Saves the hype-meter knobs. */
+export const saveHypeCfg = (cfg: import('./types').HypeCfg) =>
+  cmd<void>('save_hype_cfg', { cfg });
+
+/** Timed auto-events list. */
+export const getTimedEvents = () =>
+  cmd<import('./types').TimedEvent[]>('get_timed_events');
+
+/** Replaces the timed-event list. */
+export const saveTimedEvents = (events: import('./types').TimedEvent[]) =>
+  cmd<void>('save_timed_events', { events });
+
 /** Alert playback settings for the mapper status bar (§3.1–§3.2). */
 export const getAlertsSettings = () =>
   cmd<{

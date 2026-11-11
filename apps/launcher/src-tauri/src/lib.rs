@@ -25,6 +25,7 @@ pub mod forwarder;
 pub mod game_ws;
 pub mod goals;
 pub mod hwid;
+pub mod hype;
 pub mod integrations;
 pub mod logging;
 pub mod media;
@@ -36,6 +37,7 @@ pub mod queue;
 pub mod scheduler;
 pub mod settings;
 pub mod subathon;
+pub mod timed;
 pub mod tts;
 pub mod types;
 pub mod usage;
@@ -169,6 +171,15 @@ pub fn run() {
             // Viewer queue (!join) — `queue_next` injects a `queue` event
             // into the pipeline so a rule can act on the called viewer.
             let queue = queue::ViewerQueue::new(raw_tx.clone(), overlay_tx.clone());
+            // Hype meter — sliding-window coins sum on /overlay/hype.
+            let hype = hype::HypeTracker::new(settings.clone());
+            // Timed auto-events — every-N-minutes synthetic `timer` events
+            // re-enter the ingest pipeline for trigger rules to act on.
+            let timed = timed::TimedEvents::new(settings.clone(), raw_tx.clone());
+            {
+                let t = timed.clone();
+                tauri::async_runtime::spawn(async move { t.run().await });
+            }
             let overlay_port = match tauri::async_runtime::block_on(overlay::start_overlay_server(
                 hub.clone(),
                 overlay_tx.clone(),
@@ -181,6 +192,7 @@ pub fn run() {
                 polls.clone(),
                 subathon.clone(),
                 queue.clone(),
+                hype.clone(),
             )) {
                 Ok((port, fell_back)) => {
                     if fell_back {
@@ -310,6 +322,7 @@ pub fn run() {
                 polls: polls.clone(),
                 subathon: subathon.clone(),
                 queue: queue.clone(),
+                hype: hype.clone(),
                 mc: mc.clone(),
                 adapter_key: adapter_key.clone(),
                 overlay_token: overlay_token.clone(),
@@ -331,6 +344,7 @@ pub fn run() {
                     polls.clone(),
                     subathon.clone(),
                     queue.clone(),
+                    hype.clone(),
                 ));
             }
 
@@ -494,6 +508,10 @@ pub fn run() {
             commands::queue_status,
             commands::queue_set_open,
             commands::queue_clear,
+            commands::hype_status,
+            commands::save_hype_cfg,
+            commands::get_timed_events,
+            commands::save_timed_events,
         ])
         .build(tauri::generate_context!());
     let app = match app {
@@ -615,6 +633,7 @@ async fn mapper_loop(
     polls: Arc<polls::PollTracker>,
     subathon: Arc<subathon::Subathon>,
     queue: Arc<queue::ViewerQueue>,
+    hype: Arc<hype::HypeTracker>,
 ) {
     let mut cache: Option<MappingCache> = None;
     while let Some(raw) = raw_rx.recv().await {
@@ -627,6 +646,7 @@ async fn mapper_loop(
         polls.note_raw(&raw).await;
         subathon.note_raw(&raw).await;
         queue.note_raw(&raw).await;
+        hype.note_raw(&raw).await;
         let slug = active_slug
             .lock()
             .await

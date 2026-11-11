@@ -78,6 +78,12 @@ pub struct Settings {
     /// Subathon countdown config — see `subathon.rs`.
     #[serde(default)]
     pub subathon: crate::types::SubathonCfg,
+    /// Hype-meter knobs (window + 100% target) — see `hype.rs`.
+    #[serde(default)]
+    pub hype: crate::types::HypeCfg,
+    /// Timed auto-events («каждые N минут») — see `timed.rs`.
+    #[serde(default)]
+    pub timed_events: Vec<crate::types::TimedEvent>,
 }
 
 /// Managed Minecraft server configuration (parity spec §9.2–§9.3).

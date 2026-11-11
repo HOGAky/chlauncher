@@ -21,6 +21,7 @@ import GoalsCard from '../components/GoalsCard';
 import PollCard from '../components/PollCard';
 import QueueCard from '../components/QueueCard';
 import SubathonCard from '../components/SubathonCard';
+import TimedCard from '../components/TimedCard';
 /** Maps serde's IntegrationStatus union to badge + label. */
 function statusBadge(st: IntegrationStatus | undefined) {
   if (!st || st === 'disconnected') return <Badge variant="outline">Отключено</Badge>;
@@ -172,6 +173,7 @@ export default function IntegrationsPage() {
     ['poll', 'overlay/poll', 'Опрос', 'живые столбики голосования'],
     ['subathon', 'overlay/subathon', 'Субатон', 'обратный отсчёт'],
     ['queue', 'overlay/queue', 'Очередь', 'список зрителей !join'],
+    ['hype', 'overlay/hype', 'Хайп', 'шкала активности'],
   ];
 
   return (
@@ -476,6 +478,9 @@ export default function IntegrationsPage() {
 
       {/* Viewer queue - next injects a queue event into the pipeline. */}
       <QueueCard />
+
+      {/* Timed auto-events + hype meter knobs. */}
+      <TimedCard />
 
       {/* External game adapters (§10.1) — mods connect to the local
           game WS with the shared key instead of a launch token. */}

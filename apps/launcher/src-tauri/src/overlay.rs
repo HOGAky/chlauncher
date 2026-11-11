@@ -93,6 +93,8 @@ struct OverlayState {
     subathon: Arc<crate::subathon::Subathon>,
     /// Viewer queue for `/queue.json` + `/overlay/queue`.
     queue: Arc<crate::queue::ViewerQueue>,
+    /// Hype meter for `/hype.json` + `/overlay/hype`.
+    hype: Arc<crate::hype::HypeTracker>,
 }
 
 /// Query-param extractor shared by all guarded routes.
@@ -266,6 +268,7 @@ pub async fn start_overlay_server(
     polls: Arc<crate::polls::PollTracker>,
     subathon: Arc<crate::subathon::Subathon>,
     queue: Arc<crate::queue::ViewerQueue>,
+    hype: Arc<crate::hype::HypeTracker>,
 ) -> std::io::Result<(u16, bool)> {
     let state = OverlayState {
         hub,
@@ -280,6 +283,7 @@ pub async fn start_overlay_server(
         polls,
         subathon,
         queue,
+        hype,
     };
 
     // Recorder: remember the last frame per channel for late joiners.
@@ -314,11 +318,13 @@ pub async fn start_overlay_server(
         .route("/overlay/poll", get(page_route(POLL_HTML)))
         .route("/overlay/subathon", get(page_route(SUBATHON_HTML)))
         .route("/overlay/queue", get(page_route(QUEUE_HTML)))
+        .route("/overlay/hype", get(page_route(HYPE_HTML)))
         .route("/top.json", get(serve_top))
         .route("/goals.json", get(serve_goals))
         .route("/poll.json", get(serve_poll))
         .route("/subathon.json", get(serve_subathon))
         .route("/queue.json", get(serve_queue))
+        .route("/hype.json", get(serve_hype))
         .route("/gifts/:file", get(serve_gift))
         .route("/media/:id", get(serve_media))
         .route("/tts/:file", get(serve_tts))
@@ -452,6 +458,17 @@ async fn serve_queue(
         return StatusCode::FORBIDDEN.into_response();
     }
     axum::Json(st.queue.status().await).into_response()
+}
+
+/// `/hype.json` - sliding-window coins + level, polled by the meter page.
+async fn serve_hype(
+    Query(q): Query<HashMap<String, String>>,
+    State(st): State<OverlayState>,
+) -> Response {
+    if !token_ok(q.get("t").map(String::as_str), &st.token) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    axum::Json(st.hype.status().await).into_response()
 }
 
 /// `/media/:id` — media-library file with byte-range support (§4.1:
@@ -668,6 +685,7 @@ const GOALS_HTML: &str = include_str!("../overlay/goals.html");
 const POLL_HTML: &str = include_str!("../overlay/poll.html");
 const SUBATHON_HTML: &str = include_str!("../overlay/subathon.html");
 const QUEUE_HTML: &str = include_str!("../overlay/queue.html");
+const HYPE_HTML: &str = include_str!("../overlay/hype.html");
 const SPINNER_HTML: &str = include_str!("../overlay/spinner.html");
 const TTS_HTML: &str = include_str!("../overlay/tts.html");
 
