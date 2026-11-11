@@ -449,6 +449,7 @@ export interface Bootstrap {
     tts: string;
     progress: string;
     leaderboard: string;
+    goals: string;
   } | null;
   /** Actual OS-assigned game WS port (0 = service failed to bind). */
   game_ws_port: number;
@@ -496,4 +497,28 @@ export interface McPluginCatalog {
   catalog: McPlugin[];
   installed: string[];
   premium_allowed: boolean;
+}
+
+/** Stream-level goal definition («Цель стрима») — mirrors `StreamGoal`. */
+export interface StreamGoal {
+  id: string;
+  label: string;
+  source: string;
+  event_kind: string;
+  match_value: string;
+  count_coins: boolean;
+  target: number;
+  action: string;
+  celebrate: string;
+  enabled: boolean;
+}
+
+/** Goal with live counter — `get_goals` / `/goals.json` row. */
+export interface GoalProgress {
+  id: string;
+  label: string;
+  value: number;
+  target: number;
+  done: boolean;
+  enabled: boolean;
 }

@@ -243,6 +243,19 @@ export const openOverlayWindow = (page: string, chroma: boolean) =>
 export const closeOverlayWindow = (page: string) =>
   cmd<void>('close_overlay_window', { page });
 
+/** Stream goals: live progress rows + stored definitions. */
+export const getGoals = () =>
+  cmd<{ goals: import('./types').GoalProgress[]; defs: import('./types').StreamGoal[] }>(
+    'get_goals'
+  );
+
+/** Replaces the whole goal list. */
+export const saveGoals = (goals: import('./types').StreamGoal[]) =>
+  cmd<void>('save_goals', { goals });
+
+/** Zeroes goal counters and re-arms completed goals. */
+export const resetGoals = () => cmd<void>('reset_goals');
+
 /** Alert playback settings for the mapper status bar (§3.1–§3.2). */
 export const getAlertsSettings = () =>
   cmd<{

@@ -80,6 +80,9 @@ fn default_one_u32() -> u32 {
 fn default_one_f32() -> f32 {
     1.0
 }
+fn default_any() -> String {
+    "any".into()
+}
 fn default_contains() -> String {
     "contains".into()
 }
@@ -260,6 +263,58 @@ pub struct MediaItem {
     pub size: u64,
     #[serde(default)]
     pub duration_ms: Option<u64>,
+}
+
+/// A stream-level goal — "300 roses → spawn boss" (§goals).
+///
+/// Unlike per-rule accumulators (`every_n`, reset on each fire), a goal
+/// accumulates over the whole stream and fires its `action` once on
+/// reaching `target`. Counters live in memory — a launcher restart or
+/// `reset_goals` zeroes them.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamGoal {
+    pub id: String,
+    /// Overlay caption, e.g. «300 роз → босс».
+    pub label: String,
+    /// `"tiktok"` | `"donationalerts"` | `"simulator"` | `"any"`.
+    #[serde(default = "default_any")]
+    pub source: String,
+    /// `"gift"` | `"like"` | `"donation"` | `"comment"` | `"follow"` | `"any"`.
+    #[serde(default = "default_any")]
+    pub event_kind: String,
+    /// Case-insensitive substring of `raw_name`; empty = all of the kind.
+    #[serde(default)]
+    pub match_value: String,
+    /// Accumulate `raw.coins` (coins/RUB value) instead of `raw.count`.
+    /// Use for "5000 coins worth of gifts"; off for "300 roses".
+    #[serde(default)]
+    pub count_coins: bool,
+    pub target: i64,
+    /// Game action dispatched once on completion ("" = celebrate only).
+    #[serde(default)]
+    pub action: String,
+    /// Alert text shown on completion; empty uses the default template.
+    #[serde(default)]
+    pub celebrate: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+impl Default for StreamGoal {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            label: String::new(),
+            source: "any".into(),
+            event_kind: "any".into(),
+            match_value: String::new(),
+            count_coins: false,
+            target: 0,
+            action: String::new(),
+            celebrate: String::new(),
+            enabled: true,
+        }
+    }
 }
 
 /// One trigger-mapping rule in a streamer's profile.

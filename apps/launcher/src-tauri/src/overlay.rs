@@ -85,6 +85,8 @@ struct OverlayState {
     last_frames: Arc<Mutex<HashMap<&'static str, OverlayFrame>>>,
     /// Synthesized TTS WAVs for `output = "overlay"` (`/tts/<id>.wav`, §6).
     wavs: crate::tts::WavStore,
+    /// Stream-goal counters for `/goals.json` + `/overlay/goals`.
+    goals: Arc<crate::goals::GoalTracker>,
 }
 
 /// Query-param extractor shared by all guarded routes.
@@ -254,6 +256,7 @@ pub async fn start_overlay_server(
     media_dir: PathBuf,
     settings: Arc<tokio::sync::Mutex<SettingsStore>>,
     wavs: crate::tts::WavStore,
+    goals: Arc<crate::goals::GoalTracker>,
 ) -> std::io::Result<(u16, bool)> {
     let state = OverlayState {
         hub,
@@ -264,6 +267,7 @@ pub async fn start_overlay_server(
         settings,
         last_frames: Arc::new(Mutex::new(HashMap::new())),
         wavs,
+        goals,
     };
 
     // Recorder: remember the last frame per channel for late joiners.
@@ -294,7 +298,9 @@ pub async fn start_overlay_server(
         .route("/overlay/tts", get(page_route(TTS_HTML)))
         .route("/overlay/progress", get(page_route(PROGRESS_HTML)))
         .route("/overlay/leaderboard", get(page_route(LEADERBOARD_HTML)))
+        .route("/overlay/goals", get(page_route(GOALS_HTML)))
         .route("/top.json", get(serve_top))
+        .route("/goals.json", get(serve_goals))
         .route("/gifts/:file", get(serve_gift))
         .route("/media/:id", get(serve_media))
         .route("/tts/:file", get(serve_tts))
@@ -382,6 +388,18 @@ async fn serve_top(
         .map(|(user, total)| serde_json::json!({"user": user, "total": total}))
         .collect();
     axum::Json(top).into_response()
+}
+
+/// `/goals.json` — stream-goal progress rows (`GoalProgress`), polled by
+/// `/overlay/goals` and the settings card.
+async fn serve_goals(
+    Query(q): Query<HashMap<String, String>>,
+    State(st): State<OverlayState>,
+) -> Response {
+    if !token_ok(q.get("t").map(String::as_str), &st.token) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    axum::Json(st.goals.snapshot().await).into_response()
 }
 
 /// `/media/:id` — media-library file with byte-range support (§4.1:
@@ -594,6 +612,7 @@ const ALERTS_HTML: &str = include_str!("../overlay/alerts.html");
 const PRESET_HTML: &str = include_str!("../overlay/preset.html");
 const PROGRESS_HTML: &str = include_str!("../overlay/progress.html");
 const LEADERBOARD_HTML: &str = include_str!("../overlay/leaderboard.html");
+const GOALS_HTML: &str = include_str!("../overlay/goals.html");
 const SPINNER_HTML: &str = include_str!("../overlay/spinner.html");
 const TTS_HTML: &str = include_str!("../overlay/tts.html");
 

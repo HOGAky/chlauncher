@@ -56,6 +56,9 @@ pub struct AppState {
     pub tts: Arc<crate::tts::Tts>,
     /// Earn-limit meter + entitlements cache (§8).
     pub usage: Arc<crate::usage::UsageMeter>,
+    /// Stream-goal counters («Цели стрима») — raw events accrue here,
+    /// `/goals.json` + `/overlay/goals` render progress.
+    pub goals: Arc<crate::goals::GoalTracker>,
     /// Managed Paper server lifecycle (§9).
     pub mc: Arc<crate::minecraft::MinecraftManager>,
     /// Shared adapter key for `hello_adapter` validation (§10.1).
@@ -165,6 +168,7 @@ pub async fn get_bootstrap(state: State<'_, AppState>) -> Result<Value, String> 
                 "tts": overlay_page(p, t, "/overlay/tts"),
                 "progress": overlay_page(p, t, "/overlay/progress"),
                 "leaderboard": overlay_page(p, t, "/overlay/leaderboard"),
+                "goals": overlay_page(p, t, "/overlay/goals"),
             })
         }),
         "game_ws_port": state.game_server.port(),
@@ -1361,6 +1365,7 @@ const OVERLAY_WINDOW_PAGES: &[&str] = &[
     "overlay/tts",
     "overlay/progress",
     "overlay/leaderboard",
+    "overlay/goals",
 ];
 
 /// Opens (or focuses) a transparent always-on-top window hosting one of
@@ -1424,6 +1429,47 @@ pub async fn close_overlay_window(page: String, app: AppHandle) -> Result<(), St
     if let Some(w) = app.get_webview_window(&label) {
         let _ = w.close();
     }
+    Ok(())
+}
+
+/// Stream goals: live progress (`goals`) + the stored definitions
+/// (`defs`) the editor round-trips.
+#[tauri::command]
+pub async fn get_goals(state: State<'_, AppState>) -> Result<Value, String> {
+    let defs = state.settings.lock().await.data.goals.clone();
+    Ok(json!({
+        "goals": state.goals.snapshot().await,
+        "defs": defs,
+    }))
+}
+
+/// Replaces the whole goal list (UI edits locally then saves). Caps at
+/// 20 goals — enough bars for one stream, keeps the overlay readable.
+#[tauri::command]
+pub async fn save_goals(
+    mut goals: Vec<crate::types::StreamGoal>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    if goals.len() > 20 {
+        return Err("Не больше 20 целей".into());
+    }
+    for g in goals.iter_mut() {
+        g.label = g.label.trim().chars().take(80).collect();
+        if g.id.is_empty() {
+            g.id = uuid::Uuid::new_v4().to_string();
+        }
+        g.target = g.target.clamp(0, 1_000_000_000);
+    }
+    let mut s = state.settings.lock().await;
+    s.data.goals = goals;
+    s.save().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Zeroes all goal counters and re-arms completed goals («новый стрим»).
+#[tauri::command]
+pub async fn reset_goals(state: State<'_, AppState>) -> Result<(), String> {
+    state.goals.reset().await;
     Ok(())
 }
 

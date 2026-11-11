@@ -71,6 +71,10 @@ pub struct Settings {
     /// revocable via regeneration. Never logged.
     #[serde(default)]
     pub adapter_key: String,
+    /// Stream-level goals ("300 роз → босс") — counters are in-memory,
+    /// see `goals.rs`.
+    #[serde(default)]
+    pub goals: Vec<crate::types::StreamGoal>,
 }
 
 /// Managed Minecraft server configuration (parity spec §9.2–§9.3).

@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge';
 
 import { humanError } from '../errorMessages';
+import GoalsCard from '../components/GoalsCard';
 /** Maps serde's IntegrationStatus union to badge + label. */
 function statusBadge(st: IntegrationStatus | undefined) {
   if (!st || st === 'disconnected') return <Badge variant="outline">Отключено</Badge>;
@@ -164,6 +165,7 @@ export default function IntegrationsPage() {
     ['tts', 'overlay/tts', 'TTS', 'озвучка + субтитры'],
     ['progress', 'overlay/progress', 'Прогресс', 'накопители «лайки 63/100»'],
     ['leaderboard', 'overlay/leaderboard', 'Топ', 'топ дарителей за стрим'],
+    ['goals', 'overlay/goals', 'Цели', 'бары целей стрима'],
   ];
 
   return (
@@ -456,6 +458,9 @@ export default function IntegrationsPage() {
           </p>
         </CardContent>
       </Card>
+
+      {/* Stream goals («Цели стрима») — session counters + /overlay/goals. */}
+      <GoalsCard />
 
       {/* External game adapters (§10.1) — mods connect to the local
           game WS with the shared key instead of a launch token. */}

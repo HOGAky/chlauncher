@@ -23,6 +23,7 @@ pub mod downloads;
 pub mod events;
 pub mod forwarder;
 pub mod game_ws;
+pub mod goals;
 pub mod hwid;
 pub mod integrations;
 pub mod logging;
@@ -152,6 +153,9 @@ pub fn run() {
             // Shared token cell: the overlay server validates `?t=` per
             // request, `rotate_overlay_token` writes the new value here.
             let overlay_token = Arc::new(std::sync::RwLock::new(overlay_token));
+            // Stream-goal counters — counted on raw events in the mapper
+            // loop, rendered by /overlay/goals via /goals.json.
+            let goals = goals::GoalTracker::new(settings.clone(), hub.clone(), overlay_tx.clone());
             let overlay_port = match tauri::async_runtime::block_on(overlay::start_overlay_server(
                 hub.clone(),
                 overlay_tx.clone(),
@@ -160,6 +164,7 @@ pub fn run() {
                 media::media_dir(&data_dir),
                 settings.clone(),
                 tts.wavs.clone(),
+                goals.clone(),
             )) {
                 Ok((port, fell_back)) => {
                     if fell_back {
@@ -285,6 +290,7 @@ pub fn run() {
                 overlay_tx: overlay_tx.clone(),
                 tts: tts.clone(),
                 usage: usage.clone(),
+                goals: goals.clone(),
                 mc: mc.clone(),
                 adapter_key: adapter_key.clone(),
                 overlay_token: overlay_token.clone(),
@@ -302,6 +308,7 @@ pub fn run() {
                     active_game_slug.clone(),
                     tts.clone(),
                     usage.clone(),
+                    goals.clone(),
                 ));
             }
 
@@ -451,6 +458,9 @@ pub fn run() {
             commands::regenerate_adapter_key,
             commands::open_overlay_window,
             commands::close_overlay_window,
+            commands::get_goals,
+            commands::save_goals,
+            commands::reset_goals,
         ])
         .build(tauri::generate_context!());
     let app = match app {
@@ -568,12 +578,16 @@ async fn mapper_loop(
     active_slug: Arc<Mutex<Option<String>>>,
     tts: Arc<tts::Tts>,
     usage: Arc<usage::UsageMeter>,
+    goals: Arc<goals::GoalTracker>,
 ) {
     let mut cache: Option<MappingCache> = None;
     while let Some(raw) = raw_rx.recv().await {
         // Chat-to-speech sees every event — gifter tracking, comment and
         // gift reading per `read_*` modes (§6.2).
         tts.note_event(&raw).await;
+        // Stream goals count the event flow itself (kind/count/coins) —
+        // independent of which profile maps it.
+        goals.note_raw(&raw).await;
         let slug = active_slug
             .lock()
             .await
