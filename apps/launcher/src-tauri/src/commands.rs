@@ -59,6 +59,9 @@ pub struct AppState {
     /// Stream-goal counters («Цели стрима») — raw events accrue here,
     /// `/goals.json` + `/overlay/goals` render progress.
     pub goals: Arc<crate::goals::GoalTracker>,
+    /// Chat polls («Голосования») — votes counted on raw comments, the
+    /// winner re-entering the pipeline as a `poll` event.
+    pub polls: Arc<crate::polls::PollTracker>,
     /// Managed Paper server lifecycle (§9).
     pub mc: Arc<crate::minecraft::MinecraftManager>,
     /// Shared adapter key for `hello_adapter` validation (§10.1).
@@ -1471,6 +1474,29 @@ pub async fn save_goals(
 pub async fn reset_goals(state: State<'_, AppState>) -> Result<(), String> {
     state.goals.reset().await;
     Ok(())
+}
+
+/// Starts a chat poll — viewers vote by typing the option number.
+/// Replaces any poll already running (its votes are discarded).
+#[tauri::command]
+pub async fn poll_start(
+    cfg: crate::polls::PollConfig,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    state.polls.start(cfg).await
+}
+
+/// Ends the running poll: announces the winner and injects the `poll`
+/// event into the ingest pipeline.
+#[tauri::command]
+pub async fn poll_stop(state: State<'_, AppState>) -> Result<(), String> {
+    state.polls.stop().await
+}
+
+/// Live poll status for the UI card (running/options/counts/timer).
+#[tauri::command]
+pub async fn poll_status(state: State<'_, AppState>) -> Result<Value, String> {
+    Ok(json!(state.polls.status().await))
 }
 
 /// Toggles streamer mode (masks personal data in the UI).

@@ -18,6 +18,7 @@ import { Badge } from '../components/ui/badge';
 
 import { humanError } from '../errorMessages';
 import GoalsCard from '../components/GoalsCard';
+import PollCard from '../components/PollCard';
 /** Maps serde's IntegrationStatus union to badge + label. */
 function statusBadge(st: IntegrationStatus | undefined) {
   if (!st || st === 'disconnected') return <Badge variant="outline">Отключено</Badge>;
@@ -166,6 +167,7 @@ export default function IntegrationsPage() {
     ['progress', 'overlay/progress', 'Прогресс', 'накопители «лайки 63/100»'],
     ['leaderboard', 'overlay/leaderboard', 'Топ', 'топ дарителей за стрим'],
     ['goals', 'overlay/goals', 'Цели', 'бары целей стрима'],
+    ['poll', 'overlay/poll', 'Опрос', 'живые столбики голосования'],
   ];
 
   return (
@@ -461,6 +463,9 @@ export default function IntegrationsPage() {
 
       {/* Stream goals («Цели стрима») — session counters + /overlay/goals. */}
       <GoalsCard />
+
+      {/* Chat polls — the winner re-enters the pipeline as a `poll` event. */}
+      <PollCard />
 
       {/* External game adapters (§10.1) — mods connect to the local
           game WS with the shared key instead of a launch token. */}

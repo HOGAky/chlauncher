@@ -87,6 +87,8 @@ struct OverlayState {
     wavs: crate::tts::WavStore,
     /// Stream-goal counters for `/goals.json` + `/overlay/goals`.
     goals: Arc<crate::goals::GoalTracker>,
+    /// Chat-poll state for `/poll.json` + `/overlay/poll`.
+    polls: Arc<crate::polls::PollTracker>,
 }
 
 /// Query-param extractor shared by all guarded routes.
@@ -257,6 +259,7 @@ pub async fn start_overlay_server(
     settings: Arc<tokio::sync::Mutex<SettingsStore>>,
     wavs: crate::tts::WavStore,
     goals: Arc<crate::goals::GoalTracker>,
+    polls: Arc<crate::polls::PollTracker>,
 ) -> std::io::Result<(u16, bool)> {
     let state = OverlayState {
         hub,
@@ -268,6 +271,7 @@ pub async fn start_overlay_server(
         last_frames: Arc::new(Mutex::new(HashMap::new())),
         wavs,
         goals,
+        polls,
     };
 
     // Recorder: remember the last frame per channel for late joiners.
@@ -299,8 +303,10 @@ pub async fn start_overlay_server(
         .route("/overlay/progress", get(page_route(PROGRESS_HTML)))
         .route("/overlay/leaderboard", get(page_route(LEADERBOARD_HTML)))
         .route("/overlay/goals", get(page_route(GOALS_HTML)))
+        .route("/overlay/poll", get(page_route(POLL_HTML)))
         .route("/top.json", get(serve_top))
         .route("/goals.json", get(serve_goals))
+        .route("/poll.json", get(serve_poll))
         .route("/gifts/:file", get(serve_gift))
         .route("/media/:id", get(serve_media))
         .route("/tts/:file", get(serve_tts))
@@ -400,6 +406,18 @@ async fn serve_goals(
         return StatusCode::FORBIDDEN.into_response();
     }
     axum::Json(st.goals.snapshot().await).into_response()
+}
+
+/// `/poll.json` — live vote counters, polled by `/overlay/poll` and
+/// the poll card every ~1 s while a vote runs.
+async fn serve_poll(
+    Query(q): Query<HashMap<String, String>>,
+    State(st): State<OverlayState>,
+) -> Response {
+    if !token_ok(q.get("t").map(String::as_str), &st.token) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    axum::Json(st.polls.status().await).into_response()
 }
 
 /// `/media/:id` — media-library file with byte-range support (§4.1:
@@ -613,6 +631,7 @@ const PRESET_HTML: &str = include_str!("../overlay/preset.html");
 const PROGRESS_HTML: &str = include_str!("../overlay/progress.html");
 const LEADERBOARD_HTML: &str = include_str!("../overlay/leaderboard.html");
 const GOALS_HTML: &str = include_str!("../overlay/goals.html");
+const POLL_HTML: &str = include_str!("../overlay/poll.html");
 const SPINNER_HTML: &str = include_str!("../overlay/spinner.html");
 const TTS_HTML: &str = include_str!("../overlay/tts.html");
 

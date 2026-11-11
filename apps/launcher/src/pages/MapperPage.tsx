@@ -43,7 +43,18 @@ import { Badge } from '../components/ui/badge';
 
 import { humanError } from '../errorMessages';
 const SOURCES = ['any', 'tiktok', 'donationalerts', 'simulator'];
-const KINDS = ['any', 'gift', 'like', 'comment', 'donation', 'follow', 'share', 'subscribe', 'join'];
+const KINDS = [
+  'any',
+  'gift',
+  'like',
+  'comment',
+  'donation',
+  'follow',
+  'share',
+  'subscribe',
+  'join',
+  'poll',
+];
 const MATCH_MODES = [
   { v: 'contains', t: 'содержит' },
   { v: 'exact', t: 'точно' },

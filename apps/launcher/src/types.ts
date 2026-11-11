@@ -522,3 +522,22 @@ export interface GoalProgress {
   done: boolean;
   enabled: boolean;
 }
+
+/** Chat poll config — sent to `poll_start` (not persisted). */
+export interface PollConfig {
+  title: string;
+  options: string[];
+  duration_s: number;
+  action: string;
+}
+
+/** Live poll state — `poll_status` / `/poll.json`. */
+export interface PollStatus {
+  running: boolean;
+  title: string;
+  options: string[];
+  counts: number[];
+  total: number;
+  ends_in_s: number;
+  last_winner: string;
+}

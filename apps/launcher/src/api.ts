@@ -256,6 +256,17 @@ export const saveGoals = (goals: import('./types').StreamGoal[]) =>
 /** Zeroes goal counters and re-arms completed goals. */
 export const resetGoals = () => cmd<void>('reset_goals');
 
+/** Starts a chat poll (viewers vote by typing the option number). */
+export const pollStart = (cfg: import('./types').PollConfig) =>
+  cmd<void>('poll_start', { cfg });
+
+/** Ends the running poll — announces and dispatches the winner. */
+export const pollStop = () => cmd<void>('poll_stop');
+
+/** Live poll status for the UI card. */
+export const pollStatus = () =>
+  cmd<import('./types').PollStatus>('poll_status');
+
 /** Alert playback settings for the mapper status bar (§3.1–§3.2). */
 export const getAlertsSettings = () =>
   cmd<{

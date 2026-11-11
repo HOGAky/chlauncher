@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>chlauncher · poll</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: transparent; overflow: hidden;
+    font-family: 'Segoe UI', system-ui, sans-serif; color: #fff;
+  }
+  #poll { position: absolute; right: 12px; bottom: 12px; width: 320px;
+          background: rgba(15,17,26,.88); border: 1px solid rgba(255,255,255,.12);
+          border-radius: 12px; padding: 10px 14px;
+          opacity: 0; transition: opacity .3s; }
+  #poll.on { opacity: 1; }
+  #poll .title { font-size: 13px; font-weight: 600; margin-bottom: 8px;
+                 overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #poll .timer { float: right; font-variant-numeric: tabular-nums;
+                 color: rgba(255,255,255,.6); font-weight: 400; }
+  .opt { margin: 6px 0; }
+  .opt .row { display: flex; justify-content: space-between; gap: 8px;
+              font-size: 12px; margin-bottom: 3px; }
+  .opt .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .opt .name b { color: #38bdf8; margin-right: 4px; }
+  .opt .num { font-variant-numeric: tabular-nums; color: rgba(255,255,255,.75); }
+  .opt .track { height: 7px; border-radius: 4px; background: rgba(255,255,255,.12);
+                overflow: hidden; }
+  .opt .fill { height: 100%; border-radius: 4px; background: #38bdf8;
+               transition: width .25s ease; }
+  .opt.lead .fill { background: linear-gradient(90deg,#0ea5e9,#a855f7); }
+  #poll .hint { margin-top: 8px; font-size: 10px; color: rgba(255,255,255,.45); }
+</style>
+</head>
+<body>
+<div id="poll"></div>
+<script>
+const params = new URLSearchParams(location.search);
+const token = params.get('t') || '';
+// ?bg=rrggbb — solid chroma background for LIVE Studio window capture.
+const _bg = params.get('bg');
+if (_bg && /^[0-9a-fA-F]{6}$/.test(_bg)) document.body.style.background = '#' + _bg;
+const box = document.getElementById('poll');
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function render(p) {
+  if (!p || !p.running) {
+    box.classList.remove('on');
+    return;
+  }
+  const max = Math.max(1, ...p.counts);
+  const timer = p.ends_in_s > 0 ? `<span class="timer">${p.ends_in_s}с</span>` : '';
+  const rows = p.options.map((o, i) => {
+    const v = p.counts[i] || 0;
+    const pct = Math.round(v / max * 100);
+    const lead = v === max && v > 0 ? ' lead' : '';
+    return `<div class="opt${lead}"><div class="row">` +
+      `<span class="name"><b>${i + 1}</b>${esc(o)}</span>` +
+      `<b class="num">${v}</b></div>` +
+      `<div class="track"><div class="fill" style="width:${pct}%"></div></div></div>`;
+  }).join('');
+  box.innerHTML =
+    `<div class="title">${esc(p.title || 'Голосование')}${timer}</div>` +
+    rows +
+    `<div class="hint">пиши номер в чат · всего ${p.total}</div>`;
+  box.classList.add('on');
+}
+
+async function tick() {
+  try {
+    const r = await fetch(`/poll.json?t=${encodeURIComponent(token)}`);
+    if (r.ok) render(await r.json());
+  } catch (_) { /* overlay server restarting — retry next tick */ }
+}
+tick();
+setInterval(tick, 1000);
+</script>
+</body>
+</html>

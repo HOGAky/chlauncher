@@ -30,6 +30,7 @@ pub mod logging;
 pub mod media;
 pub mod minecraft;
 pub mod overlay;
+pub mod polls;
 pub mod process;
 pub mod scheduler;
 pub mod settings;
@@ -156,6 +157,10 @@ pub fn run() {
             // Stream-goal counters — counted on raw events in the mapper
             // loop, rendered by /overlay/goals via /goals.json.
             let goals = goals::GoalTracker::new(settings.clone(), hub.clone(), overlay_tx.clone());
+            // Chat polls — votes counted on raw comments; the winner is
+            // re-injected into the ingest pipeline as a synthetic `poll`
+            // event so trigger rules can act on it.
+            let polls = polls::PollTracker::new(raw_tx.clone(), overlay_tx.clone());
             let overlay_port = match tauri::async_runtime::block_on(overlay::start_overlay_server(
                 hub.clone(),
                 overlay_tx.clone(),
@@ -165,6 +170,7 @@ pub fn run() {
                 settings.clone(),
                 tts.wavs.clone(),
                 goals.clone(),
+                polls.clone(),
             )) {
                 Ok((port, fell_back)) => {
                     if fell_back {
@@ -291,6 +297,7 @@ pub fn run() {
                 tts: tts.clone(),
                 usage: usage.clone(),
                 goals: goals.clone(),
+                polls: polls.clone(),
                 mc: mc.clone(),
                 adapter_key: adapter_key.clone(),
                 overlay_token: overlay_token.clone(),
@@ -309,6 +316,7 @@ pub fn run() {
                     tts.clone(),
                     usage.clone(),
                     goals.clone(),
+                    polls.clone(),
                 ));
             }
 
@@ -579,6 +587,7 @@ async fn mapper_loop(
     tts: Arc<tts::Tts>,
     usage: Arc<usage::UsageMeter>,
     goals: Arc<goals::GoalTracker>,
+    polls: Arc<polls::PollTracker>,
 ) {
     let mut cache: Option<MappingCache> = None;
     while let Some(raw) = raw_rx.recv().await {
@@ -588,6 +597,7 @@ async fn mapper_loop(
         // Stream goals count the event flow itself (kind/count/coins) —
         // independent of which profile maps it.
         goals.note_raw(&raw).await;
+        polls.note_raw(&raw).await;
         let slug = active_slug
             .lock()
             .await
