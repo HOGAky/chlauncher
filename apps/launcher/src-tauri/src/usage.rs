@@ -306,6 +306,12 @@ pub fn enforce_profile_limits(profile: &mut TriggerProfile, ent: &Entitlements) 
     }
     let mut media_seen = 0i64;
     for r in profile.rules.iter_mut() {
+        // Disabled rules never fire — their gated fields are inert, and
+        // crucially they must not burn `max_media_triggers` quota that
+        // enabled rules need.
+        if !r.enabled {
+            continue;
+        }
         if !ent.interrupts {
             r.interrupt = false;
         }

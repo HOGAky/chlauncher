@@ -127,6 +127,15 @@ pub async fn resolve_paper(
     } else {
         version.trim().to_string()
     };
+    // The version becomes a URL path segment — restrict to the MC
+    // version charset so a stray `..`/`/`/`?` can't rewrite the request.
+    if version.len() > 32
+        || !version
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+    {
+        return Err("MC_VERSION_INVALID".into());
+    }
     let meta: serde_json::Value = client
         .get(format!("{FILL_PROJECT}/versions/{version}/builds/latest"))
         .send()

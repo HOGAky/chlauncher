@@ -127,7 +127,9 @@ struct SchedState {
     /// Paid interrupts wait in FIFO while a takeover is active (§3.3.3).
     interrupts: VecDeque<ActionJob>,
     rule_cd: HashMap<String, Instant>,
-    user_cd: HashMap<(String, String), Instant>,
+    /// rule_id → (user → last fire) — nested so lookups don't allocate
+    /// a `(String, String)` key on every event.
+    user_cd: HashMap<String, HashMap<String, Instant>>,
     last_any: Option<Instant>,
     /// `every_n` accumulators: rule_id → (collected units, label, target).
     accumulators: HashMap<String, (u64, String, u64)>,
@@ -181,6 +183,10 @@ pub struct ActionScheduler {
     wake: Notify,
     /// Signalled by interrupt jobs — cuts the running alert short (§3.3.1).
     interrupt_wake: Notify,
+    /// Bumped with every `interrupt_wake` signal. `Notify` keeps one
+    /// unread permit, so a signal that fired while no alert was playing
+    /// would otherwise cancel the *next* (unrelated) alert instantly.
+    interrupt_gen: std::sync::atomic::AtomicU64,
     hub: Arc<EventHub>,
     /// Overlay frames (alerts/spinners/progress/takeover) — the overlay
     /// server relays these to `/ws` subscribers.
@@ -281,6 +287,7 @@ impl ActionScheduler {
             }),
             wake: Notify::new(),
             interrupt_wake: Notify::new(),
+            interrupt_gen: std::sync::atomic::AtomicU64::new(0),
             hub,
             overlay_tx,
             alerts_enabled: std::sync::atomic::AtomicBool::new(true),
@@ -527,6 +534,8 @@ impl ActionScheduler {
                     // reigns (a normal alert playing then gets cut).
                     let takeover_active = st.takeover_until.map(|u| u > now).unwrap_or(false);
                     if !takeover_active {
+                        self.interrupt_gen
+                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         self.interrupt_wake.notify_one();
                     }
                 } else if job.not_before.is_some() {
@@ -551,7 +560,10 @@ impl ActionScheduler {
                 st.last_any = Some(now);
                 st.rule_cd.insert(rule.id.clone(), now);
                 if rule.user_cooldown_ms > 0 {
-                    st.user_cd.insert((rule.id.clone(), raw.user.clone()), now);
+                    st.user_cd
+                        .entry(rule.id.clone())
+                        .or_default()
+                        .insert(raw.user.clone(), now);
                 }
             }
         }
@@ -676,9 +688,27 @@ impl ActionScheduler {
                 }
                 let _ = self.overlay_tx.send(alert_frame(&job, alert));
                 let dur = Duration::from_millis(alert.duration_ms.max(200));
+                // Only a signal raised *after this alert started* may cut
+                // it — a stale Notify permit from an earlier interrupt
+                // must not cancel a freshly-shown alert.
+                let gen0 = self
+                    .interrupt_gen
+                    .load(std::sync::atomic::Ordering::Relaxed);
+                let interrupt = async {
+                    loop {
+                        self.interrupt_wake.notified().await;
+                        if self
+                            .interrupt_gen
+                            .load(std::sync::atomic::Ordering::Relaxed)
+                            != gen0
+                        {
+                            break;
+                        }
+                    }
+                };
                 tokio::select! {
                     _ = tokio::time::sleep(dur) => {}
-                    _ = self.interrupt_wake.notified() => {
+                    _ = interrupt => {
                         let _ = self.overlay_tx.send(OverlayFrame::AlertCancel {
                             id: job.alert_id.clone(),
                         });
@@ -716,8 +746,10 @@ impl SchedState {
     /// Prune viewer-cooldown entries older than 10 minutes (§2.2 memory
     /// guard) — called under the state lock on ingest.
     fn prune_user_cd(&mut self, now: Instant) {
-        self.user_cd
-            .retain(|_, at| now.duration_since(*at) < USER_CD_PRUNE);
+        self.user_cd.retain(|_, users| {
+            users.retain(|_, at| now.duration_since(*at) < USER_CD_PRUNE);
+            !users.is_empty()
+        });
     }
 
     fn cooling_since(&self, gap_ms: u64, now: Instant) -> bool {
@@ -741,7 +773,8 @@ impl SchedState {
         cd_ms > 0
             && self
                 .user_cd
-                .get(&(id.to_string(), user.to_string()))
+                .get(id)
+                .and_then(|users| users.get(user))
                 .map(|t| now.duration_since(*t).as_millis() < cd_ms as u128)
                 .unwrap_or(false)
     }
@@ -1158,16 +1191,18 @@ mod tests {
         let sp = no_spinners();
         let al = alerts();
 
-        // First interrupt → takeover. Second lands during it → FIFO.
+        // First interrupt → alert (200 ms floor — `max(200)` in execute)
+        // → takeover for 200 ms. The second ingest must land inside the
+        // takeover window (~200–400 ms) to exercise the FIFO path.
         sched.ingest(&input(&p, raw("gift", "Lion", 1, 1, 500), &sp, &al));
-        tokio::time::sleep(Duration::from_millis(120)).await;
+        tokio::time::sleep(Duration::from_millis(260)).await;
         assert!(sched.active_takeover().is_some());
         let mut raw2 = raw("gift", "Lion", 1, 1, 500);
         raw2.user = "u2".into();
         sched.ingest(&input(&p, raw2, &sp, &al));
-        // Wait out the first takeover (~200 ms) + margin — the queued
-        // interrupt must fire *after* it, not cut it.
-        let frames = collect_frames(&mut orx, 700).await;
+        // Wait out the first takeover (~400 ms total) + margin — the
+        // queued interrupt must fire *after* it, not cut it.
+        let frames = collect_frames(&mut orx, 900).await;
         handle.abort();
         let cancels = frames
             .iter()

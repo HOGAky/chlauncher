@@ -75,7 +75,9 @@ pub fn mp4_duration_ms(b: &[u8]) -> Option<u64> {
     } else {
         u32::from_be_bytes(b.get(dur_off..dur_off + 4)?.try_into().ok()?) as u64
     };
-    Some(dur * 1000 / ts)
+    // Crafted mvhd values can overflow `dur * 1000` — saturate instead of
+    // wrapping to a small number that would bypass the 30 s video cap.
+    Some(dur.saturating_mul(1000) / ts)
 }
 
 /// Imports `src` into the library: sniff → limits → copy → index row.
@@ -168,9 +170,9 @@ pub fn usages(id: &str, settings: &crate::settings::Settings) -> Vec<String> {
 /// Deletes the index row + file (best-effort on the file — a vanished
 /// file isn't an error for the index).
 pub async fn delete(dir: &Path, item: &MediaItem) -> std::io::Result<()> {
-    match tokio::fs::remove_file(media_path(dir, item)).await {
-        Ok(()) | Err(_) => Ok(()), // missing file is fine — index was the truth
-    }
+    // Missing file is fine — the index row was the source of truth.
+    let _ = tokio::fs::remove_file(media_path(dir, item)).await;
+    Ok(())
 }
 
 #[cfg(test)]

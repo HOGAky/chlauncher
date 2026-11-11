@@ -320,22 +320,60 @@ impl ProcessManager {
     }
 }
 
+/// Longest retained log line. A child emitting one huge line (or no
+/// newlines at all) must not grow memory without bound — the overflow
+/// is drained to the next newline in fixed-size chunks and dropped.
+const MAX_LINE_BYTES: u64 = 2000;
+
 /// Spawns a thread draining `reader` line-by-line into `buf`. Lines are
 /// truncated so a pathological child can't flood memory; the buffer itself
 /// is bounded at [`LOG_RING_CAPACITY`].
 fn drain_lines<R: std::io::Read + Send + 'static>(reader: R, buf: Arc<Mutex<RingBuf>>) {
     std::thread::spawn(move || {
-        for line in BufReader::new(reader).lines() {
-            match line {
-                Ok(mut l) => {
-                    l.truncate(2000);
-                    if let Ok(mut b) = buf.lock() {
-                        b.push(l);
-                    } else {
+        use std::io::Read;
+        let mut reader = BufReader::new(reader);
+        loop {
+            // Read at most MAX+1 bytes for a line — `take` bounds memory
+            // even when the newline never comes.
+            let mut line = Vec::new();
+            match reader
+                .by_ref()
+                .take(MAX_LINE_BYTES + 1)
+                .read_until(b'\n', &mut line)
+            {
+                Ok(0) => break, // EOF
+                Ok(_) => {}
+                Err(_) => break,
+            }
+            if !line.ends_with(b"\n") && line.len() as u64 > MAX_LINE_BYTES {
+                // Overlong line: drop the tail up to the real newline
+                // without buffering it (fill_buf/consume, 8 KB at a time).
+                loop {
+                    let (consumed, found) = {
+                        let avail = match reader.fill_buf() {
+                            Ok(a) if !a.is_empty() => a,
+                            _ => break,
+                        };
+                        match avail.iter().position(|&b| b == b'\n') {
+                            Some(i) => (i + 1, true),
+                            None => (avail.len(), false),
+                        }
+                    };
+                    reader.consume(consumed);
+                    if found {
                         break;
                     }
                 }
-                Err(_) => break,
+                line.truncate(MAX_LINE_BYTES as usize);
+            }
+            let mut l = String::from_utf8_lossy(&line).into_owned();
+            while l.ends_with(['\n', '\r']) {
+                l.pop();
+            }
+            if let Ok(mut b) = buf.lock() {
+                b.push(l);
+            } else {
+                break;
             }
         }
     });

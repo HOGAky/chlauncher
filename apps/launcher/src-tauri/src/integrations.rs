@@ -233,9 +233,8 @@ async fn run_da(
     .await
     .map_err(|e| e.to_string())?;
 
-    *status.lock().await = IntegrationStatus::Live;
-
     // 5) Forward alerts into the ingest channel.
+    let mut handshake_checked = false;
     while let Some(msg) = rx.next().await {
         let Ok(tokio_tungstenite::tungstenite::Message::Text(text)) = msg else {
             continue;
@@ -243,6 +242,26 @@ async fn run_da(
         let Ok(v) = serde_json::from_str::<Value>(&text) else {
             continue;
         };
+        // Centrifugo server ping → client must answer `{}` or the socket
+        // gets reaped as stale.
+        if v.get("ping").is_some() {
+            let _ = tx.send("{}".into()).await;
+            continue;
+        }
+        // Command replies: id 1 = connect, id 2 = subscribe — surface
+        // errors instead of declaring Live on a dead session.
+        if let Some(id) = v["id"].as_i64() {
+            if let Some(err) = v.get("error") {
+                let code = err["code"].as_i64().unwrap_or(0);
+                let msg = err["message"].as_str().unwrap_or("centrifugo error");
+                return Err(format!("centrifugo {code}: {msg}"));
+            }
+            if id == 1 && !handshake_checked {
+                handshake_checked = true;
+                *status.lock().await = IntegrationStatus::Live;
+            }
+            continue;
+        }
         // Centrifugo push → {"result":{"channel":…,"data":{"data":{…}}}}
         let data = &v["result"]["data"]["data"];
         if data.is_null() {

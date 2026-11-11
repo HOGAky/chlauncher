@@ -60,6 +60,9 @@ pub struct AppState {
     pub mc: Arc<crate::minecraft::MinecraftManager>,
     /// Shared adapter key for `hello_adapter` validation (§10.1).
     pub adapter_key: Arc<std::sync::RwLock<String>>,
+    /// Live overlay access token — the overlay server reads this cell
+    /// per request, so `rotate_overlay_token` must update it.
+    pub overlay_token: Arc<std::sync::RwLock<String>>,
     /// Last seen slug→version snapshot for catalog-change detection (§6.3).
     pub catalog_seen: Arc<Mutex<Option<std::collections::BTreeMap<String, String>>>>,
     /// Actual OS-assigned overlay port (None until bound / on bind failure).
@@ -1325,17 +1328,24 @@ pub async fn set_overlay_port(port: u16, state: State<'_, AppState>) -> Result<(
 }
 
 /// Rotates the overlay access token — every `/overlay*` URL changes and
-/// previously copied Browser Source URLs stop working (§5.4).
+/// previously copied Browser Source URLs stop working (§5.4). The new
+/// value is pushed into the overlay server's shared cell too — without
+/// that the server would keep accepting the OLD token (and reject the
+/// new one the UI already shows).
 #[tauri::command]
 pub async fn rotate_overlay_token(state: State<'_, AppState>) -> Result<(), String> {
-    let mut s = state.settings.lock().await;
     // Same 64-hex shape `SettingsStore::load` generates on first launch.
-    s.data.overlay_token = format!(
+    let new_token = format!(
         "{}{}",
         uuid::Uuid::new_v4().simple(),
         uuid::Uuid::new_v4().simple()
     );
+    let mut s = state.settings.lock().await;
+    s.data.overlay_token = new_token.clone();
     let _ = s.save();
+    if let Ok(mut t) = state.overlay_token.write() {
+        *t = new_token;
+    }
     Ok(())
 }
 
@@ -1947,7 +1957,13 @@ pub async fn mc_set_settings(
     }
     if let Some(v) = mc_version {
         let v = v.trim().to_string();
-        if !v.is_empty() && v.len() <= 32 {
+        // The version lands in a Fill-API URL path segment later — keep
+        // it to the version-string charset (same rule install.rs enforces).
+        if v.is_empty()
+            || (v.len() <= 32
+                && v.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_')))
+        {
             s.data.mc.mc_version = v;
         }
     }
@@ -2039,6 +2055,19 @@ pub async fn mc_install_plugin(slug: String, state: State<'_, AppState>) -> Resu
         .ok_or("PLUGIN_NOT_FOUND")?;
     if plugin.premium && !state.usage.entitlements().await.mc_premium_plugins {
         return Err("PLAN_LIMIT|mc_premium_plugins".into());
+    }
+    // slug/version become the local jar filename — keep both inside the
+    // catalog charset so a hostile/broken catalog row can't escape
+    // `server/plugins/` (defense in depth; the server validates too).
+    let ok_name = |s: &str| {
+        !s.is_empty()
+            && s.len() <= 64
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+            && !s.contains("..")
+    };
+    if !ok_name(&plugin.slug) || !ok_name(&plugin.version) {
+        return Err("PLUGIN_NAME_INVALID".into());
     }
     let dir = state.mc.plugins_dir();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;

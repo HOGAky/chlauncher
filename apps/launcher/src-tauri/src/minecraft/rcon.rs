@@ -28,9 +28,12 @@ pub async fn exec(host: &str, port: u16, password: &str, command: &str) -> Resul
     // --- AUTH ------------------------------------------------------------
     write_packet(&mut io, 1, AUTH, password).await?;
     // Servers may prepend an empty RESPONSE_VALUE; wait for type-2.
+    // `buf` persists across packets — TCP coalescing can deliver two
+    // frames in one read and the tail must survive to the next parse.
+    let mut buf = Vec::with_capacity(512);
     let mut auth_ok = false;
     for _ in 0..4 {
-        let (id, ty, _body) = read_packet(&mut io).await?;
+        let (id, ty, _body) = read_packet(&mut io, &mut buf).await?;
         if ty == AUTH_RESPONSE {
             if id == -1 {
                 return Err("RCON_AUTH_FAILED".into());
@@ -46,7 +49,7 @@ pub async fn exec(host: &str, port: u16, password: &str, command: &str) -> Resul
     // --- EXECCOMMAND -----------------------------------------------------
     write_packet(&mut io, 2, EXECCOMMAND, command).await?;
     for _ in 0..4 {
-        let (id, ty, body) = read_packet(&mut io).await?;
+        let (id, ty, body) = read_packet(&mut io, &mut buf).await?;
         if ty == RESPONSE_VALUE && id == 2 {
             return Ok(body.trim().to_string());
         }
@@ -70,9 +73,10 @@ async fn write_packet(io: &mut TcpStream, id: i32, ty: i32, body: &str) -> Resul
 
 /// Reads one framed packet → `(id, type, body)`. The MC server sends
 /// packets whole, but TCP can split anywhere — loop until 14+ bytes and
-/// the declared size have arrived.
-async fn read_packet(io: &mut TcpStream) -> Result<(i32, i32, String), String> {
-    let mut buf = Vec::with_capacity(512);
+/// the declared size have arrived. `buf` is caller-owned: bytes beyond
+/// the consumed packet are left in it for the next call (pipelined
+/// frames would otherwise be silently dropped → spurious timeouts).
+async fn read_packet(io: &mut TcpStream, buf: &mut Vec<u8>) -> Result<(i32, i32, String), String> {
     loop {
         if buf.len() >= 14 {
             let size = i32::from_le_bytes(buf[0..4].try_into().unwrap());
@@ -83,10 +87,11 @@ async fn read_packet(io: &mut TcpStream) -> Result<(i32, i32, String), String> {
                 let id = i32::from_le_bytes(buf[4..8].try_into().unwrap());
                 let ty = i32::from_le_bytes(buf[8..12].try_into().unwrap());
                 let body = String::from_utf8_lossy(&buf[12..2 + size as usize]).into_owned();
+                buf.drain(..4 + size as usize);
                 return Ok((id, ty, body));
             }
         }
-        let n = timeout(IO_TIMEOUT, io.read_buf(&mut buf))
+        let n = timeout(IO_TIMEOUT, io.read_buf(buf))
             .await
             .map_err(|_| "RCON_TIMEOUT".to_string())?
             .map_err(|e| format!("RCON_READ: {e}"))?;

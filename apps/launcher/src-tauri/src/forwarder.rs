@@ -196,16 +196,19 @@ impl Forwarder {
             .build()
             .unwrap_or_default();
         while let Some(ev) = queue.pop().await {
+            // The event is dequeued now — `queued` must drop regardless
+            // of whether it ends up delivered or skipped (disabled /
+            // misconfigured forwarding would otherwise leak the counter).
+            {
+                let mut st = status.lock().await;
+                st.queued = st.queued.saturating_sub(1);
+            }
             let cfg = settings.lock().await.data.forward.clone();
             let (Some(url), Some(key)) = (cfg.forward_url, cfg.stream_key) else {
                 continue;
             };
             if !cfg.enabled || url.is_empty() || key.is_empty() {
                 continue;
-            }
-            {
-                let mut st = status.lock().await;
-                st.queued = st.queued.saturating_sub(1);
             }
             let body = event_body(&ev);
             let res = http

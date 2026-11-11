@@ -60,8 +60,16 @@ impl EventHub {
             recent.push_back(ev.clone());
         }
         {
+            // Session-scoped leaderboard — hard-capped so a marathon
+            // stream with hundreds of thousands of distinct viewers
+            // can't grow this map without bound.
+            const TOTALS_CAP: usize = 100_000;
             let mut totals = self.totals.lock().unwrap_or_else(|p| p.into_inner());
-            *totals.entry(ev.user.clone()).or_default() += ev.amount as i64;
+            if let Some(v) = totals.get_mut(&ev.user) {
+                *v += ev.amount as i64;
+            } else if totals.len() < TOTALS_CAP {
+                totals.insert(ev.user.clone(), ev.amount as i64);
+            }
         }
         // No receivers is fine — broadcast just drops the message.
         let _ = self.tx.send(ev);

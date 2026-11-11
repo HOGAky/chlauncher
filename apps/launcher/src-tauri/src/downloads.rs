@@ -69,6 +69,25 @@ pub async fn download_and_install(
     expected_sha256: Option<&str>,
     data_dir: &Path,
 ) -> Result<InstalledGame, ApiError> {
+    // Catalog fields that become path segments — a compromised/hostile
+    // catalog response must not write outside `games/<slug>/`. Launch
+    // re-verifies by canonicalization, but install shouldn't even stage
+    // a bad name (defense in depth).
+    let bad_path = |s: &str| {
+        s.is_empty()
+            || s.len() > 128
+            || s.contains("..")
+            || s.contains('/')
+            || s.contains('\\')
+            || s.chars().any(|c| c.is_control())
+    };
+    if bad_path(executable_name) || bad_path(version) {
+        return Err(ApiError::server_detailed(
+            422,
+            "CATALOG_INVALID",
+            "catalog executable_name/version unsafe for filesystem use".into(),
+        ));
+    }
     let root = games_root(data_dir);
     fs::create_dir_all(&root)
         .map_err(|e| ApiError::server_detailed(500, "INSTALL_FAILED", e.to_string()))?;

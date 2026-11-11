@@ -4,8 +4,9 @@
 //!
 //! 1. Resolves the app-data dir (`%APPDATA%/com.chlauncher.app`) and loads
 //!    persisted [`SettingsStore`].
-//! 2. Starts the game WebSocket server (`:9876`), the browser overlay
-//!    server (`:9877`) and the trigger-mapper forwarder task.
+//! 2. Starts the game WebSocket server and the browser overlay server
+//!    (both bind `127.0.0.1` on OS-assigned ports) plus the
+//!    trigger-mapper forwarder task.
 //! 3. Spawns the watchdog that reaps exited game processes and re-verifies
 //!    the subscription every ~60 s while games run (lapsed sub → shutdown).
 //! 4. Registers all [`commands`] as the frontend IPC surface.
@@ -147,10 +148,13 @@ pub fn run() {
                 .try_lock()
                 .map(|s| (s.data.overlay_token.clone(), s.data.overlay_port))
                 .unwrap_or_default();
+            // Shared token cell: the overlay server validates `?t=` per
+            // request, `rotate_overlay_token` writes the new value here.
+            let overlay_token = Arc::new(std::sync::RwLock::new(overlay_token));
             let overlay_port = match tauri::async_runtime::block_on(overlay::start_overlay_server(
                 hub.clone(),
                 overlay_tx.clone(),
-                overlay_token,
+                overlay_token.clone(),
                 overlay_port_cfg,
                 media::media_dir(&data_dir),
                 settings.clone(),
@@ -250,8 +254,16 @@ pub fn run() {
                 let mut rx = hub.tx.subscribe();
                 let app_h = app.handle().clone();
                 tauri::async_runtime::spawn(async move {
-                    while let Ok(ev) = rx.recv().await {
-                        let _ = app_h.emit("stream-event", &ev);
+                    loop {
+                        match rx.recv().await {
+                            Ok(ev) => {
+                                let _ = app_h.emit("stream-event", &ev);
+                            }
+                            // A burst > capacity must not kill the feed —
+                            // skip the lost events and keep relaying.
+                            Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                            Err(broadcast::error::RecvError::Closed) => break,
+                        }
                     }
                 });
             }
@@ -274,6 +286,7 @@ pub fn run() {
                 usage: usage.clone(),
                 mc: mc.clone(),
                 adapter_key: adapter_key.clone(),
+                overlay_token: overlay_token.clone(),
                 catalog_seen: Arc::new(Mutex::new(None)),
                 overlay_port: Mutex::new(overlay_port),
                 service_error: Mutex::new(service_error),

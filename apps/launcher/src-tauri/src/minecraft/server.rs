@@ -23,7 +23,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
-use tokio::sync::Mutex;
+use tokio::sync::{broadcast, Mutex};
 
 use super::{install, rcon, templates};
 use crate::events::EventHub;
@@ -436,47 +436,18 @@ impl MinecraftManager {
     }
 
     /// Zips `world*` dirs into `backups/world-<ts>.zip` (stopped only).
+    /// Runs on the blocking pool: world dirs can be gigabytes — doing
+    /// sync I/O and whole-file compression on the async executor would
+    /// stall every other task for seconds.
     pub async fn world_backup(&self) -> Result<String, String> {
         if self.is_running().await {
             return Err("MC_RUNNING".into());
         }
+        let server_dir = self.server_dir();
         let backups = self.dir.join("backups");
-        std::fs::create_dir_all(&backups).map_err(|e| e.to_string())?;
-        let name = format!(
-            "world-{}.zip",
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs())
-                .unwrap_or(0)
-        );
-        let dest = backups.join(&name);
-        let file = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
-        let mut zip = zip::ZipWriter::new(file);
-        let opts = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Deflated);
-        for w in ["world", "world_nether", "world_the_end"] {
-            let root = self.server_dir().join(w);
-            if !root.exists() {
-                continue;
-            }
-            for entry in walkdir(&root) {
-                let rel = entry
-                    .strip_prefix(self.server_dir())
-                    .map_err(|e| e.to_string())?;
-                if entry.is_dir() {
-                    zip.add_directory(rel.to_string_lossy().replace('\\', "/"), opts)
-                        .map_err(|e| e.to_string())?;
-                } else {
-                    zip.start_file(rel.to_string_lossy().replace('\\', "/"), opts)
-                        .map_err(|e| e.to_string())?;
-                    let bytes = std::fs::read(&entry).map_err(|e| e.to_string())?;
-                    use std::io::Write;
-                    zip.write_all(&bytes).map_err(|e| e.to_string())?;
-                }
-            }
-        }
-        zip.finish().map_err(|e| e.to_string())?;
-        Ok(name)
+        tokio::task::spawn_blocking(move || world_backup_inner(&server_dir, &backups))
+            .await
+            .map_err(|e| e.to_string())?
     }
 
     /// Event router: subscribes to the EventHub; while the server runs
@@ -489,22 +460,34 @@ impl MinecraftManager {
         active_slug: Arc<Mutex<Option<String>>>,
     ) {
         let mut rx = hub.tx.subscribe();
-        while let Ok(ev) = rx.recv().await {
-            if active_slug.lock().await.as_deref() != Some(MC_SLUG) {
-                continue;
-            }
-            if !self.is_running().await {
-                continue;
-            }
-            let player = self.settings.lock().await.data.mc.player.clone();
-            for cmd in templates::render_event(&ev.action_command, &ev, &player) {
-                match self.console_raw(&cmd).await {
-                    Ok(resp) => {
-                        self.log(&app, &format!("[rcon] {cmd}{}", fmt_resp(&resp)))
-                            .await
+        loop {
+            match rx.recv().await {
+                Ok(ev) => {
+                    if active_slug.lock().await.as_deref() != Some(MC_SLUG) {
+                        continue;
                     }
-                    Err(e) => self.log(&app, &format!("[rcon-fail] {cmd}: {e}")).await,
+                    if !self.is_running().await {
+                        continue;
+                    }
+                    let player = self.settings.lock().await.data.mc.player.clone();
+                    for cmd in templates::render_event(&ev.action_command, &ev, &player) {
+                        match self.console_raw(&cmd).await {
+                            Ok(resp) => {
+                                self.log(&app, &format!("[rcon] {cmd}{}", fmt_resp(&resp)))
+                                    .await
+                            }
+                            Err(e) => self.log(&app, &format!("[rcon-fail] {cmd}: {e}")).await,
+                        }
+                    }
                 }
+                // An event burst past channel capacity must not kill the
+                // router — drop the backlog and keep serving commands.
+                Err(broadcast::error::RecvError::Lagged(_)) => {
+                    self.log(&app, "[mc] event queue overflow — skipped backlog")
+                        .await;
+                    continue;
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
             }
         }
     }
@@ -516,6 +499,46 @@ fn fmt_resp(resp: &str) -> String {
     } else {
         format!(" → {}", resp.chars().take(80).collect::<String>())
     }
+}
+
+/// Blocking half of `world_backup` — streams each region file through
+/// the zip in 1 MB chunks instead of reading it whole into memory.
+fn world_backup_inner(server_dir: &Path, backups: &Path) -> Result<String, String> {
+    std::fs::create_dir_all(backups).map_err(|e| e.to_string())?;
+    let name = format!(
+        "world-{}.zip",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0)
+    );
+    let dest = backups.join(&name);
+    let file = std::fs::File::create(&dest).map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipWriter::new(file);
+    let opts = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+    for w in ["world", "world_nether", "world_the_end"] {
+        let root = server_dir.join(w);
+        if !root.exists() {
+            continue;
+        }
+        for entry in walkdir(&root) {
+            let rel = entry.strip_prefix(server_dir).map_err(|e| e.to_string())?;
+            let rel_name = rel.to_string_lossy().replace('\\', "/");
+            if entry.is_dir() {
+                zip.add_directory(rel_name, opts)
+                    .map_err(|e| e.to_string())?;
+            } else {
+                zip.start_file(rel_name, opts).map_err(|e| e.to_string())?;
+                let mut src = std::io::BufReader::new(
+                    std::fs::File::open(&entry).map_err(|e| e.to_string())?,
+                );
+                std::io::copy(&mut src, &mut zip).map_err(|e| e.to_string())?;
+            }
+        }
+    }
+    zip.finish().map_err(|e| e.to_string())?;
+    Ok(name)
 }
 
 /// Recursive file listing (no extra dep — worlds are deep but bounded).

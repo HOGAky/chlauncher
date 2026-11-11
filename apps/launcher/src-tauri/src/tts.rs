@@ -23,7 +23,7 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use base64::Engine;
 use tokio::sync::{broadcast, Notify};
@@ -352,12 +352,17 @@ impl Tts {
         }
         match raw.event_kind.as_str() {
             "gift" | "donation" => {
-                self.gifters
-                    .lock()
-                    .unwrap()
-                    .entry(raw.user.clone())
-                    .and_modify(|c| *c += raw.coins)
-                    .or_insert(raw.coins);
+                // Session coin totals per viewer — session-scoped by
+                // design, but hard-capped so a marathon stream can't
+                // grow the map without bound.
+                const GIFTER_CAP: usize = 50_000;
+                let mut g = self.gifters.lock().unwrap();
+                if let Some(c) = g.get_mut(&raw.user) {
+                    *c += raw.coins;
+                } else if g.len() < GIFTER_CAP {
+                    g.insert(raw.user.clone(), raw.coins);
+                }
+                drop(g);
                 if cfg.read_gifts {
                     let text = crate::scheduler::render_template(&cfg.gift_template, "", "", raw);
                     self.enqueue(TtsJob {
@@ -521,19 +526,34 @@ impl Tts {
                     }
                 }
                 {
-                    let mut u = self.last_user.lock().unwrap();
+                    let u = self.last_user.lock().unwrap();
                     if let Some(t) = u.get(&job.user) {
                         if now.duration_since(*t).as_millis() < cfg.user_cooldown_ms as u128 {
                             continue;
                         }
                     }
-                    u.insert(job.user.clone(), now);
                 }
-                *self.last_any.lock().unwrap() = Some(now);
             }
+            // Filter BEFORE stamping cooldowns — a vetoed phrase must not
+            // consume the viewer's/user's cooldown (§6.3).
             let Some(text) = Self::filter_text(&cfg, &job.text) else {
                 continue;
             };
+            if !job.bypass_cooldown {
+                let now = Instant::now();
+                {
+                    let mut u = self.last_user.lock().unwrap();
+                    u.insert(job.user.clone(), now);
+                    // Prune stale viewers — a long stream with thousands
+                    // of commenters must not grow this map forever.
+                    let horizon =
+                        Duration::from_millis(cfg.user_cooldown_ms).max(Duration::from_secs(3600));
+                    if u.len() > 4096 {
+                        u.retain(|_, t| now.duration_since(*t) < horizon);
+                    }
+                }
+                *self.last_any.lock().unwrap() = Some(now);
+            }
             let voice = job.voice.clone().unwrap_or_else(|| cfg.voice.clone());
             let id = uuid::Uuid::new_v4().to_string();
             self.tts_frame(&id, &text, "start", None);

@@ -186,18 +186,26 @@ impl GameServer {
     /// (old keys must stop working). Mods reconnect with the new key.
     pub async fn disconnect_adapters(&self) {
         let ids: Vec<u64> = self.adapter_clients.lock().await.keys().cloned().collect();
-        for (slug, clients) in self.clients.lock().await.iter() {
-            for (id, tx) in clients {
-                if ids.contains(id) {
-                    tracing::info!(slug = %slug, client_id = id, "adapter kicked (key regenerated)");
-                    let _ = tx.try_send(Control::Shutdown);
-                }
-            }
+        let txs: Vec<mpsc::Sender<Control>> = self
+            .clients
+            .lock()
+            .await
+            .values()
+            .flat_map(|clients| clients.iter())
+            .filter(|(id, _)| ids.contains(id))
+            .map(|(_, tx)| tx.clone())
+            .collect();
+        for tx in txs {
+            // Bounded `send`, not `try_send`: a full queue must not
+            // silently swallow the shutdown and leave a stale mod behind.
+            let _ = tx.send(Control::Shutdown).await;
         }
     }
 
     /// `true` when the slug's WS handshake completes before `timeout`;
     /// `false` on timeout — used by `play_game` for the 15 s launch gate.
+    /// Only real game clients count: an adapter handshake announces the
+    /// same slug on `handshake_tx` but must not satisfy the launch gate.
     pub async fn wait_for_handshake(&self, slug: &str, timeout: Duration) -> bool {
         // Handshake may have already landed — check connected clients first.
         if self.client_count(slug).await > 0 {
@@ -207,8 +215,19 @@ impl GameServer {
         let res = tokio::time::timeout(timeout, async {
             loop {
                 match rx.recv().await {
-                    Ok(s) if s == slug => return,
+                    // Wake on the slug, then verify a *game* client is
+                    // actually registered (adapter hellos also announce).
+                    Ok(s) if s == slug => {
+                        if self.client_count(slug).await > 0 {
+                            return;
+                        }
+                    }
                     Ok(_) => continue,
+                    Err(broadcast::error::RecvError::Lagged(_)) => {
+                        if self.client_count(slug).await > 0 {
+                            return;
+                        }
+                    }
                     Err(_) => return,
                 }
             }
@@ -246,13 +265,15 @@ impl GameServer {
         token
     }
 
-    /// Number of connected game clients for a slug.
+    /// Number of connected *game* clients for a slug — external adapters
+    /// are excluded (a mod claiming a game's slug must not count as the
+    /// game itself for the launch gate).
     pub async fn client_count(&self, slug: &str) -> usize {
-        self.clients
-            .lock()
-            .await
+        let clients = self.clients.lock().await;
+        let adapters = self.adapter_clients.lock().await;
+        clients
             .get(slug)
-            .map(|m| m.len())
+            .map(|m| m.keys().filter(|id| !adapters.contains_key(*id)).count())
             .unwrap_or(0)
     }
 
@@ -269,11 +290,17 @@ impl GameServer {
 
     /// Sends `shutdown` to every client of `slug`; the socket close that
     /// follows lets the game-side watchdog terminate the process.
+    /// Awaited `send` — a dropped shutdown frame means a zombie game.
     pub async fn shutdown_slug(&self, slug: &str) {
-        if let Some(clients) = self.clients.lock().await.get(slug) {
-            for tx in clients.values() {
-                let _ = tx.try_send(Control::Shutdown);
-            }
+        let txs: Vec<mpsc::Sender<Control>> = self
+            .clients
+            .lock()
+            .await
+            .get(slug)
+            .map(|m| m.values().cloned().collect())
+            .unwrap_or_default();
+        for tx in txs {
+            let _ = tx.send(Control::Shutdown).await;
         }
     }
 

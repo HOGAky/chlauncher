@@ -69,8 +69,11 @@ struct OverlayState {
     hub: Arc<EventHub>,
     /// Broadcast of scheduler overlay frames (alerts/spinner/progress…).
     frames: broadcast::Sender<OverlayFrame>,
-    /// Access token — every route requires `?t=` matching this.
-    token: Arc<String>,
+    /// Access token — every route requires `?t=` matching this. Shared
+    /// with `AppState` so `rotate_overlay_token` takes effect instantly
+    /// (a static copy would keep accepting the old token while the UI
+    /// already shows the new one — the rotation would be inverted).
+    token: Arc<std::sync::RwLock<String>>,
     /// Directory with bundled gift icons (`*.webp` + `gifts.json`).
     gifts_dir: Option<PathBuf>,
     /// `<app-data>/media` — files behind `/media/:id` (§4.1).
@@ -87,10 +90,19 @@ struct OverlayState {
 /// Query-param extractor shared by all guarded routes.
 type Token = Query<HashMap<String, String>>;
 
+/// `?t=` matches the *current* token — read under the shared lock so a
+/// rotation flips every route at once.
 fn check_token(q: &Token, st: &OverlayState) -> bool {
-    q.0.get("t")
-        .map(|t| t == st.token.as_str())
-        .unwrap_or(false)
+    token_ok(q.0.get("t").map(String::as_str), st)
+}
+
+/// Raw comparison helper for handlers that take `Query<HashMap>` rather
+/// than the `Token` alias.
+fn token_ok(given: Option<&str>, st: &OverlayState) -> bool {
+    match (given, st.token.read()) {
+        (Some(g), Ok(exp)) => g == exp.as_str(),
+        _ => false,
+    }
 }
 
 /// URL the Browser Source should consume, given the bound port + token.
@@ -237,7 +249,7 @@ pub fn preset_frame(profile: &TriggerProfile) -> OverlayFrame {
 pub async fn start_overlay_server(
     hub: Arc<EventHub>,
     frames: broadcast::Sender<OverlayFrame>,
-    token: String,
+    token: Arc<std::sync::RwLock<String>>,
     port_cfg: u16,
     media_dir: PathBuf,
     settings: Arc<tokio::sync::Mutex<SettingsStore>>,
@@ -246,7 +258,7 @@ pub async fn start_overlay_server(
     let state = OverlayState {
         hub,
         frames,
-        token: Arc::new(token),
+        token,
         gifts_dir: gifts_dir(),
         media_dir,
         settings,
@@ -324,7 +336,7 @@ async fn serve_gift(
     Query(q): Query<HashMap<String, String>>,
     State(st): State<OverlayState>,
 ) -> Response {
-    if q.get("t").map(|t| t == st.token.as_str()) != Some(true) {
+    if !token_ok(q.get("t").map(String::as_str), &st) {
         return StatusCode::FORBIDDEN.into_response();
     }
     // Whitelist: catalog files are lowercase slugs ending in .webp.
@@ -356,7 +368,7 @@ async fn serve_media(
     State(st): State<OverlayState>,
     req: axum::extract::Request,
 ) -> Response {
-    if q.get("t").map(|t| t == st.token.as_str()) != Some(true) {
+    if !token_ok(q.get("t").map(String::as_str), &st) {
         return StatusCode::FORBIDDEN.into_response();
     }
     if id.len() != 32
@@ -399,7 +411,7 @@ async fn serve_tts(
     Query(q): Query<HashMap<String, String>>,
     State(st): State<OverlayState>,
 ) -> Response {
-    if q.get("t").map(|t| t == st.token.as_str()) != Some(true) {
+    if !token_ok(q.get("t").map(String::as_str), &st) {
         return StatusCode::FORBIDDEN.into_response();
     }
     let id = file.strip_suffix(".wav").unwrap_or("");
@@ -418,7 +430,7 @@ async fn ws_upgrade(
     Query(q): Query<HashMap<String, String>>,
     State(st): State<OverlayState>,
 ) -> Response {
-    if q.get("t").map(|t| t == st.token.as_str()) != Some(true) {
+    if !token_ok(q.get("t").map(String::as_str), &st) {
         return StatusCode::FORBIDDEN.into_response();
     }
     ws.on_upgrade(move |sock| overlay_ws(sock, st))
