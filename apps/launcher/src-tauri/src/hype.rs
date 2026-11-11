@@ -105,6 +105,7 @@ mod tests {
             count: 1,
             coins,
             gift_id: None,
+            vip: false,
             ts_ms: 0,
         }
     }

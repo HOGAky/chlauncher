@@ -55,6 +55,10 @@ pub struct RawStreamEvent {
     /// Stable TikTok gift id — survives gift-name localization.
     #[serde(default)]
     pub gift_id: Option<i64>,
+    /// Subscriber/moderator/super-fan flag from the sidecar — feeds VIP
+    /// multipliers (points) and can gate VIP-only rules later.
+    #[serde(default)]
+    pub vip: bool,
     /// Unix ms when the event reached the launcher (queueing latency).
     #[serde(default)]
     pub ts_ms: u64,
@@ -387,6 +391,9 @@ pub struct PointsCfg {
     pub per_sub: u32,
     /// Flat points per `follow`.
     pub per_follow: u32,
+    /// Earn multiplier for VIP viewers (subscriber/moderator/super-fan
+    /// per the sidecar `vip` flag). 1.0 = no bonus.
+    pub vip_multiplier: f32,
 }
 
 impl Default for PointsCfg {
@@ -398,6 +405,7 @@ impl Default for PointsCfg {
             per_coin: 10,
             per_sub: 500,
             per_follow: 50,
+            vip_multiplier: 2.0,
         }
     }
 }

@@ -869,6 +869,7 @@ mod tests {
             count,
             coins,
             gift_id: None,
+            vip: false,
             ts_ms: 0,
         }
     }

@@ -84,7 +84,7 @@ impl ViewerPoints {
             return;
         }
         // --- earning ---
-        let earn: i64 = match raw.event_kind.as_str() {
+        let base: i64 = match raw.event_kind.as_str() {
             "comment" => {
                 // `!buy` is spending, not earning — skip the point.
                 if raw.raw_name.trim_start().starts_with("!buy") {
@@ -115,6 +115,12 @@ impl ViewerPoints {
             "subscribe" => cfg.per_sub as i64,
             "follow" => cfg.per_follow as i64,
             _ => 0,
+        };
+        // VIP viewers (subscriber/mod/super-fan) earn at a multiplier.
+        let earn = if raw.vip {
+            (base as f64 * cfg.vip_multiplier.max(1.0) as f64) as i64
+        } else {
+            base
         };
         if earn > 0 {
             let mut st = self.state.lock().await;
@@ -169,6 +175,7 @@ impl ViewerPoints {
             count: 1,
             coins: 0,
             gift_id: None,
+            vip: false,
             ts_ms: crate::types::now_ms(),
         };
         let _ = self.raw_tx.try_send(ev);
@@ -259,6 +266,7 @@ mod tests {
             count: 1,
             coins,
             gift_id: None,
+            vip: false,
             ts_ms: 0,
         }
     }

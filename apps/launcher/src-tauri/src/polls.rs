@@ -246,6 +246,7 @@ impl PollTracker {
                 count: 1,
                 coins: 0,
                 gift_id: None,
+                vip: false,
                 ts_ms: crate::types::now_ms(),
             };
             let _ = self.raw_tx.try_send(ev);
@@ -286,6 +287,7 @@ mod tests {
             count: 1,
             coins: 0,
             gift_id: None,
+            vip: false,
             ts_ms: 0,
         }
     }

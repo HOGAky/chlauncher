@@ -81,6 +81,7 @@ impl TimedEvents {
                 count: 1,
                 coins: 0,
                 gift_id: None,
+                vip: false,
                 ts_ms: crate::types::now_ms(),
             };
             // Full channel — drop this tick rather than block the loop.

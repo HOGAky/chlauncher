@@ -119,6 +119,13 @@ const avatarOf = (d) => {
   return (Array.isArray(p?.url) ? p.url[0] : p?.url) || p?.uri || '';
 };
 
+// VIP flag — subscriber/moderator/super-fan per the user attributes the
+// connector normalizes. Feeds the points multiplier in the launcher.
+const vipOf = (d) => {
+  const a = d?.user?.userAttributes || d?.userAttributes || {};
+  return !!(a.isSubscriber || a.isModerator || a.isSuperFan || a.isTopGifter);
+};
+
 const ev = (event_kind, d, raw_name, amount = 0, extra = {}) =>
   out({
     type: 'event',
@@ -132,6 +139,7 @@ const ev = (event_kind, d, raw_name, amount = 0, extra = {}) =>
     count: extra.count ?? 1,
     coins: extra.coins ?? 0,
     gift_id: extra.gift_id ?? null,
+    vip: vipOf(d),
   });
 
 const main = async () => {

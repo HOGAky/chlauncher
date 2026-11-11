@@ -51,6 +51,7 @@ export default function PointsCard() {
     per_coin: 10,
     per_sub: 500,
     per_follow: 50,
+    vip_multiplier: 2,
   };
   const set = (p: Partial<PointsCfg>) => setCfg({ ...c, ...p });
 
@@ -124,6 +125,17 @@ export default function PointsCard() {
               min={0}
               value={c.per_follow}
               onChange={(e) => set({ per_follow: Number(e.target.value) || 0 })}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-muted-foreground">VIP ×</span>
+            <Input
+              type="number"
+              min={1}
+              step={0.5}
+              title="Множитель для подписчиков/модераторов"
+              value={c.vip_multiplier}
+              onChange={(e) => set({ vip_multiplier: Number(e.target.value) || 1 })}
             />
           </label>
         </div>

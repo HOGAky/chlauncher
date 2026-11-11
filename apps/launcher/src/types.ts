@@ -602,6 +602,7 @@ export interface PointsCfg {
   per_coin: number;
   per_sub: number;
   per_follow: number;
+  vip_multiplier: number;
 }
 
 /** `!buy` shop item — `kind=shop` event with `raw_name = name`. */

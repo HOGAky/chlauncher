@@ -1128,6 +1128,7 @@ pub async fn test_rule(
         count: rule.min_amount.max(1),
         coins: 0,
         gift_id: None,
+        vip: false,
         ts_ms: now_ms(),
     };
     // Single-rule profile so match_all can't pull in neighbors.
