@@ -95,7 +95,16 @@ pub fn run() {
             // "local service unavailable" warning from bootstrap instead
             // of silently degrading.
             let mut service_error: Option<String> = None;
-            let game_server = match GameServer::bind(hub.clone()) {
+            // Shared adapter-key cell (§10.1): settings is the source of
+            // truth on disk; this copy lets `hello_adapter` validate and
+            // `regenerate_adapter_key` take effect instantly.
+            let adapter_key = Arc::new(std::sync::RwLock::new(
+                settings
+                    .try_lock()
+                    .map(|s| s.data.adapter_key.clone())
+                    .unwrap_or_default(),
+            ));
+            let game_server = match GameServer::bind(hub.clone(), adapter_key.clone()) {
                 Ok(gs) => gs,
                 Err(e) => {
                     let msg = format!(
@@ -106,10 +115,10 @@ pub fn run() {
                     service_error = Some(msg);
                     // Fallback: bind lazily on port 0 again — will fail the
                     // same way, but keeps AppState constructible.
-                    GameServer::bind(hub.clone()).unwrap_or_else(|_| {
+                    GameServer::bind(hub.clone(), adapter_key.clone()).unwrap_or_else(|_| {
                         // Absolute last resort so the app can still start
                         // and show the error instead of crashing.
-                        GameServer::bind_placeholder(hub.clone())
+                        GameServer::bind_placeholder(hub.clone(), adapter_key.clone())
                     })
                 }
             };
@@ -264,6 +273,7 @@ pub fn run() {
                 tts: tts.clone(),
                 usage: usage.clone(),
                 mc: mc.clone(),
+                adapter_key: adapter_key.clone(),
                 catalog_seen: Arc::new(Mutex::new(None)),
                 overlay_port: Mutex::new(overlay_port),
                 service_error: Mutex::new(service_error),
@@ -421,6 +431,8 @@ pub fn run() {
             commands::mc_plugin_catalog,
             commands::mc_install_plugin,
             commands::mc_remove_plugin,
+            commands::adapter_status,
+            commands::regenerate_adapter_key,
         ])
         .build(tauri::generate_context!());
     let app = match app {

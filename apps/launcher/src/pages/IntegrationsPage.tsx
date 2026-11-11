@@ -5,11 +5,11 @@
  * URL for TikTok Live Studio.
  */
 import React, { useEffect, useState } from 'react';
-import { Radio, Copy, Wallet, Cloud, RefreshCw } from 'lucide-react';
+import { Radio, Copy, Wallet, Cloud, RefreshCw, Plug } from 'lucide-react';
 import * as api from '../api';
 import { useApp } from '../App';
 import { maskSecret } from '../lib/utils';
-import type { ForwardStatus, IntegrationStatus } from '../types';
+import type { AdapterStatus, ForwardStatus, IntegrationStatus } from '../types';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Switch } from '../components/ui/switch';
@@ -48,6 +48,16 @@ export default function IntegrationsPage() {
   const [fwdStatus, setFwdStatus] = useState<ForwardStatus | null>(fwd?.status ?? null);
   const [fwdErr, setFwdErr] = useState('');
   const [keyCopied, setKeyCopied] = useState(false);
+
+  // External game adapters — mods dial the local game WS with the shared
+  // adapter key (§10.1); regeneration disconnects every connected mod.
+  const [adapter, setAdapter] = useState<AdapterStatus | null>(null);
+  const refreshAdapter = () => api.adapterStatus().then(setAdapter).catch(() => {});
+  useEffect(() => {
+    refreshAdapter();
+    const t = setInterval(refreshAdapter, 5000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -396,6 +406,65 @@ export default function IntegrationsPage() {
           <p className="text-[10px] text-muted-foreground">
             Фиксированный порт делает URL стабильным между запусками (удобно для OBS).
             «Новый токен» инвалидирует все скопированные URL.
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* External game adapters (§10.1) — mods connect to the local
+          game WS with the shared key instead of a launch token. */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Plug size={16} /> Внешние моды (адаптеры)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-xs text-muted-foreground">
+            Моды для сторонних игр (GTA V, Valheim, …) подключаются к локальному
+            сокету лаунчера и получают те же события, что и встроенные игры.
+            Впишите в конфиг мода адрес <code>ws://127.0.0.1:{adapter?.port ?? '…'}</code> и ключ ниже.
+          </p>
+          {adapter && (
+            <div className="flex items-center gap-2">
+              <code className="flex-1 text-[10px] bg-secondary/60 rounded px-2 py-1.5 select-all truncate">
+                {adapter.key}
+              </code>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  navigator.clipboard.writeText(adapter.key);
+                  setCopied('adapter');
+                  setTimeout(() => setCopied(null), 1500);
+                }}
+              >
+                <Copy size={12} /> {copied === 'adapter' ? 'OK' : ''}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  api
+                    .regenerateAdapterKey()
+                    .then(refreshAdapter)
+                    .catch(() => {})
+                }
+                title="Старый ключ перестанет работать — моды отключатся"
+              >
+                <RefreshCw size={12} /> Новый ключ
+              </Button>
+            </div>
+          )}
+          <div className="text-xs text-muted-foreground">
+            Подключено:{' '}
+            {adapter?.connected.length
+              ? adapter.connected.join(', ')
+              : 'нет активных модов'}
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            Протокол: hello_adapter{'{key, game, protocol}'} → welcome, далее
+            поток event/heartbeat; мод может отвечать ack{'{event_id, ok}'} —
+            лента покажет «выполнено в игре». См. tools/adapter-example.
           </p>
         </CardContent>
       </Card>

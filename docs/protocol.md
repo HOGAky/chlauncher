@@ -35,6 +35,24 @@ are the reference implementation.
 
 Tokens are minted per launch (`issue_token`) and **consumed on first use**.
 
+### External adapters (mods, spec §10.1)
+
+Mods for third-party games aren't launcher processes — they can't receive
+a one-time token. They handshake with the persistent, revocable
+`adapter_key` (Интеграции → Внешние моды):
+
+```jsonc
+// mod → launcher (first frame, ≤5 s)
+{ "type": "hello_adapter", "key": "<adapter_key>", "game": "gta5", "protocol": 1 }
+// launcher → mod
+{ "type": "welcome", "protocol": 1 }
+// or: { "type": "error", "reason": "invalid adapter key" }
+```
+
+`game` must be a catalog slug (`[a-z0-9_-]{1,64}`); events are dispatched
+when that slug's trigger profile is active. Regenerating the key sends
+`shutdown` to all adapter clients and invalidates the old key.
+
 ## Steady state (launcher → game)
 
 ```jsonc
@@ -45,7 +63,8 @@ Tokens are minted per launch (`issue_token`) and **consumed on first use**.
     "avatar_url": "",
     "action_command": "spawn_enemy",
     "amount": 1,
-    "raw_name": "Rose"
+    "raw_name": "Rose",
+    "event_id": "uuid-v4"              // §10.1 — echoed back by ack frames
 }}
 
 { "type": "heartbeat", "ts": 1730000000 }        // every 30 s
@@ -54,7 +73,14 @@ Tokens are minted per launch (`issue_token`) and **consumed on first use**.
 ```
 
 The game replies to transport-level `ping` with `pong` and otherwise stays
-silent after `hello`.
+silent after `hello`. Adapters may additionally send an execution
+confirmation back-channel (§10.1):
+
+```jsonc
+// adapter → launcher — marks the dispatch as executed/failed in-game;
+// the UI feed shows «выполнено в игре».
+{ "type": "ack", "event_id": "<uuid from the event frame>", "ok": true }
+```
 
 ## Overlay feed (`ws://127.0.0.1:<port>/ws?t=<overlay_token>`)
 

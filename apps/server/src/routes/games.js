@@ -52,6 +52,10 @@ function gameView(row) {
     cover_image: row.cover_image,
     changelog: row.changelog,
     is_free: !!row.is_free,
+    // §10.3: 'adapter' entries are external mods, not launcher games;
+    // adapter_manifest is a JSON blob ({actions:[…]}) parsed client-side.
+    kind: row.kind || 'game',
+    adapter_manifest: row.adapter_manifest || '',
   };
 }
 
@@ -60,6 +64,7 @@ function listPublished(db) {
   return db
     .prepare(
       `SELECT g.slug, g.title, g.description, g.executable_name, g.cover_image, g.is_free,
+              g.kind, g.adapter_manifest,
               b.version, b.sha256, b.size_bytes, b.changelog
        FROM games g
        JOIN game_builds b ON b.id = g.published_build_id
@@ -74,6 +79,7 @@ function findPublished(db, slug) {
   return db
     .prepare(
       `SELECT g.slug, g.title, g.description, g.executable_name, g.cover_image, g.is_free,
+              g.kind, g.adapter_manifest,
               b.version, b.sha256, b.size_bytes, b.changelog, b.file_name
        FROM games g
        JOIN game_builds b ON b.id = g.published_build_id

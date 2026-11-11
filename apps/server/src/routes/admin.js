@@ -64,22 +64,43 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
 
   /** POST /api/admin/games — create a draft game entry. */
   app.post('/games', async (request, reply) => {
-    const { slug, title, description = '', executable_name, is_free } = request.body || {};
+    const { slug, title, description = '', executable_name, is_free, kind, adapter_manifest } =
+      request.body || {};
     if (!slug || !SLUG_RE.test(slug)) {
       return reply.code(400).send({ error: 'INVALID_SLUG' });
     }
     if (!title || !executable_name) {
       return reply.code(400).send({ error: 'MISSING_FIELDS' });
     }
+    // §10.3: adapters are external mods — a JSON manifest blob validates here.
+    if (kind !== undefined && !['game', 'adapter'].includes(kind)) {
+      return reply.code(400).send({ error: 'INVALID_KIND' });
+    }
+    if (adapter_manifest !== undefined) {
+      try {
+        JSON.parse(adapter_manifest || '{}');
+      } catch {
+        return reply.code(400).send({ error: 'INVALID_MANIFEST' });
+      }
+    }
     if (findGameBySlug(db, slug)) {
       return reply.code(409).send({ error: 'SLUG_TAKEN' });
     }
     const info = db
       .prepare(
-        `INSERT INTO games (slug, title, description, version, file_name, executable_name, status, is_free, updated_at)
-         VALUES (?, ?, ?, '', '', ?, 'draft', ?, ?)`
+        `INSERT INTO games (slug, title, description, version, file_name, executable_name, status, is_free, kind, adapter_manifest, updated_at)
+         VALUES (?, ?, ?, '', '', ?, 'draft', ?, ?, ?, ?)`
       )
-      .run(slug, title, description, executable_name, is_free ? 1 : 0, nowIso());
+      .run(
+        slug,
+        title,
+        description,
+        executable_name,
+        is_free ? 1 : 0,
+        kind === 'adapter' ? 'adapter' : 'game',
+        adapter_manifest || '',
+        nowIso()
+      );
     audit(request.auth.userId, 'create_game', slug, { title });
     return reply.code(201).send({ game: adminGameView(db, Number(info.lastInsertRowid)) });
   });
@@ -88,13 +109,26 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
   app.patch('/games/:slug', async (request, reply) => {
     const game = findGameBySlug(db, request.params.slug);
     if (!game) return reply.code(404).send({ error: 'GAME_NOT_FOUND' });
-    const { title, description, cover_image, is_free } = request.body || {};
+    const { title, description, cover_image, is_free, kind, adapter_manifest } =
+      request.body || {};
+    if (kind !== undefined && !['game', 'adapter'].includes(kind)) {
+      return reply.code(400).send({ error: 'INVALID_KIND' });
+    }
+    if (adapter_manifest !== undefined) {
+      try {
+        JSON.parse(adapter_manifest || '{}');
+      } catch {
+        return reply.code(400).send({ error: 'INVALID_MANIFEST' });
+      }
+    }
     db.prepare(
       `UPDATE games SET
          title = COALESCE(?, title),
          description = COALESCE(?, description),
          cover_image = COALESCE(?, cover_image),
          is_free = COALESCE(?, is_free),
+         kind = COALESCE(?, kind),
+         adapter_manifest = COALESCE(?, adapter_manifest),
          updated_at = ?
        WHERE id = ?`
     ).run(
@@ -102,11 +136,13 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
       description ?? null,
       cover_image ?? null,
       is_free === undefined ? null : is_free ? 1 : 0,
+      kind ?? null,
+      adapter_manifest ?? null,
       nowIso(),
       game.id
     );
     audit(request.auth.userId, 'update_game', game.slug, {
-      fields: ['title', 'description', 'cover_image', 'is_free'].filter(
+      fields: ['title', 'description', 'cover_image', 'is_free', 'kind', 'adapter_manifest'].filter(
         (f) => request.body?.[f] !== undefined
       ),
     });
@@ -687,6 +723,8 @@ function gameViewFull(g, builds) {
     is_free: !!g.is_free,
     pending_submissions: g.pending_submissions || 0,
     published_version: published?.version || null,
+    kind: g.kind || 'game',
+    adapter_manifest: g.adapter_manifest || '',
     updated_at: g.updated_at,
     builds,
   };

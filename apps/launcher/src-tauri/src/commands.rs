@@ -58,6 +58,8 @@ pub struct AppState {
     pub usage: Arc<crate::usage::UsageMeter>,
     /// Managed Paper server lifecycle (§9).
     pub mc: Arc<crate::minecraft::MinecraftManager>,
+    /// Shared adapter key for `hello_adapter` validation (§10.1).
+    pub adapter_key: Arc<std::sync::RwLock<String>>,
     /// Last seen slug→version snapshot for catalog-change detection (§6.3).
     pub catalog_seen: Arc<Mutex<Option<std::collections::BTreeMap<String, String>>>>,
     /// Actual OS-assigned overlay port (None until bound / on bind failure).
@@ -2008,4 +2010,43 @@ pub async fn mc_install_plugin(slug: String, state: State<'_, AppState>) -> Resu
 #[tauri::command]
 pub async fn mc_remove_plugin(file: String, state: State<'_, AppState>) -> Result<(), String> {
     state.mc.remove_plugin(&file)
+}
+
+// ---------------------------------------------------------------------------
+// External game adapters — mods connecting to the local game WS (§10.1)
+// ---------------------------------------------------------------------------
+
+/// Status of the adapter endpoint: the shared key (generated on first
+/// call), the WS port to dial, and which adapters are connected now.
+#[tauri::command]
+pub async fn adapter_status(state: State<'_, AppState>) -> Result<Value, String> {
+    let key = {
+        let mut s = state.settings.lock().await;
+        if s.data.adapter_key.is_empty() {
+            s.data.adapter_key = uuid::Uuid::new_v4().to_string();
+            let _ = s.save();
+        }
+        *state.adapter_key.write().map_err(|_| "LOCK")? = s.data.adapter_key.clone();
+        s.data.adapter_key.clone()
+    };
+    Ok(serde_json::json!({
+        "key": key,
+        "port": state.game_server.port(),
+        "connected": state.game_server.connected_adapters().await,
+    }))
+}
+
+/// Rotates the adapter key: connected mods are force-disconnected and
+/// must reconnect with the new key (§10.1 revocation).
+#[tauri::command]
+pub async fn regenerate_adapter_key(state: State<'_, AppState>) -> Result<String, String> {
+    let key = uuid::Uuid::new_v4().to_string();
+    {
+        let mut s = state.settings.lock().await;
+        s.data.adapter_key = key.clone();
+        let _ = s.save();
+    }
+    *state.adapter_key.write().map_err(|_| "LOCK")? = key.clone();
+    state.game_server.disconnect_adapters().await;
+    Ok(key)
 }

@@ -105,6 +105,7 @@ mod tests {
             action_command: String::new(),
             amount: 3,
             raw_name: "Rose".into(),
+            event_id: String::new(),
         };
         let lines = render_event(
             "say hi {user}\n\n  give {player} rose {count}  ",

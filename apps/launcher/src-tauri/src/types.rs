@@ -23,6 +23,10 @@ pub struct StreamEvent {
     pub amount: i32,
     /// Raw human-readable payload (gift name, donation text, comment body).
     pub raw_name: String,
+    /// Unique dispatch id — external adapters (§10.1) echo it back in
+    /// `ack` frames so the UI feed can show «выполнено в игре».
+    #[serde(default)]
+    pub event_id: String,
 }
 
 /// A raw, unmapped event as produced by an integration or the simulator —
@@ -543,6 +547,10 @@ pub struct FeedItem {
     /// `"done"` | `"cooldown"` | `"limit"` | `"interrupt_cooldown"` |
     /// `"paused"` | `"dropped"`.
     pub status: String,
+    /// Adapter `ack` for this dispatch: `true` = выполнено в игре,
+    /// `false` = adapter reported failure; `None` = no ack yet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ack: Option<bool>,
     pub event: StreamEvent,
 }
 
@@ -565,6 +573,17 @@ pub struct CatalogGame {
     /// Free-tier games launch/download without a subscription (§8.3).
     #[serde(default)]
     pub is_free: bool,
+    /// `"game"` (launcher-spawned, SDK) or `"adapter"` (external mod, §10.3).
+    #[serde(default = "default_game_kind")]
+    pub kind: String,
+    /// JSON blob `{actions:[{id,label,params}]}` for adapters — the mapper
+    /// renders it as an action dropdown instead of a free-text field.
+    #[serde(default)]
+    pub adapter_manifest: String,
+}
+
+fn default_game_kind() -> String {
+    "game".into()
 }
 
 /// Locally installed game state.

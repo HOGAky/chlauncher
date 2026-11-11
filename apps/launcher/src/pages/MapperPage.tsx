@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import * as api from '../api';
 import type {
+  AdapterManifest,
   AlertSpec,
   GiftEntry,
   MediaItem,
@@ -66,7 +67,24 @@ const ACTIONS = [
 const GAME_ACTIONS: Record<string, string[]> = {
   'mock-game': ['spawn_enemy', 'spawn_boss', 'heal_player', 'log_only'],
 };
-const actionsFor = (slug: string) => GAME_ACTIONS[slug] ?? ACTIONS;
+
+/** Adapter manifests (§10.3): slug → action ids from the catalog entry's
+ *  `adapter_manifest` — the mod's declared vocabulary replaces the
+ *  generic command list in the datalist. */
+type ActionOpt = { id: string; label?: string };
+function parseManifestActions(entry: {
+  slug: string;
+  kind?: string;
+  adapter_manifest?: string;
+}): ActionOpt[] {
+  if (entry.kind !== 'adapter' || !entry.adapter_manifest) return [];
+  try {
+    const m = JSON.parse(entry.adapter_manifest) as AdapterManifest;
+    return (m.actions || []).filter((a) => a.id).map((a) => ({ id: a.id, label: a.label }));
+  } catch {
+    return []; // malformed manifests simply add no options
+  }
+}
 const DEFAULT_SLUG = 'default'; // profile used when no game is active (cloud servers)
 
 const ALERT_POSITIONS = [
@@ -107,6 +125,7 @@ function newRule(): TriggerRule {
 
 export default function MapperPage() {
   const [slug, setSlug] = useState(DEFAULT_SLUG);
+  const [manifestActions, setManifestActions] = useState<Record<string, ActionOpt[]>>({});
   const [gameSlugs, setGameSlugs] = useState<string[]>([DEFAULT_SLUG]);
   const [activeSlug, setActiveSlug] = useState<string | null>(null);
   const [profile, setProfile] = useState<TriggerProfile | null>(null);
@@ -219,6 +238,13 @@ export default function MapperPage() {
     api.listGames().then((r) => {
       const slugs = [DEFAULT_SLUG, ...r.games.map((g) => g.slug)];
       setGameSlugs((old) => [...new Set([...old, ...slugs])]);
+      // Adapter games carry a manifest → their action vocabulary.
+      const found: Record<string, ActionOpt[]> = {};
+      for (const g of r.games) {
+        const acts = parseManifestActions(g);
+        if (acts.length) found[g.slug] = acts;
+      }
+      setManifestActions(found);
     }).catch(() => {});
     api.getActiveTriggerProfile().then((s) => {
       if (s) {
@@ -676,8 +702,11 @@ export default function MapperPage() {
                   onChange={(e) => patchRule(r.id, { action: e.target.value })}
                 />
                 <datalist id="action-commands">
-                  {actionsFor(slug).map((a) => (
-                    <option key={a} value={a} />
+                  {(manifestActions[slug]?.length
+                    ? manifestActions[slug]
+                    : (GAME_ACTIONS[slug] ?? ACTIONS).map((id): ActionOpt => ({ id }))
+                  ).map((a) => (
+                    <option key={a.id} value={a.id} label={a.label} />
                   ))}
                 </datalist>
                 <span className="text-muted-foreground text-xs">×</span>

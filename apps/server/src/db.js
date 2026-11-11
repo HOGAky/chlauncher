@@ -311,6 +311,17 @@ const MIGRATIONS = [
       );
     `);
   },
+  // v7 → v8: external game adapters (parity spec §10.3). Mods publish
+  // as catalog entries with kind='adapter'; `adapter_manifest` is a JSON
+  // blob `{actions:[{id,label,params}]}` the mapper renders as an action
+  // dropdown instead of a free-text command field.
+  (db) => {
+    db.exec(`
+      ALTER TABLE games ADD COLUMN kind TEXT NOT NULL DEFAULT 'game'
+        CHECK (kind IN ('game','adapter'));
+      ALTER TABLE games ADD COLUMN adapter_manifest TEXT NOT NULL DEFAULT '';
+    `);
+  },
 ];
 
 /** Runs all pending migrations in order. Idempotent via user_version. */

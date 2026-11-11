@@ -9,6 +9,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { onOpenUrl, getCurrent } from '@tauri-apps/plugin-deep-link';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import type {
+  AdapterStatus,
   MediaItem,
   McPluginCatalog,
   McStatus,
@@ -418,3 +419,7 @@ export const mcInstallPlugin = (slug: string) =>
   cmd<void>('mc_install_plugin', { slug });
 export const mcRemovePlugin = (file: string) =>
   cmd<void>('mc_remove_plugin', { file });
+
+// --- External game adapters (§10.1) -------------------------------------------
+export const adapterStatus = () => cmd<AdapterStatus>('adapter_status');
+export const regenerateAdapterKey = () => cmd<string>('regenerate_adapter_key');

@@ -313,6 +313,23 @@ export interface LibraryEntry {
   is_free?: boolean;
   /** The account's `paid_games` entitlement — UI lock badge only. */
   paid_games_allowed?: boolean;
+  /** `"game"` (launcher-spawned) or `"adapter"` (external mod, §10.3). */
+  kind?: 'game' | 'adapter';
+  /** Adapter manifest JSON blob `{actions:[{id,label,params}]}`. */
+  adapter_manifest?: string;
+}
+
+/** Parsed `adapter_manifest` — actions the mapper offers as a dropdown. */
+export interface AdapterManifest {
+  game?: string;
+  actions?: { id: string; label?: string; params?: Record<string, unknown> }[];
+}
+
+/** `adapter_status` response — key, ws port, connected mod slugs. */
+export interface AdapterStatus {
+  key: string;
+  port: number;
+  connected: string[];
 }
 
 /** Window-shaping options passed to the game process. */

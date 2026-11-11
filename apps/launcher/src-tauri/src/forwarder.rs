@@ -339,6 +339,7 @@ mod tests {
             raw_name: "Rose".into(),
             amount: 1,
             action_command: "log_only".into(),
+            event_id: String::new(),
         }
     }
 

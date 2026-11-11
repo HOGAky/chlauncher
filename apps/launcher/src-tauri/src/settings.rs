@@ -66,6 +66,11 @@ pub struct Settings {
     /// Managed Minecraft server (§9): EULA, RAM, RCON credentials.
     #[serde(default)]
     pub mc: McSettings,
+    /// Shared secret external game adapters (mods) use in their
+    /// `hello_adapter` handshake (§10.1) — generated on demand,
+    /// revocable via regeneration. Never logged.
+    #[serde(default)]
+    pub adapter_key: String,
 }
 
 /// Managed Minecraft server configuration (parity spec §9.2–§9.3).

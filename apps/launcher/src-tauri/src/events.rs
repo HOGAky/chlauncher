@@ -78,8 +78,24 @@ impl EventHub {
         feed.push_back(crate::types::FeedItem {
             ts: crate::types::now_ms() / 1000,
             status: status.into(),
+            ack: None,
             event: ev,
         });
+    }
+
+    /// Adapter back-channel (§10.1): marks the feed entry carrying
+    /// `event_id` as executed/failed in-game — «выполнено в игре».
+    pub fn note_ack(&self, event_id: &str, ok: bool) {
+        if event_id.is_empty() {
+            return;
+        }
+        let mut feed = self.feed.lock().unwrap_or_else(|p| p.into_inner());
+        for item in feed.iter_mut().rev() {
+            if item.event.event_id == event_id {
+                item.ack = Some(ok);
+                break;
+            }
+        }
     }
 
     /// Snapshot of the statusful feed (newest first) for the UI.
@@ -184,6 +200,8 @@ impl TriggerMapper {
             action_command: rule.action.clone(),
             amount: ((raw.amount as f32) * rule.multiplier.max(0.0)) as i32,
             raw_name: raw.raw_name.clone(),
+            // Unique id per dispatch — adapters echo it in `ack` frames.
+            event_id: uuid::Uuid::new_v4().to_string(),
         }
     }
 
@@ -413,6 +431,50 @@ mod tests {
         let ev = TriggerMapper::map(&whale, &profile).unwrap();
         assert_eq!(ev.action_command, "yeet");
         assert_eq!(profile.preset.as_deref(), Some("steal-the-stream"));
+    }
+
+    #[test]
+    fn mapped_events_get_unique_event_ids() {
+        let profile =
+            TriggerMapper::profile_from_preset("mock-game", &TriggerMapper::builtin_presets()[0]);
+        let raw = RawStreamEvent {
+            source: "tiktok".into(),
+            event_kind: "gift".into(),
+            user: "u".into(),
+            avatar_url: String::new(),
+            amount: 1,
+            raw_name: "Whale".into(),
+            count: 1,
+            coins: 0,
+            gift_id: None,
+            ts_ms: 0,
+        };
+        let a = TriggerMapper::map(&raw, &profile).unwrap();
+        let b = TriggerMapper::map(&raw, &profile).unwrap();
+        assert!(!a.event_id.is_empty());
+        assert_ne!(a.event_id, b.event_id);
+    }
+
+    #[test]
+    fn note_ack_marks_feed_entry_by_event_id() {
+        let hub = EventHub::new();
+        let ev = StreamEvent {
+            source: "simulator".into(),
+            event_kind: "gift".into(),
+            user: "u".into(),
+            avatar_url: String::new(),
+            action_command: "x".into(),
+            amount: 1,
+            raw_name: "r".into(),
+            event_id: "evt-1".into(),
+        };
+        hub.dispatch(ev.clone());
+        assert_eq!(hub.feed_items()[0].ack, None);
+        hub.note_ack("evt-1", true);
+        assert_eq!(hub.feed_items()[0].ack, Some(true));
+        hub.note_ack("unknown", false); // no match — nothing changes
+        assert_eq!(hub.feed_items()[0].ack, Some(true));
+        hub.note_ack("", false); // empty ids are ignored
     }
 }
 

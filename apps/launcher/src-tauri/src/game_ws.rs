@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, mpsc, Mutex};
@@ -33,11 +33,31 @@ const HEARTBEAT_EVERY: Duration = Duration::from_secs(30);
 /// How long to wait for the `hello` frame before dropping the socket.
 const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// First frame a game must send.
+/// First frame a client must send: one-time `hello` from launcher-spawned
+/// games, or `hello_adapter` from external mods (§10.1) that carry the
+/// persistent adapter key instead — mods aren't launcher processes, so
+/// they can't receive a one-time token.
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum ClientFrame {
-    Hello { token: String },
+    Hello {
+        token: String,
+    },
+    HelloAdapter {
+        key: String,
+        game: String,
+        #[allow(dead_code)]
+        protocol: Option<u32>,
+    },
+}
+
+/// Frames an adapter (or a future SDK) may send after the handshake —
+/// the optional back-channel. `ack` marks the dispatch `event_id` as
+/// executed/failed inside the actual game (§10.1).
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum AdapterFrame {
+    Ack { event_id: String, ok: bool },
 }
 
 /// Frames sent to games (mirrors `LauncherMessage` in the game SDK).
@@ -72,6 +92,12 @@ pub struct GameServer {
     /// Notified (with the slug) every time a handshake completes — lets
     /// `play_game` bound the launch wait to 15 s.
     handshake_tx: broadcast::Sender<String>,
+    /// Persistent adapter key (§10.1) — shared with settings so
+    /// `regenerate_adapter_key` takes effect for the next handshake.
+    adapter_key: Arc<RwLock<String>>,
+    /// client_ids that arrived via `hello_adapter` — used to disconnect
+    /// mods on key regeneration and to report adapter status.
+    adapter_clients: Mutex<HashMap<u64, String>>,
     /// Actual OS-assigned loopback port.
     port: u16,
     /// The bound listener, moved into `run_accept_loop` on start.
@@ -94,7 +120,10 @@ impl GameServer {
     /// Fails fast (returns Err) if the loopback listener can't be opened,
     /// so setup can surface "local service unavailable" instead of a
     /// silent dead launcher.
-    pub fn bind(hub: Arc<EventHub>) -> std::io::Result<Arc<Self>> {
+    pub fn bind(
+        hub: Arc<EventHub>,
+        adapter_key: Arc<RwLock<String>>,
+    ) -> std::io::Result<Arc<Self>> {
         let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
         listener.set_nonblocking(true)?;
         let port = listener.local_addr()?.port();
@@ -104,6 +133,8 @@ impl GameServer {
             tokens: Mutex::new(HashMap::new()),
             clients: Mutex::new(HashMap::new()),
             handshake_tx,
+            adapter_key,
+            adapter_clients: Mutex::new(HashMap::new()),
             port,
             listener: Mutex::new(Some(listener)),
             hub,
@@ -118,16 +149,51 @@ impl GameServer {
     /// Unbound placeholder — lets `AppState` exist when the listener bind
     /// failed so the UI can still boot and show the service error.
     /// `port()` returns 0; no game can ever connect.
-    pub fn bind_placeholder(hub: Arc<EventHub>) -> Arc<Self> {
+    pub fn bind_placeholder(hub: Arc<EventHub>, adapter_key: Arc<RwLock<String>>) -> Arc<Self> {
         let (handshake_tx, _) = broadcast::channel(64);
         Arc::new(Self {
             tokens: Mutex::new(HashMap::new()),
             clients: Mutex::new(HashMap::new()),
             handshake_tx,
+            adapter_key,
+            adapter_clients: Mutex::new(HashMap::new()),
             port: 0,
             listener: Mutex::new(None),
             hub,
         })
+    }
+
+    /// The current adapter key — read per handshake so regeneration is
+    /// immediate.
+    fn adapter_key(&self) -> String {
+        self.adapter_key
+            .read()
+            .map(|k| k.clone())
+            .unwrap_or_default()
+    }
+
+    /// Slugs of currently-connected adapters (mods) — for the status card.
+    pub async fn connected_adapters(&self) -> Vec<String> {
+        self.adapter_clients
+            .lock()
+            .await
+            .values()
+            .cloned()
+            .collect()
+    }
+
+    /// Force-disconnects every adapter — used when the key is regenerated
+    /// (old keys must stop working). Mods reconnect with the new key.
+    pub async fn disconnect_adapters(&self) {
+        let ids: Vec<u64> = self.adapter_clients.lock().await.keys().cloned().collect();
+        for (slug, clients) in self.clients.lock().await.iter() {
+            for (id, tx) in clients {
+                if ids.contains(id) {
+                    tracing::info!(slug = %slug, client_id = id, "adapter kicked (key regenerated)");
+                    let _ = tx.try_send(Control::Shutdown);
+                }
+            }
+        }
     }
 
     /// `true` when the slug's WS handshake completes before `timeout`;
@@ -220,10 +286,43 @@ impl GameServer {
         let ws = tokio_tungstenite::accept_async(socket).await?;
         let (mut ws_tx, mut ws_rx) = ws.split();
 
-        // --- handshake: first frame must be hello{token} within 5 s ---
-        let token = match tokio::time::timeout(HELLO_TIMEOUT, ws_rx.next()).await {
+        // --- handshake: first frame must be hello/hello_adapter within 5 s
+        let (slug, is_adapter) = match tokio::time::timeout(HELLO_TIMEOUT, ws_rx.next()).await {
             Ok(Some(Ok(Message::Text(text)))) => match serde_json::from_str::<ClientFrame>(&text) {
-                Ok(ClientFrame::Hello { token }) => token,
+                Ok(ClientFrame::Hello { token }) => {
+                    // Consume the one-time token — replay is impossible.
+                    match self.tokens.lock().await.remove(&token) {
+                        Some(slug) => (slug, false),
+                        None => {
+                            send_frame(
+                                &mut ws_tx,
+                                &ServerFrame::Error {
+                                    reason: "invalid token",
+                                },
+                            )
+                            .await;
+                            return Err("invalid token".into());
+                        }
+                    }
+                }
+                Ok(ClientFrame::HelloAdapter { key, game, .. }) => {
+                    // §10.1: persistent revocable key instead of a
+                    // one-time token — mods are not launcher processes.
+                    let expected = self.adapter_key();
+                    let valid =
+                        !expected.is_empty() && key == expected && is_valid_adapter_slug(&game);
+                    if !valid {
+                        send_frame(
+                            &mut ws_tx,
+                            &ServerFrame::Error {
+                                reason: "invalid adapter key",
+                            },
+                        )
+                        .await;
+                        return Err("invalid adapter key".into());
+                    }
+                    (game, true)
+                }
                 _ => {
                     send_frame(
                         &mut ws_tx,
@@ -238,19 +337,6 @@ impl GameServer {
             _ => return Err("hello timeout".into()),
         };
 
-        // Consume the one-time token — replay is impossible afterwards.
-        let slug = self.tokens.lock().await.remove(&token);
-        let Some(slug) = slug else {
-            send_frame(
-                &mut ws_tx,
-                &ServerFrame::Error {
-                    reason: "invalid token",
-                },
-            )
-            .await;
-            return Err("invalid token".into());
-        };
-
         send_frame(&mut ws_tx, &ServerFrame::Welcome { protocol: 1 }).await;
 
         // --- register client control channel ---
@@ -262,6 +348,12 @@ impl GameServer {
             .entry(slug.clone())
             .or_default()
             .insert(client_id, ctl_tx);
+        if is_adapter {
+            self.adapter_clients
+                .lock()
+                .await
+                .insert(client_id, slug.clone());
+        }
 
         // Handshake done — releases play_game's 15 s launch gate.
         let _ = self.handshake_tx.send(slug.clone());
@@ -302,13 +394,21 @@ impl GameServer {
                         }
                     }
                 }
-                // Drain inbound frames — detects close & answers pings.
+                // Drain inbound frames — detects close, answers pings,
+                // consumes adapter `ack` back-channel frames (§10.1).
                 msg = ws_rx.next() => {
                     match msg {
                         Some(Ok(Message::Ping(p))) => {
                             let _ = ws_tx.send(Message::Pong(p)).await;
                         }
-                        Some(Ok(_)) => { /* games send nothing post-hello */ }
+                        Some(Ok(Message::Text(text))) => {
+                            if let Ok(AdapterFrame::Ack { event_id, ok }) =
+                                serde_json::from_str::<AdapterFrame>(&text)
+                            {
+                                self.hub.note_ack(&event_id, ok);
+                            }
+                        }
+                        Some(Ok(_)) => { /* binary frames carry nothing */ }
                         Some(Err(_)) | None => break,
                     }
                 }
@@ -319,6 +419,107 @@ impl GameServer {
         if let Some(map) = self.clients.lock().await.get_mut(&slug) {
             map.remove(&client_id);
         }
+        self.adapter_clients.lock().await.remove(&client_id);
         Ok(())
+    }
+}
+
+/// Adapter `game` names follow the same slug rules as catalog entries.
+fn is_valid_adapter_slug(s: &str) -> bool {
+    !s.is_empty()
+        && s.len() <= 64
+        && s.chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
+        && s.chars().next().is_some_and(|c| c.is_ascii_alphanumeric())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_valid_adapter_slug;
+
+    /// e2e: a real WS client performs `hello_adapter` against a bound
+    /// GameServer and gets `welcome`; a wrong key is refused, and an
+    /// `ack` frame marks the feed entry.
+    #[tokio::test]
+    async fn hello_adapter_handshake_accepts_valid_key() {
+        use futures_util::{SinkExt, StreamExt};
+        use std::sync::{Arc, RwLock};
+        use tokio_tungstenite::tungstenite::Message;
+
+        let hub = Arc::new(crate::events::EventHub::new());
+        let key = Arc::new(RwLock::new("test-adapter-key".to_string()));
+        let srv = super::GameServer::bind(hub.clone(), key).unwrap();
+        let port = srv.port();
+        let srv2 = srv.clone();
+        tokio::spawn(async move {
+            srv2.run_accept_loop().await.ok();
+        });
+
+        let url = format!("ws://127.0.0.1:{port}");
+        // --- wrong key → error frame ----------------------------------
+        let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+        ws.send(Message::Text(
+            r#"{"type":"hello_adapter","key":"wrong","game":"gta5","protocol":1}"#.into(),
+        ))
+        .await
+        .unwrap();
+        let reply = ws.next().await.unwrap().unwrap();
+        assert!(reply.to_text().unwrap().contains("invalid adapter key"));
+
+        // --- correct key → welcome ------------------------------------
+        let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+        ws.send(Message::Text(
+            r#"{"type":"hello_adapter","key":"test-adapter-key","game":"gta5","protocol":1}"#
+                .into(),
+        ))
+        .await
+        .unwrap();
+        let reply = ws.next().await.unwrap().unwrap();
+        assert!(reply.to_text().unwrap().contains("welcome"));
+        assert_eq!(srv.connected_adapters().await, vec!["gta5".to_string()]);
+
+        // --- ack back-channel marks the feed entry --------------------
+        hub.dispatch(crate::types::StreamEvent {
+            source: "simulator".into(),
+            event_kind: "gift".into(),
+            user: "u".into(),
+            avatar_url: String::new(),
+            action_command: "explode".into(),
+            amount: 1,
+            raw_name: "r".into(),
+            event_id: "evt-42".into(),
+        });
+        // Drain until the adapter sees the event frame, then ack it.
+        loop {
+            match ws.next().await.unwrap().unwrap() {
+                Message::Text(t) if t.contains("\"event\"") => break,
+                _ => continue,
+            }
+        }
+        ws.send(Message::Text(
+            r#"{"type":"ack","event_id":"evt-42","ok":true}"#.into(),
+        ))
+        .await
+        .unwrap();
+        // Give the connection task a moment to consume the frame.
+        for _ in 0..50 {
+            if hub.feed_items().first().and_then(|f| f.ack) == Some(true) {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        assert_eq!(hub.feed_items()[0].ack, Some(true));
+    }
+
+    #[test]
+    fn adapter_slug_rules_match_catalog() {
+        assert!(is_valid_adapter_slug("gta5"));
+        assert!(is_valid_adapter_slug("demo-adapter"));
+        assert!(is_valid_adapter_slug("7dtd_adapter"));
+        assert!(!is_valid_adapter_slug(""));
+        assert!(!is_valid_adapter_slug("GTA5")); // lowercase only
+        assert!(!is_valid_adapter_slug("-lead"));
+        assert!(!is_valid_adapter_slug("a/../b"));
+        assert!(!is_valid_adapter_slug(&"x".repeat(65)));
     }
 }

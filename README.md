@@ -268,6 +268,25 @@ templates split on `\n`) and sent over RCON. Viewer-controlled
 injection (`minecraft::templates`). The external `tools/mc-bridge`
 remains for remote servers.
 
+## External game adapters (mods)
+
+Mods for third-party games (GTA V, Valheim, 7DTD, …) connect to the same
+local game WS, but with a persistent revocable `adapter_key` instead of a
+one-time launch token — the launcher doesn't spawn them (§10.1):
+
+```jsonc
+{ "type": "hello_adapter", "key": "<adapter_key>", "game": "<slug>", "protocol": 1 }
+→ { "type": "welcome", "protocol": 1 }            // then event/heartbeat stream
+{ "type": "ack", "event_id": "<uuid>", "ok": true } // optional back-channel
+```
+
+Key management lives in *Интеграции → Внешние моды*: copyable key + port,
+connected-adapter list, regeneration (kicks all connected mods). Acks
+mark feed entries «выполнено в игре». Catalog entries with
+`kind='adapter'` may carry an `adapter_manifest` — its declared actions
+replace the free-text datalist in the mapper. Reference implementation:
+`tools/adapter-example` (see its README for the full frame spec).
+
 **Plugin catalog (§9.4).** `GET /api/mc/plugins` serves the server-side
 catalog (name, version, sha256, `premium`); `GET /api/mc/plugins/:slug/download`
 streams the jar, gated by the `mc_premium_plugins` entitlement for
