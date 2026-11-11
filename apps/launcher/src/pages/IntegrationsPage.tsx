@@ -5,7 +5,7 @@
  * URL for TikTok Live Studio.
  */
 import React, { useEffect, useState } from 'react';
-import { Radio, Copy, Wallet, Cloud, RefreshCw, Plug } from 'lucide-react';
+import { Radio, Copy, Wallet, Cloud, RefreshCw, Plug, Play } from 'lucide-react';
 import * as api from '../api';
 import { useApp } from '../App';
 import { maskSecret } from '../lib/utils';
@@ -48,6 +48,8 @@ export default function IntegrationsPage() {
   const [fwdStatus, setFwdStatus] = useState<ForwardStatus | null>(fwd?.status ?? null);
   const [fwdErr, setFwdErr] = useState('');
   const [keyCopied, setKeyCopied] = useState(false);
+  const [placeId, setPlaceId] = useState(fwd?.roblox_place_id ?? '');
+  const [launchMsg, setLaunchMsg] = useState('');
 
   // External game adapters — mods dial the local game WS with the shared
   // adapter key (§10.1); regeneration disconnects every connected mod.
@@ -80,6 +82,14 @@ export default function IntegrationsPage() {
       setKeyCopied(true);
       setTimeout(() => setKeyCopied(false), 1500);
     });
+  };
+
+  const launchRoblox = () => {
+    setLaunchMsg('');
+    api
+      .setRobloxPlaceId(placeId.trim())
+      .then(() => api.robloxLaunch())
+      .catch((e) => setLaunchMsg(humanError(e)));
   };
 
   useEffect(() => {
@@ -324,6 +334,23 @@ export default function IntegrationsPage() {
             </p>
           )}
           {fwdErr && <p className="text-[11px] text-destructive">{fwdErr}</p>}
+
+          <div className="flex gap-2 items-center border-t border-border/60 pt-3">
+            <Input
+              className="flex-1"
+              placeholder="Roblox Place ID (из URL игры)"
+              value={placeId}
+              onChange={(e) => setPlaceId(e.target.value.replace(/\D/g, ''))}
+            />
+            <Button variant="outline" size="sm" onClick={launchRoblox} disabled={!placeId.trim()}>
+              <Play size={14} /> Запустить игру
+            </Button>
+          </div>
+          {launchMsg && <p className="text-[11px] text-destructive">{launchMsg}</p>}
+          <p className="text-[10px] text-muted-foreground">
+            Кнопка открывает Roblox-клиент прямо в указанном experience — сервер
+            румы поднимается в облаке Roblox и забирает события по ключу.
+          </p>
 
           {fwdEnabled && streamKey && (
             <div className="rounded-md border border-border/60 bg-secondary/30 p-3 flex flex-col gap-2">

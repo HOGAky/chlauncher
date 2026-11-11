@@ -236,6 +236,8 @@ pub struct ForwardSettings {
     pub stream_key: Option<String>,
     /// Admin secret for `POST /api/admin/register` key renewals.
     pub relay_admin_secret: Option<String>,
+    /// Roblox place ID for the "Запустить игру" deep link.
+    pub roblox_place_id: Option<String>,
 }
 
 /// File-backed settings store.

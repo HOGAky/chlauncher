@@ -459,6 +459,7 @@ export interface Bootstrap {
     forward_url: string | null;
     stream_key: string | null;
     has_admin_secret: boolean;
+    roblox_place_id: string | null;
     status: ForwardStatus;
   } | null;
 }

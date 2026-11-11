@@ -399,6 +399,8 @@ pub fn run() {
             commands::set_forward_config,
             commands::regenerate_stream_key,
             commands::get_forward_status,
+            commands::set_roblox_place_id,
+            commands::roblox_launch,
             commands::admin_list_games,
             commands::admin_create_game,
             commands::admin_update_game,

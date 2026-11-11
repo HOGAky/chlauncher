@@ -86,6 +86,10 @@ struct LibraryEntry {
     /// `paid_games` entitlement — UI shows a lock badge on paid titles
     /// for Free accounts (server still enforces on download/launch).
     paid_games_allowed: bool,
+    /// `"game"` or `"adapter"` (external mod, §10.3).
+    kind: String,
+    /// Adapter action manifest JSON blob — parsed client-side.
+    adapter_manifest: String,
 }
 
 /// Slug boundary check: `^[a-z0-9][a-z0-9_-]{0,63}$`. Rejects `..`,
@@ -167,6 +171,7 @@ pub async fn get_bootstrap(state: State<'_, AppState>) -> Result<Value, String> 
             "forward_url": settings.forward.forward_url,
             "stream_key": settings.forward.stream_key,
             "has_admin_secret": settings.forward.relay_admin_secret.is_some(),
+            "roblox_place_id": settings.forward.roblox_place_id,
             "status": state.forwarder.snapshot().await,
         },
     }))
@@ -348,6 +353,8 @@ pub async fn list_games(state: State<'_, AppState>) -> Result<Value, String> {
             update_available,
             is_free: g.is_free,
             paid_games_allowed,
+            kind: g.kind,
+            adapter_manifest: g.adapter_manifest,
         });
     }
     Ok(json!({"games": entries}))
@@ -1446,6 +1453,48 @@ pub async fn regenerate_stream_key(state: State<'_, AppState>) -> Result<String,
 #[tauri::command]
 pub async fn get_forward_status(state: State<'_, AppState>) -> Result<Value, String> {
     Ok(serde_json::to_value(state.forwarder.snapshot().await).unwrap_or_default())
+}
+
+/// Saves the Roblox place ID used by `roblox_launch`.
+#[tauri::command]
+pub async fn set_roblox_place_id(
+    place_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let id = place_id.trim().to_string();
+    if !id.is_empty() && !id.chars().all(|c| c.is_ascii_digit()) {
+        return Err("Place ID — только цифры".into());
+    }
+    let mut s = state.settings.lock().await;
+    s.data.forward.roblox_place_id = if id.is_empty() { None } else { Some(id) };
+    let _ = s.save();
+    Ok(())
+}
+
+/// Launches the Roblox client straight into the configured experience via
+/// the `roblox://` deep link — the room server spins up in Roblox cloud and
+/// claims the stream by the stream_key.
+#[tauri::command]
+pub async fn roblox_launch(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let place_id = state
+        .settings
+        .lock()
+        .await
+        .data
+        .forward
+        .roblox_place_id
+        .clone()
+        .ok_or("Укажите Place ID игры")?;
+    use tauri_plugin_opener::OpenerExt;
+    app.opener()
+        .open_url(
+            format!("roblox://experiences/start?placeId={place_id}"),
+            None::<&str>,
+        )
+        .map_err(|e| format!("не удалось запустить Roblox: {e}"))
 }
 
 // ---------------------------------------------------------------------------

@@ -309,6 +309,13 @@ export const regenerateStreamKey = () => cmd<string>('regenerate_stream_key');
 /** Forwarder counters for the UI. */
 export const getForwardStatus = () => cmd<ForwardStatus>('get_forward_status');
 
+/** Saves the Roblox place ID for the launch deep link. */
+export const setRobloxPlaceId = (placeId: string) =>
+  cmd<void>('set_roblox_place_id', { placeId });
+
+/** Opens the Roblox client into the configured experience. */
+export const robloxLaunch = () => cmd<void>('roblox_launch');
+
 /** Sanitized diagnostics report text (no secrets) — for bug reports. */
 export const getDiagnostics = () => cmd<string>('get_diagnostics');
 
