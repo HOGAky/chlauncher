@@ -1221,6 +1221,49 @@ mod tests {
         assert_eq!(takeovers, 2, "both interrupts should take over");
     }
 
+    /// Regression: `Notify` keeps one unread permit. An interrupt that
+    /// fired while NO alert was running used to leave its wake-signal
+    /// buffered — the NEXT job's alert consumed it instantly and was cut
+    /// before its duration. The interrupt generation counter makes only
+    /// signals raised *after* an alert started able to interrupt it.
+    #[tokio::test]
+    async fn stale_interrupt_permit_does_not_cancel_next_alert() {
+        let (hub_, _rx, otx, mut orx) = hub();
+        let sched = Arc::new(ActionScheduler::with_seed(hub_.clone(), otx, 13));
+        let driver = sched.clone();
+        let handle = tokio::spawn(async move { driver.run().await });
+
+        let mut vip = rule("lion", "Lion");
+        vip.interrupt = true;
+        vip.alert = alert("vip alert", 30);
+        let mut rose = rule("rose", "Rose");
+        rose.alert = alert("rose alert", 400); // must play in full
+        let mut p = profile(vec![vip, rose]);
+        p.interrupt_cooldown_ms = 0;
+        let sp = no_spinners();
+        let al = alerts();
+
+        // Interrupt while idle — nothing to cut, but the wake signal was
+        // still buffered (the bug).
+        sched.ingest(&input(&p, raw("gift", "Lion", 1, 1, 500), &sp, &al));
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        // Now a normal alert — it must survive its whole 400 ms window.
+        sched.ingest(&input(&p, raw("gift", "Rose", 1, 1, 1), &sp, &al));
+        let frames = collect_frames(&mut orx, 600).await;
+        handle.abort();
+        let cancels_after_vip = frames
+            .iter()
+            .skip_while(|f| !matches!(f, OverlayFrame::Alert { text, .. } if text.contains("vip")))
+            .skip(1) // past the vip alert itself
+            .filter(|f| matches!(f, OverlayFrame::AlertCancel { .. }))
+            .count();
+        assert_eq!(
+            cancels_after_vip, 0,
+            "stale interrupt permit cancelled the next alert: {frames:?}"
+        );
+    }
+
     // ---- gift spinner e2e (§7) -------------------------------------------
 
     /// Rule → spinner frame → wheel lands → the *segment's* action (not

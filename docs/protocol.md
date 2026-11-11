@@ -86,10 +86,23 @@ confirmation back-channel (§10.1):
 
 The overlay server hosts one Browser Source page per widget
 (`/overlay`, `/overlay/alerts`, `/overlay/preset`, `/overlay/spinner`,
-`/overlay/tts`, `/overlay/progress`) plus `/gifts/*.webp` icons. Every
-HTTP route and the socket require `?t=<overlay_token>` — the exact URLs
-come from `get_bootstrap().overlay_pages`. The port is OS-assigned unless
+`/overlay/tts`, `/overlay/progress`, `/overlay/leaderboard`) plus
+`/gifts/*.webp` icons. Every HTTP route and the socket require
+`?t=<overlay_token>` — the exact URLs come from
+`get_bootstrap().overlay_pages`. The port is OS-assigned unless
 `overlay_port` pins it (`set_overlay_port`).
+
+Auxiliary routes: `/top.json?n=<1..50>` — session leaderboard
+(`[{"user","total"}…]`, polled by the leaderboard page every 3 s);
+`/media/<id>` (range-enabled), `/tts/<id>.wav`, `/health`.
+
+**Capture windows (TikTok LIVE Studio):** the Studio has no Browser
+Source — `open_overlay_window {page, chroma}` opens a transparent
+always-on-top `WebviewWindow` hosting any `/overlay*` page so the
+streamer captures it via Window/Game capture. `chroma: true` appends
+`&bg=ff00ff` (solid magenta for chroma-key filters — real transparency
+can render black under some capture paths). `close_overlay_window {page}`
+closes it. Pages accept the `?bg=rrggbb` parameter.
 
 ```jsonc
 // client → server, once after connect:

@@ -8,7 +8,7 @@
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex;
 
 use crate::api::ApiClient;
@@ -164,6 +164,7 @@ pub async fn get_bootstrap(state: State<'_, AppState>) -> Result<Value, String> 
                 "spinner": overlay_page(p, t, "/overlay/spinner"),
                 "tts": overlay_page(p, t, "/overlay/tts"),
                 "progress": overlay_page(p, t, "/overlay/progress"),
+                "leaderboard": overlay_page(p, t, "/overlay/leaderboard"),
             })
         }),
         "game_ws_port": state.game_server.port(),
@@ -1345,6 +1346,83 @@ pub async fn rotate_overlay_token(state: State<'_, AppState>) -> Result<(), Stri
     let _ = s.save();
     if let Ok(mut t) = state.overlay_token.write() {
         *t = new_token;
+    }
+    Ok(())
+}
+
+/// Overlay pages that may be hosted in a capture window — kept in sync
+/// with the routes in `overlay.rs`. Whitelisting prevents the command
+/// from opening arbitrary local URLs in a privileged webview.
+const OVERLAY_WINDOW_PAGES: &[&str] = &[
+    "overlay",
+    "overlay/alerts",
+    "overlay/preset",
+    "overlay/spinner",
+    "overlay/tts",
+    "overlay/progress",
+    "overlay/leaderboard",
+];
+
+/// Opens (or focuses) a transparent always-on-top window hosting one of
+/// the local overlay pages. TikTok LIVE Studio has no Browser Source —
+/// the streamer captures THIS window via Window/Game capture. `chroma`
+/// requests a solid magenta background inside the page (`?bg=ff00ff`)
+/// for chroma-key filters instead of real transparency.
+#[tauri::command]
+pub async fn open_overlay_window(
+    page: String,
+    chroma: bool,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    if !OVERLAY_WINDOW_PAGES.contains(&page.as_str()) {
+        return Err("UNKNOWN_OVERLAY_PAGE".into());
+    }
+    let port = (*state.overlay_port.lock().await)
+        .ok_or("Оверлей-сервер не запущен — см. ошибку сервиса")?;
+    let token = state
+        .overlay_token
+        .read()
+        .map(|t| t.clone())
+        .unwrap_or_default();
+    let label = format!("overlay-{}", page.replace('/', "-"));
+    let mut url = format!("http://127.0.0.1:{port}/{page}?t={token}");
+    if chroma {
+        url.push_str("&bg=ff00ff");
+    }
+    if let Some(w) = app.get_webview_window(&label) {
+        // Re-opening a live window: navigate to the freshest URL (token
+        // or chroma mode may have changed since it was created), keep its
+        // geometry and focus it.
+        let js = format!("location.href = {}", serde_json::json!(url));
+        let _ = w.eval(&js);
+        let _ = w.set_focus();
+        return Ok(());
+    }
+    let url = url.parse::<tauri::Url>().map_err(|e| e.to_string())?;
+    tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::External(url))
+        .title(format!("chlauncher — {page}"))
+        .inner_size(420.0, 640.0)
+        .resizable(true)
+        .decorations(false)
+        .transparent(!chroma)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .visible(true)
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Closes a capture window previously opened by `open_overlay_window`.
+#[tauri::command]
+pub async fn close_overlay_window(page: String, app: AppHandle) -> Result<(), String> {
+    if !OVERLAY_WINDOW_PAGES.contains(&page.as_str()) {
+        return Err("UNKNOWN_OVERLAY_PAGE".into());
+    }
+    let label = format!("overlay-{}", page.replace('/', "-"));
+    if let Some(w) = app.get_webview_window(&label) {
+        let _ = w.close();
     }
     Ok(())
 }

@@ -44,6 +44,10 @@
 <div id="takeover"></div>
 <script>
 const token = new URLSearchParams(location.search).get('t') || '';
+// ?bg=rrggbb — solid chroma background for LIVE Studio window capture
+// (real transparency doesn't survive every capture path).
+const _bg = new URLSearchParams(location.search).get('bg');
+if (_bg && /^[0-9a-fA-F]{6}$/.test(_bg)) document.body.style.background = '#' + _bg;
 const takeover = document.getElementById('takeover');
 const timers = {};
 const els = {};

@@ -93,13 +93,13 @@ type Token = Query<HashMap<String, String>>;
 /// `?t=` matches the *current* token — read under the shared lock so a
 /// rotation flips every route at once.
 fn check_token(q: &Token, st: &OverlayState) -> bool {
-    token_ok(q.0.get("t").map(String::as_str), st)
+    token_ok(q.0.get("t").map(String::as_str), &st.token)
 }
 
-/// Raw comparison helper for handlers that take `Query<HashMap>` rather
-/// than the `Token` alias.
-fn token_ok(given: Option<&str>, st: &OverlayState) -> bool {
-    match (given, st.token.read()) {
+/// Raw comparison helper — takes the shared token cell directly so it
+/// stays testable without constructing a whole `OverlayState`.
+fn token_ok(given: Option<&str>, token: &std::sync::RwLock<String>) -> bool {
+    match (given, token.read()) {
         (Some(g), Ok(exp)) => g == exp.as_str(),
         _ => false,
     }
@@ -293,6 +293,8 @@ pub async fn start_overlay_server(
         .route("/overlay/spinner", get(page_route(SPINNER_HTML)))
         .route("/overlay/tts", get(page_route(TTS_HTML)))
         .route("/overlay/progress", get(page_route(PROGRESS_HTML)))
+        .route("/overlay/leaderboard", get(page_route(LEADERBOARD_HTML)))
+        .route("/top.json", get(serve_top))
         .route("/gifts/:file", get(serve_gift))
         .route("/media/:id", get(serve_media))
         .route("/tts/:file", get(serve_tts))
@@ -336,7 +338,7 @@ async fn serve_gift(
     Query(q): Query<HashMap<String, String>>,
     State(st): State<OverlayState>,
 ) -> Response {
-    if !token_ok(q.get("t").map(String::as_str), &st) {
+    if !token_ok(q.get("t").map(String::as_str), &st.token) {
         return StatusCode::FORBIDDEN.into_response();
     }
     // Whitelist: catalog files are lowercase slugs ending in .webp.
@@ -358,6 +360,30 @@ async fn serve_gift(
     }
 }
 
+/// `/top.json` — session leaderboard (top supporters by cumulative
+/// amount). The leaderboard page polls it every few seconds — cheap
+/// enough that a WS channel isn't warranted.
+async fn serve_top(
+    Query(q): Query<HashMap<String, String>>,
+    State(st): State<OverlayState>,
+) -> Response {
+    if !token_ok(q.get("t").map(String::as_str), &st.token) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let n = q
+        .get("n")
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(10)
+        .min(50);
+    let top: Vec<serde_json::Value> = st
+        .hub
+        .top_supporters(n)
+        .into_iter()
+        .map(|(user, total)| serde_json::json!({"user": user, "total": total}))
+        .collect();
+    axum::Json(top).into_response()
+}
+
 /// `/media/:id` — media-library file with byte-range support (§4.1:
 /// video in a Browser Source won't seek — and sometimes won't play —
 /// without Range). The id must be a 32-hex index row; paths never come
@@ -368,7 +394,7 @@ async fn serve_media(
     State(st): State<OverlayState>,
     req: axum::extract::Request,
 ) -> Response {
-    if !token_ok(q.get("t").map(String::as_str), &st) {
+    if !token_ok(q.get("t").map(String::as_str), &st.token) {
         return StatusCode::FORBIDDEN.into_response();
     }
     if id.len() != 32
@@ -411,7 +437,7 @@ async fn serve_tts(
     Query(q): Query<HashMap<String, String>>,
     State(st): State<OverlayState>,
 ) -> Response {
-    if !token_ok(q.get("t").map(String::as_str), &st) {
+    if !token_ok(q.get("t").map(String::as_str), &st.token) {
         return StatusCode::FORBIDDEN.into_response();
     }
     let id = file.strip_suffix(".wav").unwrap_or("");
@@ -430,7 +456,7 @@ async fn ws_upgrade(
     Query(q): Query<HashMap<String, String>>,
     State(st): State<OverlayState>,
 ) -> Response {
-    if !token_ok(q.get("t").map(String::as_str), &st) {
+    if !token_ok(q.get("t").map(String::as_str), &st.token) {
         return StatusCode::FORBIDDEN.into_response();
     }
     ws.on_upgrade(move |sock| overlay_ws(sock, st))
@@ -567,5 +593,25 @@ const OVERLAY_HTML: &str = include_str!("../overlay/overlay.html");
 const ALERTS_HTML: &str = include_str!("../overlay/alerts.html");
 const PRESET_HTML: &str = include_str!("../overlay/preset.html");
 const PROGRESS_HTML: &str = include_str!("../overlay/progress.html");
+const LEADERBOARD_HTML: &str = include_str!("../overlay/leaderboard.html");
 const SPINNER_HTML: &str = include_str!("../overlay/spinner.html");
 const TTS_HTML: &str = include_str!("../overlay/tts.html");
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Token rotation regression: a value written into the shared cell
+    /// must take effect immediately — a static copy captured at server
+    /// start would keep accepting the OLD token (rotation inverted).
+    #[test]
+    fn token_ok_reads_live_cell_value() {
+        let token = std::sync::RwLock::new("old-token".to_string());
+        assert!(token_ok(Some("old-token"), &token));
+        assert!(!token_ok(Some("new-token"), &token));
+        assert!(!token_ok(None, &token));
+        *token.write().unwrap() = "new-token".to_string();
+        assert!(!token_ok(Some("old-token"), &token));
+        assert!(token_ok(Some("new-token"), &token));
+    }
+}

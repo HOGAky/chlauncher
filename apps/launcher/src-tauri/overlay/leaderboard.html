@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>chlauncher · leaderboard</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: transparent; overflow: hidden;
+    font-family: 'Segoe UI', system-ui, sans-serif; color: #fff;
+  }
+  #board { position: absolute; left: 12px; top: 12px; width: 300px;
+           display: flex; flex-direction: column; gap: 6px; }
+  .title { font-size: 11px; font-weight: 700; letter-spacing: .12em;
+           text-transform: uppercase; color: rgba(255,255,255,.65);
+           margin-bottom: 2px; }
+  .row { display: flex; align-items: center; gap: 8px;
+         background: rgba(15,17,26,.85); border: 1px solid rgba(255,255,255,.1);
+         border-radius: 10px; padding: 6px 12px; font-size: 13px; }
+  .row .rank { width: 22px; font-weight: 700; color: rgba(255,255,255,.5); }
+  .row:first-of-type .rank { color: #facc15; }
+  .row:nth-of-type(2) .rank { color: #cbd5e1; }
+  .row:nth-of-type(3) .rank { color: #d97706; }
+  .row .user { flex: 1; overflow: hidden; text-overflow: ellipsis;
+               white-space: nowrap; }
+  .row .total { font-weight: 600; color: #a78bfa; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<div id="board"></div>
+<script>
+const token = new URLSearchParams(location.search).get('t') || '';
+// ?bg=rrggbb — solid chroma background for LIVE Studio window capture
+// (real transparency doesn't survive every capture path).
+const _bg = new URLSearchParams(location.search).get('bg');
+if (_bg && /^[0-9a-fA-F]{6}$/.test(_bg)) document.body.style.background = '#' + _bg;
+const limit = Math.min(50, Math.max(1,
+  Number(new URLSearchParams(location.search).get('n')) || 10));
+const board = document.getElementById('board');
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function render(items) {
+  board.innerHTML = '<div class="title">Топ стрима</div>' +
+    (items || []).map((it, i) =>
+      `<div class="row"><span class="rank">${i + 1}</span>` +
+      `<span class="user">${esc(it.user)}</span>` +
+      `<span class="total">${it.total}</span></div>`
+    ).join('');
+}
+
+async function tick() {
+  try {
+    const r = await fetch(`/top.json?t=${encodeURIComponent(token)}&n=${limit}`);
+    if (r.ok) render(await r.json());
+  } catch (_) { /* overlay server restarting — retry next tick */ }
+}
+tick();
+setInterval(tick, 3000);
+</script>
+</body>
+</html>

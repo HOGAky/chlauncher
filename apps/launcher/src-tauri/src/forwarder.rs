@@ -368,4 +368,40 @@ mod tests {
         assert_eq!(rfc3339_utc(0), "1970-01-01T00:00:00Z");
         assert_eq!(rfc3339_utc(1794000318), "2026-11-06T21:25:18Z");
     }
+
+    /// Regression: a dequeued-but-skipped event (forwarding disabled or
+    /// missing URL/key) used to leave `queued` incremented forever —
+    /// the UI counter drifted upward with every skipped event.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn queued_metric_returns_to_zero_when_disabled() {
+        let hub = EventHub::new();
+        let dir = std::env::temp_dir().join(format!("fw-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let settings = Arc::new(Mutex::new(SettingsStore::load(&dir)));
+        // forward.enabled defaults to false — events will be skipped.
+        let api = ApiClient::new("http://127.0.0.1:1".into());
+        let fwd = Forwarder::start(&hub, settings, api);
+        // Wait for the producer task to subscribe — otherwise the test
+        // would pass vacuously with the events simply never queued.
+        for _ in 0..200 {
+            if hub.tx.receiver_count() >= 1 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        assert!(hub.tx.receiver_count() >= 1, "forwarder never subscribed");
+        for _ in 0..5 {
+            hub.note(ev("gift"), "done");
+        }
+        let mut snap = fwd.snapshot().await;
+        for _ in 0..200 {
+            snap = fwd.snapshot().await;
+            if snap.queued == 0 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert_eq!(snap.queued, 0, "queued leaked: {snap:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

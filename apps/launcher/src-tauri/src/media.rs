@@ -203,4 +203,18 @@ mod tests {
         b[28..32].copy_from_slice(&5000u32.to_be_bytes()); // duration
         assert_eq!(mp4_duration_ms(&b), Some(5000));
     }
+
+    /// Regression: v1 mvhd with `duration = u64::MAX` used to wrap
+    /// `dur * 1000` to a small value — a crafted video would sail past
+    /// the 30 s cap. Saturating math keeps it huge → rejected.
+    #[test]
+    fn mp4_mvhd_v1_huge_duration_saturates() {
+        let mut b = vec![0u8; 64];
+        b[8..12].copy_from_slice(b"mvhd");
+        b[12] = 1; // version 1 → 64-bit timestamps
+        b[28..32].copy_from_slice(&1u32.to_be_bytes()); // timescale = 1
+        b[32..40].copy_from_slice(&u64::MAX.to_be_bytes()); // duration
+        let ms = mp4_duration_ms(&b).unwrap();
+        assert!(ms > 30_000, "crafted duration must stay huge: {ms}");
+    }
 }

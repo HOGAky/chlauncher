@@ -47,7 +47,8 @@ use game_ws::GameServer;
 use integrations::IntegrationManager;
 use scheduler::ActionScheduler;
 use settings::SettingsStore;
-use types::{OverlayFrame, RawStreamEvent};
+use std::collections::HashMap;
+use types::{OverlayFrame, RawStreamEvent, SpinnerPool, TriggerProfile};
 
 /// Builds and runs the Tauri app.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -448,6 +449,8 @@ pub fn run() {
             commands::mc_remove_plugin,
             commands::adapter_status,
             commands::regenerate_adapter_key,
+            commands::open_overlay_window,
+            commands::close_overlay_window,
         ])
         .build(tauri::generate_context!());
     let app = match app {
@@ -535,6 +538,25 @@ async fn catalog_poller_loop(app: tauri::AppHandle) {
     }
 }
 
+/// Cached clone of the settings sections the mapper needs. Rebuilt only
+/// when `SettingsStore::revision` changes (any `save()`) or the active
+/// slug/takeover changes — on a like-storm this avoids cloning the whole
+/// profile+spinner maps for every single event. A periodic rebuild bounds
+/// staleness for any in-memory mutation that forgets `save()`.
+struct MappingCache {
+    rev: u64,
+    slug: String,
+    takeover: Option<String>,
+    built: std::time::Instant,
+    profile: TriggerProfile,
+    spinners: HashMap<String, SpinnerPool>,
+    alerts: crate::settings::AlertSettings,
+}
+
+/// How long a cached mapping survives without a settings save —
+/// safety net against non-persisted in-memory changes.
+const MAPPING_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// Maps raw ingest events through the active game's trigger profile —
 /// hands them to the [`ActionScheduler`], which owns cooldowns,
 /// accumulators, the priority queue, alerts and interrupts. An active
@@ -547,6 +569,7 @@ async fn mapper_loop(
     tts: Arc<tts::Tts>,
     usage: Arc<usage::UsageMeter>,
 ) {
+    let mut cache: Option<MappingCache> = None;
     while let Some(raw) = raw_rx.recv().await {
         // Chat-to-speech sees every event — gifter tracking, comment and
         // gift reading per `read_*` modes (§6.2).
@@ -556,7 +579,26 @@ async fn mapper_loop(
             .await
             .clone()
             .unwrap_or_else(|| "default".to_string());
-        let (mut profile, spinners, alerts_cfg) = {
+        let takeover = scheduler
+            .active_takeover()
+            .map(|(preset, _user, _until)| preset);
+        let stale = match &cache {
+            None => true,
+            Some(c) => {
+                c.slug != slug
+                    || c.takeover != takeover
+                    || c.built.elapsed() > MAPPING_CACHE_TTL
+                    || {
+                        // Revision check needs the lock — but a shared read
+                        // of one u64 is far cheaper than cloning profiles.
+                        settings
+                            .try_lock()
+                            .map(|s| s.revision() != c.rev)
+                            .unwrap_or(true)
+                    }
+            }
+        };
+        if stale {
             let mut s = settings.lock().await;
             let mut profile = s
                 .data
@@ -566,25 +608,34 @@ async fn mapper_loop(
                 .clone();
             // Paid-interrupt takeover: the override profile is built from
             // the interrupt's preset and never persisted (§3.3.4).
-            if let Some((preset_name, _user, _until)) = scheduler.active_takeover() {
+            if let Some(preset_name) = &takeover {
                 if let Some(preset) =
-                    TriggerMapper::find_preset(&preset_name, &s.data.trigger_presets)
+                    TriggerMapper::find_preset(preset_name, &s.data.trigger_presets)
                 {
                     profile = TriggerMapper::profile_from_preset(&slug, &preset);
                 }
             }
-            (profile, s.data.spinners.clone(), s.data.alerts.clone())
-        };
+            cache = Some(MappingCache {
+                rev: s.revision(),
+                slug: slug.clone(),
+                takeover,
+                built: std::time::Instant::now(),
+                profile,
+                spinners: s.data.spinners.clone(),
+                alerts: s.data.alerts.clone(),
+            });
+        }
+        let c = cache.as_mut().unwrap();
         // Plan entitlements (§8): trim the profile copy to what the plan
         // allows and seed the earn-limit check with the monthly total.
         let ent = usage.entitlements().await;
-        usage::enforce_profile_limits(&mut profile, &ent);
+        usage::enforce_profile_limits(&mut c.profile, &ent);
         let before = scheduler.status().usage_coins;
         scheduler.ingest(&scheduler::IngestInput {
-            profile: &profile,
+            profile: &c.profile,
             raw,
-            spinners: &spinners,
-            alerts: &alerts_cfg,
+            spinners: &c.spinners,
+            alerts: &c.alerts,
             earn_limit_coins: ent.earn_limit_coins_month.unwrap_or(0),
             usage_base: usage.month_coins().await,
             bypass: false,

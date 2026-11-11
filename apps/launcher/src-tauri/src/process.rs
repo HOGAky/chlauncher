@@ -419,4 +419,27 @@ mod tests {
             &format!("line {}", LOG_RING_CAPACITY + 49)
         );
     }
+
+    /// A child writing megabytes without a newline must not grow memory:
+    /// the retained line is capped at `MAX_LINE_BYTES` and the overflow
+    /// is drained without buffering.
+    #[test]
+    fn drain_lines_bounds_overlong_line() {
+        let mut data = vec![b'x'; 500_000]; // one huge line, no '\n'
+        data.extend_from_slice(b"\nshort-line\n");
+        let buf = Arc::new(Mutex::new(RingBuf::default()));
+        drain_lines(std::io::Cursor::new(data), buf.clone());
+        // drain_lines works on a thread — poll the buffer briefly.
+        let mut snap = Vec::new();
+        for _ in 0..100 {
+            snap = buf.lock().unwrap().snapshot();
+            if snap.len() == 2 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(snap.len(), 2);
+        assert_eq!(snap[0].len(), MAX_LINE_BYTES as usize);
+        assert_eq!(snap[1], "short-line");
+    }
 }

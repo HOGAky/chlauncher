@@ -129,12 +129,14 @@ impl EventHub {
     }
 
     /// Top contributors by cumulative amount (for the overlay leaderboard).
+    /// Sorts references and clones only the top N — the map can hold
+    /// 100k entries and this is polled every few seconds per page.
     pub fn top_supporters(&self, n: usize) -> Vec<(String, i64)> {
         let totals = self.totals.lock().unwrap_or_else(|p| p.into_inner());
-        let mut v: Vec<(String, i64)> = totals.clone().into_iter().collect();
-        v.sort_by_key(|a| std::cmp::Reverse(a.1));
+        let mut v: Vec<(&String, &i64)> = totals.iter().collect();
+        v.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
         v.truncate(n);
-        v
+        v.into_iter().map(|(u, t)| (u.clone(), *t)).collect()
     }
 }
 
@@ -483,6 +485,33 @@ mod tests {
         hub.note_ack("unknown", false); // no match — nothing changes
         assert_eq!(hub.feed_items()[0].ack, Some(true));
         hub.note_ack("", false); // empty ids are ignored
+    }
+
+    /// The session leaderboard is hard-capped: a marathon stream with
+    /// hundreds of thousands of distinct viewers must not grow `totals`
+    /// without bound — new users stop being tracked past the cap while
+    /// existing entries keep accumulating.
+    #[test]
+    fn totals_map_is_capped() {
+        let hub = EventHub::new();
+        let ev_for = |user: String| StreamEvent {
+            source: "s".into(),
+            event_kind: "gift".into(),
+            user,
+            avatar_url: String::new(),
+            action_command: "x".into(),
+            amount: 1,
+            raw_name: "r".into(),
+            event_id: String::new(),
+        };
+        for i in 0..100_005 {
+            hub.dispatch(ev_for(format!("u{i}")));
+        }
+        hub.dispatch(ev_for("u0".into())); // existing entry still counts
+        assert_eq!(hub.totals.lock().unwrap().len(), 100_000);
+        let top = hub.top_supporters(1);
+        assert_eq!(top[0].0, "u0");
+        assert_eq!(top[0].1, 2);
     }
 }
 

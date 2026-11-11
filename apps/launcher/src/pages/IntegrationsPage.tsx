@@ -5,7 +5,7 @@
  * URL for TikTok Live Studio.
  */
 import React, { useEffect, useState } from 'react';
-import { Radio, Copy, Wallet, Cloud, RefreshCw, Plug, Play } from 'lucide-react';
+import { Radio, Copy, Wallet, Cloud, RefreshCw, Plug, Play, AppWindow } from 'lucide-react';
 import * as api from '../api';
 import { useApp } from '../App';
 import { maskSecret } from '../lib/utils';
@@ -38,6 +38,9 @@ export default function IntegrationsPage() {
   const [pages, setPages] = useState(boot?.overlay_pages ?? null);
   const [port, setPort] = useState('');
   const [overlayMsg, setOverlayMsg] = useState('');
+  // Solid magenta background inside capture windows — LIVE Studio's
+  // chroma-key needs a color to cut; real transparency can render black.
+  const [chromaBg, setChromaBg] = useState(false);
 
   // Roblox cloud-relay forward
   const fwd = boot?.forward;
@@ -153,13 +156,14 @@ export default function IntegrationsPage() {
       .catch((e) => setOverlayMsg(humanError(e)));
   };
 
-  const overlayPages: [string, string, string][] = [
-    ['main', 'Всё в одном', 'лента + алерты + топ дарителей'],
-    ['alerts', 'Алерты', 'карточки событий, звук и медиа'],
-    ['preset', 'Пресет', 'живая шпаргалка подарок → действие'],
-    ['spinner', 'Розыгрыш', 'колесо Gift Spinner'],
-    ['tts', 'TTS', 'озвучка + субтитры'],
-    ['progress', 'Прогресс', 'накопители «лайки 63/100»'],
+  const overlayPages: [string, string, string, string][] = [
+    ['main', 'overlay', 'Всё в одном', 'лента + алерты + топ дарителей'],
+    ['alerts', 'overlay/alerts', 'Алерты', 'карточки событий, звук и медиа'],
+    ['preset', 'overlay/preset', 'Пресет', 'живая шпаргалка подарок → действие'],
+    ['spinner', 'overlay/spinner', 'Розыгрыш', 'колесо Gift Spinner'],
+    ['tts', 'overlay/tts', 'TTS', 'озвучка + субтитры'],
+    ['progress', 'overlay/progress', 'Прогресс', 'накопители «лайки 63/100»'],
+    ['leaderboard', 'overlay/leaderboard', 'Топ', 'топ дарителей за стрим'],
   ];
 
   return (
@@ -393,7 +397,7 @@ export default function IntegrationsPage() {
           </p>
           {pages ? (
             <div className="flex flex-col gap-1.5">
-              {overlayPages.map(([key, title, hint]) => (
+              {overlayPages.map(([key, path, title, hint]) => (
                 <div key={key} className="flex items-center gap-2">
                   <div className="w-20 text-xs font-medium shrink-0">{title}</div>
                   <code className="flex-1 text-[10px] bg-secondary/60 rounded px-2 py-1.5 select-all truncate">
@@ -405,6 +409,16 @@ export default function IntegrationsPage() {
                     onClick={() => copyUrl(key, pages[key as keyof typeof pages])}
                   >
                     <Copy size={12} /> {copied === key ? 'OK' : ''}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    title="Окно для захвата в TikTok LIVE Studio"
+                    onClick={() =>
+                      api.openOverlayWindow(path, chromaBg).catch((e) => setOverlayMsg(humanError(e)))
+                    }
+                  >
+                    <AppWindow size={12} />
                   </Button>
                   <span className="text-[10px] text-muted-foreground w-40 hidden xl:block">
                     {hint}
@@ -428,11 +442,17 @@ export default function IntegrationsPage() {
             <Button variant="outline" size="sm" onClick={rotateToken}>
               <RefreshCw size={12} /> Новый токен
             </Button>
+            <label className="flex items-center gap-1.5 ml-2">
+              <Switch checked={chromaBg} onCheckedChange={setChromaBg} />
+              <span className="text-[10px] text-muted-foreground">Chroma-фон в окне</span>
+            </label>
           </div>
           {overlayMsg && <p className="text-[11px] text-amber-400">{overlayMsg}</p>}
           <p className="text-[10px] text-muted-foreground">
             Фиксированный порт делает URL стабильным между запусками (удобно для OBS).
-            «Новый токен» инвалидирует все скопированные URL.
+            «Новый токен» инвалидирует все скопированные URL. Кнопка окна открывает
+            оверлей прозрачным поверх всех окон — для захвата окна в TikTok LIVE Studio
+            (browser-source там нет); включите chroma-фон, если прозрачность захватывается чёрным.
           </p>
         </CardContent>
       </Card>

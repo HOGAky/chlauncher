@@ -448,6 +448,7 @@ export interface Bootstrap {
     spinner: string;
     tts: string;
     progress: string;
+    leaderboard: string;
   } | null;
   /** Actual OS-assigned game WS port (0 = service failed to bind). */
   game_ws_port: number;

@@ -231,6 +231,18 @@ export const setOverlayPort = (port: number) => cmd<void>('set_overlay_port', { 
 /** Rotates the overlay token — all copied Browser Source URLs expire. */
 export const rotateOverlayToken = () => cmd<void>('rotate_overlay_token');
 
+/**
+ * Opens/focuses a transparent always-on-top capture window hosting the
+ * overlay page — for TikTok LIVE Studio (no Browser Source there).
+ * `chroma` renders the page on solid magenta for chroma-key capture.
+ */
+export const openOverlayWindow = (page: string, chroma: boolean) =>
+  cmd<void>('open_overlay_window', { page, chroma });
+
+/** Closes a capture window opened by `openOverlayWindow`. */
+export const closeOverlayWindow = (page: string) =>
+  cmd<void>('close_overlay_window', { page });
+
 /** Alert playback settings for the mapper status bar (§3.1–§3.2). */
 export const getAlertsSettings = () =>
   cmd<{

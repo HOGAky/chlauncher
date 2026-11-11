@@ -244,6 +244,10 @@ pub struct ForwardSettings {
 pub struct SettingsStore {
     path: PathBuf,
     pub data: Settings,
+    /// Mutation counter — bumped by `save()`. Hot readers (the event
+    /// mapper) cache cloned sections and rebuild only when this changes.
+    /// NOT serialized: in-memory only.
+    rev: std::sync::atomic::AtomicU64,
 }
 
 impl SettingsStore {
@@ -262,11 +266,24 @@ impl SettingsStore {
                 uuid::Uuid::new_v4().simple(),
                 uuid::Uuid::new_v4().simple()
             );
-            let store = Self { path, data };
+            let store = Self::new(path, data);
             let _ = store.save();
             return store;
         }
-        Self { path, data }
+        Self::new(path, data)
+    }
+
+    fn new(path: PathBuf, data: Settings) -> Self {
+        Self {
+            path,
+            data,
+            rev: std::sync::atomic::AtomicU64::new(0),
+        }
+    }
+
+    /// Current mutation counter (see `rev`).
+    pub fn revision(&self) -> u64 {
+        self.rev.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Atomically persists the current settings to disk.
@@ -277,6 +294,7 @@ impl SettingsStore {
         let tmp = self.path.with_extension("json.tmp");
         fs::write(&tmp, serde_json::to_string_pretty(&self.data)?)?;
         fs::rename(&tmp, &self.path)?;
+        self.rev.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Ok(())
     }
 }
