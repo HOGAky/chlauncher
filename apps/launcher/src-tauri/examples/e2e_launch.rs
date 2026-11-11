@@ -23,7 +23,8 @@ async fn main() {
         .expect("usage: e2e_launch <path-to-mock-game.exe>");
 
     let hub = Arc::new(EventHub::new());
-    let server = GameServer::bind(hub.clone()).expect("bind game ws");
+    let adapter_key = Arc::new(std::sync::RwLock::new(String::new()));
+    let server = GameServer::bind(hub.clone(), adapter_key).expect("bind game ws");
     let srv = server.clone();
     tokio::spawn(async move {
         let _ = srv.run_accept_loop().await;
@@ -70,6 +71,7 @@ async fn main() {
         action_command: "spawn_enemy".into(),
         amount: 5,
         raw_name: "Rose".into(),
+        event_id: uuid::Uuid::new_v4().to_string(),
     });
     println!("[e2e] event dispatched; game alive = {}", clients >= 1);
     tokio::time::sleep(Duration::from_secs(2)).await;
