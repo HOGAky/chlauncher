@@ -31,6 +31,7 @@ pub mod logging;
 pub mod media;
 pub mod minecraft;
 pub mod overlay;
+pub mod points;
 pub mod polls;
 pub mod process;
 pub mod queue;
@@ -180,6 +181,19 @@ pub fn run() {
                 let t = timed.clone();
                 tauri::async_runtime::spawn(async move { t.run().await });
             }
+            // Viewer points + !buy shop — balances persist to
+            // <data>/points.json, purchases inject `shop` events.
+            let points = points::ViewerPoints::new(settings.clone(), raw_tx.clone(), &data_dir);
+            {
+                let pts = points.clone();
+                tauri::async_runtime::spawn(async move {
+                    let mut tick = tokio::time::interval(std::time::Duration::from_secs(3));
+                    loop {
+                        tick.tick().await;
+                        pts.flush_if_dirty().await;
+                    }
+                });
+            }
             let overlay_port = match tauri::async_runtime::block_on(overlay::start_overlay_server(
                 hub.clone(),
                 overlay_tx.clone(),
@@ -323,6 +337,7 @@ pub fn run() {
                 subathon: subathon.clone(),
                 queue: queue.clone(),
                 hype: hype.clone(),
+                points: points.clone(),
                 mc: mc.clone(),
                 adapter_key: adapter_key.clone(),
                 overlay_token: overlay_token.clone(),
@@ -345,6 +360,7 @@ pub fn run() {
                     subathon.clone(),
                     queue.clone(),
                     hype.clone(),
+                    points.clone(),
                 ));
             }
 
@@ -512,6 +528,13 @@ pub fn run() {
             commands::save_hype_cfg,
             commands::get_timed_events,
             commands::save_timed_events,
+            commands::points_top,
+            commands::points_balance,
+            commands::points_adjust,
+            commands::get_points_cfg,
+            commands::save_points_cfg,
+            commands::get_shop_items,
+            commands::save_shop_items,
         ])
         .build(tauri::generate_context!());
     let app = match app {
@@ -634,6 +657,7 @@ async fn mapper_loop(
     subathon: Arc<subathon::Subathon>,
     queue: Arc<queue::ViewerQueue>,
     hype: Arc<hype::HypeTracker>,
+    points: Arc<points::ViewerPoints>,
 ) {
     let mut cache: Option<MappingCache> = None;
     while let Some(raw) = raw_rx.recv().await {
@@ -647,6 +671,7 @@ async fn mapper_loop(
         subathon.note_raw(&raw).await;
         queue.note_raw(&raw).await;
         hype.note_raw(&raw).await;
+        points.note_raw(&raw).await;
         let slug = active_slug
             .lock()
             .await

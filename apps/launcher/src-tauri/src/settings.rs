@@ -84,6 +84,12 @@ pub struct Settings {
     /// Timed auto-events («каждые N минут») — see `timed.rs`.
     #[serde(default)]
     pub timed_events: Vec<crate::types::TimedEvent>,
+    /// Viewer-points economy — see `points.rs`.
+    #[serde(default)]
+    pub points: crate::types::PointsCfg,
+    /// `!buy` shop items — see `points.rs`.
+    #[serde(default)]
+    pub shop_items: Vec<crate::types::ShopItem>,
 }
 
 /// Managed Minecraft server configuration (parity spec §9.2–§9.3).

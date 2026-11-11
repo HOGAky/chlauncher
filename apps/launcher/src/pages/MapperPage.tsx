@@ -56,6 +56,7 @@ const KINDS = [
   'poll',
   'queue',
   'timer',
+  'shop',
 ];
 const MATCH_MODES = [
   { v: 'contains', t: 'содержит' },

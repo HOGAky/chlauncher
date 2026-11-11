@@ -593,3 +593,28 @@ export interface TimedEvent {
   interval_min: number;
   enabled: boolean;
 }
+
+/** Viewer-points earn rates — persisted in settings. */
+export interface PointsCfg {
+  enabled: boolean;
+  per_comment: number;
+  comment_cooldown_s: number;
+  per_coin: number;
+  per_sub: number;
+  per_follow: number;
+}
+
+/** `!buy` shop item — `kind=shop` event with `raw_name = name`. */
+export interface ShopItem {
+  id: string;
+  name: string;
+  price: number;
+  hint: string;
+  enabled: boolean;
+}
+
+/** `points_top` leaderboard row. */
+export interface PointsRow {
+  user: string;
+  points: number;
+}

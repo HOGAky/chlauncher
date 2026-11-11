@@ -370,6 +370,65 @@ impl Default for TimedEvent {
     }
 }
 
+/// Viewer-points economy config — how chat activity converts to points.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PointsCfg {
+    /// Master switch — off = no earning and `!buy` is ignored.
+    pub enabled: bool,
+    /// Points per comment (once per `comment_cooldown_s` per viewer —
+    /// anti-spam so "а а а" doesn't farm).
+    pub per_comment: u32,
+    /// Per-user earn cooldown for comment points, seconds.
+    pub comment_cooldown_s: u32,
+    /// Points per TikTok coin of a gift / donation.
+    pub per_coin: u32,
+    /// Flat points per `subscribe` event.
+    pub per_sub: u32,
+    /// Flat points per `follow`.
+    pub per_follow: u32,
+}
+
+impl Default for PointsCfg {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            per_comment: 1,
+            comment_cooldown_s: 60,
+            per_coin: 10,
+            per_sub: 500,
+            per_follow: 50,
+        }
+    }
+}
+
+/// One purchasable item — `!buy <name>` deducts `price` points and
+/// injects a `shop` event (`raw_name = name`) a trigger rule can act on.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ShopItem {
+    pub id: String,
+    /// What viewers type after `!buy` — e.g. "kill" → `!buy kill`.
+    pub name: String,
+    pub price: u32,
+    /// Optional note shown in the UI ("спавнит крипера").
+    pub hint: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+}
+
+impl Default for ShopItem {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            name: String::new(),
+            price: 0,
+            hint: String::new(),
+            enabled: true,
+        }
+    }
+}
+
 impl Default for StreamGoal {
     fn default() -> Self {
         Self {

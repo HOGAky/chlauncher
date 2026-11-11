@@ -311,6 +311,31 @@ export const getTimedEvents = () =>
 export const saveTimedEvents = (events: import('./types').TimedEvent[]) =>
   cmd<void>('save_timed_events', { events });
 
+/** Top-N viewers by points balance. */
+export const pointsTop = () => cmd<import('./types').PointsRow[]>('points_top');
+
+/** One viewer's balance. */
+export const pointsBalance = (user: string) =>
+  cmd<{ points: number }>('points_balance', { user });
+
+/** Admin adjust: +N grants, -N takes. */
+export const pointsAdjust = (user: string, delta: number) =>
+  cmd<void>('points_adjust', { user, delta });
+
+/** Current earn-rate knobs. */
+export const getPointsCfg = () => cmd<import('./types').PointsCfg>('get_points_cfg');
+
+/** Saves the earn-rate knobs. */
+export const savePointsCfg = (cfg: import('./types').PointsCfg) =>
+  cmd<void>('save_points_cfg', { cfg });
+
+/** `!buy` shop items list. */
+export const getShopItems = () => cmd<import('./types').ShopItem[]>('get_shop_items');
+
+/** Replaces the shop list. */
+export const saveShopItems = (items: import('./types').ShopItem[]) =>
+  cmd<void>('save_shop_items', { items });
+
 /** Alert playback settings for the mapper status bar (§3.1–§3.2). */
 export const getAlertsSettings = () =>
   cmd<{

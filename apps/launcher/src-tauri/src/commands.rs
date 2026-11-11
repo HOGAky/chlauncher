@@ -68,6 +68,8 @@ pub struct AppState {
     pub queue: Arc<crate::queue::ViewerQueue>,
     /// Hype meter - sliding-window coins for /overlay/hype.
     pub hype: Arc<crate::hype::HypeTracker>,
+    /// Viewer points + !buy shop - see `points.rs`.
+    pub points: Arc<crate::points::ViewerPoints>,
     /// Managed Paper server lifecycle (§9).
     pub mc: Arc<crate::minecraft::MinecraftManager>,
     /// Shared adapter key for `hello_adapter` validation (§10.1).
@@ -1605,6 +1607,77 @@ pub async fn save_timed_events(
     }
     let mut s = state.settings.lock().await;
     s.data.timed_events = events;
+    s.save().map_err(|e| e.to_string())
+}
+
+/// Top-N viewers by points balance (leaderboard in the card).
+#[tauri::command]
+pub async fn points_top(state: State<'_, AppState>) -> Result<Value, String> {
+    Ok(json!(state.points.top(50).await))
+}
+
+/// One viewer's balance.
+#[tauri::command]
+pub async fn points_balance(user: String, state: State<'_, AppState>) -> Result<Value, String> {
+    Ok(json!({ "points": state.points.balance(&user).await }))
+}
+
+/// Admin adjust: +N grants, -N takes (floored at 0).
+#[tauri::command]
+pub async fn points_adjust(
+    user: String,
+    delta: i64,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    state
+        .points
+        .adjust(&user, delta.clamp(-1_000_000, 1_000_000))
+        .await;
+    Ok(())
+}
+
+/// Current earn-rate knobs (for the card's initial render).
+#[tauri::command]
+pub async fn get_points_cfg(state: State<'_, AppState>) -> Result<Value, String> {
+    Ok(json!(state.settings.lock().await.data.points))
+}
+
+/// Saves the earn-rate knobs (per_comment/per_coin/sub/follow).
+#[tauri::command]
+pub async fn save_points_cfg(
+    cfg: crate::types::PointsCfg,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut s = state.settings.lock().await;
+    s.data.points = cfg;
+    s.save().map_err(|e| e.to_string())
+}
+
+/// `!buy` shop items list.
+#[tauri::command]
+pub async fn get_shop_items(state: State<'_, AppState>) -> Result<Value, String> {
+    Ok(json!(state.settings.lock().await.data.shop_items))
+}
+
+/// Replaces the shop list (UI edits locally then saves).
+#[tauri::command]
+pub async fn save_shop_items(
+    mut items: Vec<crate::types::ShopItem>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    if items.len() > 50 {
+        return Err("Не больше 50 товаров".into());
+    }
+    for i in items.iter_mut() {
+        i.name = i.name.trim().chars().take(40).collect();
+        i.hint = i.hint.trim().chars().take(120).collect();
+        if i.id.is_empty() {
+            i.id = uuid::Uuid::new_v4().to_string();
+        }
+        i.price = i.price.min(1_000_000_000);
+    }
+    let mut s = state.settings.lock().await;
+    s.data.shop_items = items;
     s.save().map_err(|e| e.to_string())
 }
 

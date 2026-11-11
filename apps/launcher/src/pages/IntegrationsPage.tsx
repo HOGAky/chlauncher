@@ -22,6 +22,7 @@ import PollCard from '../components/PollCard';
 import QueueCard from '../components/QueueCard';
 import SubathonCard from '../components/SubathonCard';
 import TimedCard from '../components/TimedCard';
+import PointsCard from '../components/PointsCard';
 /** Maps serde's IntegrationStatus union to badge + label. */
 function statusBadge(st: IntegrationStatus | undefined) {
   if (!st || st === 'disconnected') return <Badge variant="outline">Отключено</Badge>;
@@ -481,6 +482,9 @@ export default function IntegrationsPage() {
 
       {/* Timed auto-events + hype meter knobs. */}
       <TimedCard />
+
+      {/* Viewer points + !buy shop - purchases inject `shop` events. */}
+      <PointsCard />
 
       {/* External game adapters (§10.1) — mods connect to the local
           game WS with the shared key instead of a launch token. */}
