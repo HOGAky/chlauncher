@@ -352,7 +352,11 @@ the old snapshot+event stream. Pages: `/overlay` (all-in-one),
 `/overlay/preset` (live cheat sheet — re-renders on every profile
 save/apply via `preset` frames), `/overlay/spinner` (weighted wheel,
 lands on the scheduler-picked `result_index`), `/overlay/tts` (badge +
-subtitle), `/overlay/progress` (accumulator bars), `/gifts/*.webp`
+subtitle), `/overlay/progress` (accumulator bars),
+`/overlay/leaderboard` (top supporters), `/overlay/goals` (stream-goal
+bars), `/overlay/poll` (live vote), `/overlay/subathon` (countdown),
+`/overlay/queue` (viewer line), `/overlay/hype` (activity meter),
+`/gifts/*.webp`
 (bundled catalog icons), `/media/:id` for the media library. `overlay_port` in
 settings pins the port for
 stable OBS URLs (`set_overlay_port`, 0 = OS-assigned with fallback); the
@@ -445,6 +449,47 @@ titles — they download and launch without a subscription
 badge when `paid_games` isn't entitled. «Подписка» renders the plan
 comparison table with the monthly usage bar; the main screen banners
 «Лимит месяца исчерпан» when the free cap is hit.
+
+## TikTok LIVE Studio & stream engagement
+
+TikTok LIVE Studio has no Browser Source — it captures *windows*. The
+launcher therefore owns a **capture overlay window**
+(`open_overlay_window`): a transparent, undecorated, always-on-top Tauri
+`WebviewWindow` that loads any overlay page from the local server and is
+re-used/focused on reopen. Workflow: open the window in the launcher →
+LIVE Studio → «Захват окна» → pick it. Browser-source URLs stay for OBS;
+`?bg=rrggbb` on any overlay page paints a solid chroma background where
+transparency doesn't survive the capture path.
+
+Engagement features (StreamToEarn parity) all run through the same
+pipeline — synthetic events re-enter ingest, so trigger rules decide the
+action:
+
+- **Stream goals** (`goals.rs`, `/overlay/goals`): session counters —
+  «300 роз → босс»; per-kind/source/match filters, count or coin mode,
+  one-shot action + celebration alert, latched until reset.
+- **Chat polls** (`polls.rs`, `/overlay/poll`): viewers vote `1`/`!2`/
+  `!vote 3` (one per viewer), auto or manual close; the winner is
+  announced *and* injected as a `poll` event (`kind=poll`, match on the
+  option text).
+- **Subathon** (`subathon.rs`, `/overlay/subathon`): countdown extended
+  by gift coins / subscriptions, capped at a configured ceiling.
+- **Viewer queue** (`queue.rs`, `/overlay/queue`): `!join`/`!leave`
+  chat commands; `queue_next` calls the next viewer and injects a
+  `queue` event — pairs with the Roblox room workflow.
+- **Hype meter** (`hype.rs`, `/overlay/hype`): sliding-window sum of
+  paid coins on an animated 0–100 % bar.
+- **Timed events** (`timed.rs`): «каждые N минут» synthetic `timer`
+  events for periodic actions/reminders.
+- **Points + `!buy` shop** (`points.rs`): chat activity earns points
+  (comment cooldown vs spam farming, per-coin/sub/follow rates, VIP
+  multiplier); purchases deduct and inject `shop` events. Balances
+  persist to `points.json` with debounced atomic writes.
+- **Soundboard**: `soundboard_play` plays a media-library sound through
+  the alerts channel — audible in the capture window.
+- **VIP flag**: the sidecar forwards subscriber/moderator/super-fan
+  status (`RawStreamEvent.vip`); the points economy multiplies VIP
+  earnings.
 
 ## Where the real keys go
 
