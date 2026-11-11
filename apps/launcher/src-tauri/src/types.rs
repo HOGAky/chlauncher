@@ -703,3 +703,21 @@ impl Default for WindowOptions {
         }
     }
 }
+
+/// One entry of `GET /api/mc/plugins` — a Paper plugin in the catalog
+/// (parity spec §9.4). `sha256` is the download-integrity contract.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McPlugin {
+    pub slug: String,
+    pub name: String,
+    pub version: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub sha256: String,
+    #[serde(default)]
+    pub size_bytes: i64,
+    /// Requires the `mc_premium_plugins` entitlement to download.
+    #[serde(default)]
+    pub premium: bool,
+}

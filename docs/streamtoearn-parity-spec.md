@@ -599,8 +599,12 @@ CREATE TABLE usage_monthly (
 
 ### 9.4. Мини-игры и плагины
 
-- Каталог плагинов отдаёт наш сервер: `GET /api/mc/plugins` (имя, версия,
-  sha256, `premium`), скачивание с гейтом по `mc_premium_plugins`.
+- ✅ Каталог плагинов отдаёт наш сервер: `GET /api/mc/plugins` (имя, версия,
+  sha256, `premium`), скачивание `GET /api/mc/plugins/:slug/download` с
+  гейтом по `mc_premium_plugins`. Админ-CRUD и загрузка jar (sha256
+  считается сервером): `/api/admin/mc-plugins*`. Лаунчер качает jar в
+  `minecraft/server/plugins/` с верификацией хеша — плагины грузятся
+  при старте Paper (UI подсказывает о перезапуске).
 - Каждая мини-игра (Bedrock, Sandbox, Survival, Farm, Parkour, KOTH) —
   **отдельный Java-плагин** Paper (отдельный репозиторий/модуль Gradle) +
   встроенный пресет правил под него. В этом ТЗ — только инфраструктура

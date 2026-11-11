@@ -85,6 +85,46 @@ impl MinecraftManager {
         self.server_dir().join("paper.jar")
     }
 
+    /// `server/plugins/` — catalog jars land here; Paper loads them at boot.
+    pub fn plugins_dir(&self) -> PathBuf {
+        self.server_dir().join("plugins")
+    }
+
+    /// Installed jar file names (sorted) — merged into the catalog view
+    /// so the UI can show "установлен" badges.
+    pub fn installed_plugins(&self) -> Vec<String> {
+        let mut out: Vec<String> = std::fs::read_dir(self.plugins_dir())
+            .map(|rd| {
+                rd.flatten()
+                    .filter_map(|e| {
+                        let name = e.file_name().to_string_lossy().into_owned();
+                        name.ends_with(".jar").then_some(name)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        out.sort();
+        out
+    }
+
+    /// Removes one installed jar by file name — validated to stay inside
+    /// the plugins dir (no `..`, no separators).
+    pub fn remove_plugin(&self, file: &str) -> Result<(), String> {
+        if file.is_empty()
+            || file.contains('/')
+            || file.contains('\\')
+            || file.contains("..")
+            || !file.ends_with(".jar")
+        {
+            return Err("INVALID_PLUGIN_FILE".into());
+        }
+        let p = self.plugins_dir().join(file);
+        if p.exists() {
+            std::fs::remove_file(&p).map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
+
     /// Status snapshot for `mc_status` (no secrets — the RCON password
     /// never leaves the Rust side).
     pub async fn status(&self) -> serde_json::Value {

@@ -268,6 +268,15 @@ templates split on `\n`) and sent over RCON. Viewer-controlled
 injection (`minecraft::templates`). The external `tools/mc-bridge`
 remains for remote servers.
 
+**Plugin catalog (§9.4).** `GET /api/mc/plugins` serves the server-side
+catalog (name, version, sha256, `premium`); `GET /api/mc/plugins/:slug/download`
+streams the jar, gated by the `mc_premium_plugins` entitlement for
+premium rows. Admins manage it via `/api/admin/mc-plugins*` (create,
+patch, jar upload — the server computes sha256/size itself, delete).
+On the Minecraft page, *Плагины* lists the catalog; installing
+downloads + SHA-256-verifies the jar into `server/plugins/` — Paper
+loads it on the next start (a restart hint shows while running).
+
 ## Trigger presets & the gift catalog
 
 The mapper's reusable unit is the **preset** — a named set of trigger

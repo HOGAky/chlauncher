@@ -36,6 +36,7 @@ dist-ssr/
 apps/server/data/
 apps/server/static/games/*.zip
 apps/server/static/games/**/*.zip
+apps/server/static/plugins/*.jar
 
 # ---- OS / Editor ----
 .DS_Store

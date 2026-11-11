@@ -1934,3 +1934,78 @@ pub async fn mc_world_reset(state: State<'_, AppState>) -> Result<(), String> {
 pub async fn mc_world_backup(state: State<'_, AppState>) -> Result<String, String> {
     state.mc.world_backup().await
 }
+
+// ---------------------------------------------------------------------------
+// Minecraft plugin catalog (§9.4)
+// ---------------------------------------------------------------------------
+
+/// Server catalog merged with locally-installed jar names — the page
+/// renders premium badges, "installed" state and per-plan availability.
+#[tauri::command]
+pub async fn mc_plugin_catalog(state: State<'_, AppState>) -> Result<Value, String> {
+    let token = state
+        .settings
+        .lock()
+        .await
+        .data
+        .auth_token
+        .clone()
+        .ok_or("AUTH_REQUIRED")?;
+    let catalog = state
+        .api
+        .mc_plugins(&token)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(serde_json::json!({
+        "catalog": catalog,
+        "installed": state.mc.installed_plugins(),
+        "premium_allowed": state.usage.entitlements().await.mc_premium_plugins,
+    }))
+}
+
+/// Downloads + sha256-verifies a catalog plugin into `server/plugins/`.
+/// Premium rows are gated both here (defense in depth — the server also
+/// refuses the download) and in the UI. Installed jars load on the next
+/// server start; `mc_status` tells the UI whether a restart is needed.
+#[tauri::command]
+pub async fn mc_install_plugin(slug: String, state: State<'_, AppState>) -> Result<(), String> {
+    let token = state
+        .settings
+        .lock()
+        .await
+        .data
+        .auth_token
+        .clone()
+        .ok_or("AUTH_REQUIRED")?;
+    let catalog = state
+        .api
+        .mc_plugins(&token)
+        .await
+        .map_err(|e| e.to_string())?;
+    let plugin = catalog
+        .iter()
+        .find(|p| p.slug == slug)
+        .ok_or("PLUGIN_NOT_FOUND")?;
+    if plugin.premium && !state.usage.entitlements().await.mc_premium_plugins {
+        return Err("PLAN_LIMIT|mc_premium_plugins".into());
+    }
+    let dir = state.mc.plugins_dir();
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let dest = dir.join(format!("{}-{}.jar", plugin.slug, plugin.version));
+    let got = state
+        .api
+        .download_mc_plugin(&token, &plugin.slug, &dest)
+        .await
+        .map_err(|e| e.to_string())?;
+    if !got.eq_ignore_ascii_case(&plugin.sha256) {
+        let _ = std::fs::remove_file(&dest);
+        return Err("PLUGIN_HASH_MISMATCH".into());
+    }
+    Ok(())
+}
+
+/// Removes an installed jar by file name (server-side path-validated).
+#[tauri::command]
+pub async fn mc_remove_plugin(file: String, state: State<'_, AppState>) -> Result<(), String> {
+    state.mc.remove_plugin(&file)
+}

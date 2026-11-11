@@ -10,6 +10,7 @@ import { onOpenUrl, getCurrent } from '@tauri-apps/plugin-deep-link';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import type {
   MediaItem,
+  McPluginCatalog,
   McStatus,
   AdminBuild,
   AdminGame,
@@ -410,3 +411,10 @@ export const mcWorldBackup = () => cmd<string>('mc_world_backup');
 /** Live server console lines (`mc-log` events). */
 export const onMcLog = (cb: (line: string) => void): Promise<UnlistenFn> =>
   listen<string>('mc-log', (e) => cb(e.payload));
+
+// --- MC plugin catalog (§9.4) ---------------------------------------------------
+export const mcPluginCatalog = () => cmd<McPluginCatalog>('mc_plugin_catalog');
+export const mcInstallPlugin = (slug: string) =>
+  cmd<void>('mc_install_plugin', { slug });
+export const mcRemovePlugin = (file: string) =>
+  cmd<void>('mc_remove_plugin', { file });

@@ -460,3 +460,21 @@ export interface McStatus {
   last_error: string | null;
   log_tail: string[];
 }
+
+/** `GET /api/mc/plugins` entry — Paper plugin in the catalog (§9.4). */
+export interface McPlugin {
+  slug: string;
+  name: string;
+  version: string;
+  description: string;
+  sha256: string;
+  size_bytes: number;
+  premium: boolean;
+}
+
+/** `mc_plugin_catalog` response — catalog merged with installed jars. */
+export interface McPluginCatalog {
+  catalog: McPlugin[];
+  installed: string[];
+  premium_allowed: boolean;
+}

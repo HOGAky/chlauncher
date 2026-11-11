@@ -288,6 +288,29 @@ const MIGRATIONS = [
       mc_premium_plugins: true,
     }), 2);
   },
+  // v6 → v7: Minecraft plugin catalog (parity spec §9.4). Rows are
+  // catalog entries the launcher can install into the managed Paper
+  // server's plugins dir; jar bytes live under staticDir/plugins and are
+  // integrity-pinned by the stored sha256. `premium` gates the download
+  // behind the plan's `mc_premium_plugins` entitlement.
+  (db) => {
+    db.exec(`
+      CREATE TABLE mc_plugins (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        slug        TEXT UNIQUE NOT NULL,
+        name        TEXT NOT NULL,
+        version     TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        sha256      TEXT NOT NULL DEFAULT '',
+        size_bytes  INTEGER NOT NULL DEFAULT 0,
+        premium     INTEGER NOT NULL DEFAULT 0,
+        file_name   TEXT NOT NULL DEFAULT '',
+        active      INTEGER NOT NULL DEFAULT 1,
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT
+      );
+    `);
+  },
 ];
 
 /** Runs all pending migrations in order. Idempotent via user_version. */
@@ -580,4 +603,51 @@ export function reportUsage(db, userId, month, coinsDelta, nonce) {
      DO UPDATE SET coins = coins + excluded.coins, updated_at = excluded.updated_at`
   ).run(userId, month, coinsDelta, nowIso());
   return { applied: true, coins: usageForMonth(db, userId, month) };
+}
+
+// ---------------------------------------------------------------------------
+// Minecraft plugin catalog (spec §9.4)
+// ---------------------------------------------------------------------------
+
+/** Public plugin shape — internal file_name is intentionally hidden. */
+export function mcPluginView(row) {
+  return {
+    slug: row.slug,
+    name: row.name,
+    version: row.version,
+    description: row.description,
+    sha256: row.sha256,
+    size_bytes: row.size_bytes,
+    premium: !!row.premium,
+  };
+}
+
+/** Active catalog rows for `GET /api/mc/plugins`. */
+export function listMcPlugins(db) {
+  return db
+    .prepare(
+      `SELECT * FROM mc_plugins WHERE active = 1 AND file_name <> ''
+       ORDER BY premium, name`
+    )
+    .all()
+    .map(mcPluginView);
+}
+
+/** All rows incl. drafts — the admin view adds file/active internals. */
+export function listAllMcPlugins(db) {
+  return db
+    .prepare('SELECT * FROM mc_plugins ORDER BY id')
+    .all()
+    .map((r) => ({
+      ...mcPluginView(r),
+      file_name: r.file_name,
+      active: !!r.active,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
+    }));
+}
+
+/** One plugin row by slug (raw — includes file_name/active). */
+export function findMcPlugin(db, slug) {
+  return db.prepare('SELECT * FROM mc_plugins WHERE slug = ?').get(slug);
 }

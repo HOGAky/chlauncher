@@ -471,6 +471,57 @@ impl ApiClient {
             .collect())
     }
 
+    /// `GET /api/mc/plugins` — the Paper-plugin catalog (§9.4).
+    pub async fn mc_plugins(&self, token: &str) -> Result<Vec<crate::types::McPlugin>, ApiError> {
+        let v: Value = self
+            .req(reqwest::Method::GET, "/api/mc/plugins", Some(token), None)
+            .await?;
+        serde_json::from_value(v["plugins"].clone()).map_err(|_| ApiError::Malformed)
+    }
+
+    /// Downloads a plugin jar to `dest`, streaming with a running SHA-256 —
+    /// the caller compares against the catalog `sha256`. Server errors
+    /// (`PLAN_LIMIT:mc_premium_plugins`, 404s) keep their real code.
+    pub async fn download_mc_plugin(
+        &self,
+        token: &str,
+        slug: &str,
+        dest: &std::path::Path,
+    ) -> Result<String, ApiError> {
+        use sha2::{Digest, Sha256};
+        let res = self
+            .http
+            .get(format!("{}/api/mc/plugins/{}/download", self.base(), slug))
+            .bearer_auth(token)
+            .send()
+            .await?;
+        if !res.status().is_success() {
+            let status = res.status().as_u16();
+            let code = res
+                .json::<Value>()
+                .await
+                .ok()
+                .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(String::from))
+                .unwrap_or_else(|| "DOWNLOAD_FAILED".to_string());
+            return Err(ApiError::server(status, code));
+        }
+        let mut out = std::fs::File::create(dest)
+            .map_err(|e| ApiError::server_detailed(500, "DOWNLOAD_FAILED", e.to_string()))?;
+        let mut hasher = Sha256::new();
+        use std::io::Write;
+        let mut res = res;
+        while let Some(chunk) = res.chunk().await? {
+            out.write_all(&chunk)
+                .map_err(|e| ApiError::server_detailed(500, "DOWNLOAD_FAILED", e.to_string()))?;
+            hasher.update(&chunk);
+        }
+        Ok(hasher
+            .finalize()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect())
+    }
+
     // ---------------------------------------------------------------
     // Admin API (server enforces users.role='admin'; we just send the JWT)
     // ---------------------------------------------------------------

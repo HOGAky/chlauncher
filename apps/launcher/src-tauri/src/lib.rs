@@ -418,6 +418,9 @@ pub fn run() {
             commands::mc_set_settings,
             commands::mc_world_reset,
             commands::mc_world_backup,
+            commands::mc_plugin_catalog,
+            commands::mc_install_plugin,
+            commands::mc_remove_plugin,
         ])
         .build(tauri::generate_context!());
     let app = match app {

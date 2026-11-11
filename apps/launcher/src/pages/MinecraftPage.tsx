@@ -6,9 +6,9 @@
  * route in via RCON while the `minecraft` trigger profile is active.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { Box, Download, Play, Square, Save, Trash2, Terminal } from 'lucide-react';
+import { Box, Download, Play, Square, Save, Trash2, Terminal, Puzzle } from 'lucide-react';
 import * as api from '../api';
-import type { McStatus } from '../types';
+import type { McPluginCatalog, McStatus } from '../types';
 import { humanError } from '../errorMessages';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -28,7 +28,10 @@ export default function MinecraftPage() {
   const [error, setError] = useState<string | null>(null);
   const [cmdline, setCmdline] = useState('');
   const [eulaChecked, setEulaChecked] = useState(false);
+  const [plugins, setPlugins] = useState<McPluginCatalog | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
+
+  const refreshPlugins = () => api.mcPluginCatalog().then(setPlugins).catch(() => {});
 
   const refresh = () =>
     api.mcStatus().then((s) => {
@@ -39,6 +42,7 @@ export default function MinecraftPage() {
   useEffect(() => {
     refresh().catch((e) => setError(humanError(e)));
     const un = api.onMcLog((line) => setLogs((l) => [...l.slice(-499), line]));
+    refreshPlugins();
     const poll = setInterval(() => refresh().catch(() => {}), 5000);
     return () => {
       un.then((f) => f());
@@ -235,6 +239,76 @@ export default function MinecraftPage() {
           </label>
         </CardContent>
       </Card>
+
+      {/* Plugin catalog (§9.4) — jars land in server/plugins and load
+          on the next server start. */}
+      {plugins && plugins.catalog.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Puzzle size={15} /> Плагины
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {running && (
+              <p className="text-xs text-amber-400">
+                Сервер запущен — установленные плагины загрузятся после перезапуска.
+              </p>
+            )}
+            {plugins.catalog.map((p) => {
+              const jar = `${p.slug}-${p.version}.jar`;
+              const installed = plugins.installed.includes(jar);
+              const locked = p.premium && !plugins.premium_allowed;
+              return (
+                <div
+                  key={p.slug}
+                  className="flex items-center gap-3 border border-border rounded px-3 py-2"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium truncate">{p.name}</span>
+                      <span className="text-xs text-muted-foreground">v{p.version}</span>
+                      {p.premium && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">
+                          EXPERT
+                        </span>
+                      )}
+                    </div>
+                    {p.description && (
+                      <div className="text-xs text-muted-foreground truncate">
+                        {p.description}
+                      </div>
+                    )}
+                  </div>
+                  {locked ? (
+                    <span className="text-xs text-muted-foreground" title="Требуется тариф Expert">
+                      Нужен тариф Expert
+                    </span>
+                  ) : installed ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy !== null}
+                      onClick={() => run('plugin', api.mcRemovePlugin(jar).then(refreshPlugins))}
+                    >
+                      <Trash2 size={14} className="mr-1" /> Удалить
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy !== null}
+                      onClick={() => run('plugin', api.mcInstallPlugin(p.slug).then(refreshPlugins))}
+                    >
+                      <Download size={14} className="mr-1" /> Установить
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Console */}
       <Card>

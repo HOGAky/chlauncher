@@ -11,6 +11,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import rateLimit from '@fastify/rate-limit';
 import { config } from '../config.js';
 import {
@@ -22,6 +23,8 @@ import {
   listAllPlans,
   usageForMonth,
   currentMonth,
+  findMcPlugin,
+  listAllMcPlugins,
 } from '../db.js';
 import { subscriptionView, recordPayment, refreshSubscription } from '../subscriptions.js';
 import { ipHash } from '../hwid.js';
@@ -486,6 +489,123 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
       fields: Object.keys(request.body || {}),
     });
     return { plan: findPlan(db, request.params.code) };
+  });
+
+  // ---------------------------------------------------------------
+  // Minecraft plugin catalog (§9.4)
+  // ---------------------------------------------------------------
+
+  /** GET /api/admin/mc-plugins — all rows incl. drafts/inactive. */
+  app.get('/mc-plugins', async () => ({ plugins: listAllMcPlugins(db) }));
+
+  /** POST /api/admin/mc-plugins — create a catalog entry (no jar yet). */
+  app.post('/mc-plugins', async (request, reply) => {
+    const { slug, name, version, description = '', premium } = request.body || {};
+    if (!slug || !SLUG_RE.test(slug)) {
+      return reply.code(400).send({ error: 'INVALID_SLUG' });
+    }
+    if (!name || !version) {
+      return reply.code(400).send({ error: 'MISSING_FIELDS' });
+    }
+    if (findMcPlugin(db, slug)) {
+      return reply.code(409).send({ error: 'SLUG_TAKEN' });
+    }
+    db.prepare(
+      `INSERT INTO mc_plugins
+         (slug, name, version, description, premium, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(slug, name, version, description, premium ? 1 : 0, nowIso(), nowIso());
+    audit(request.auth.userId, 'create_mc_plugin', slug, { name, version });
+    return reply.code(201).send({
+      plugin: listAllMcPlugins(db).find((p) => p.slug === slug),
+    });
+  });
+
+  /** PATCH /api/admin/mc-plugins/:slug — metadata + active toggle. */
+  app.patch('/mc-plugins/:slug', async (request, reply) => {
+    const plugin = findMcPlugin(db, request.params.slug);
+    if (!plugin) return reply.code(404).send({ error: 'PLUGIN_NOT_FOUND' });
+    const { name, version, description, premium, active } = request.body || {};
+    db.prepare(
+      `UPDATE mc_plugins SET
+         name = COALESCE(?, name),
+         version = COALESCE(?, version),
+         description = COALESCE(?, description),
+         premium = COALESCE(?, premium),
+         active = COALESCE(?, active),
+         updated_at = ?
+       WHERE slug = ?`
+    ).run(
+      name ?? null,
+      version ?? null,
+      description ?? null,
+      premium === undefined ? null : premium ? 1 : 0,
+      active === undefined ? null : active ? 1 : 0,
+      nowIso(),
+      plugin.slug
+    );
+    audit(request.auth.userId, 'update_mc_plugin', plugin.slug, {
+      fields: Object.keys(request.body || {}),
+    });
+    return {
+      plugin: listAllMcPlugins(db).find((p) => p.slug === plugin.slug),
+    };
+  });
+
+  /**
+   * POST /api/admin/mc-plugins/:slug/file — uploads the jar
+   * (application/octet-stream). Stored under staticDir/plugins as
+   * `<slug>-<version>.jar`; sha256 + size are computed server-side and
+   * become the download contract the launcher verifies.
+   */
+  app.post(
+    '/mc-plugins/:slug/file',
+    { bodyLimit: config.maxBuildSize },
+    async (request, reply) => {
+      const plugin = findMcPlugin(db, request.params.slug);
+      if (!plugin) return reply.code(404).send({ error: 'PLUGIN_NOT_FOUND' });
+      const body = request.body;
+      if (!Buffer.isBuffer(body) || body.length === 0) {
+        return reply.code(400).send({ error: 'EMPTY_BODY' });
+      }
+      // Jars are zips — cheap magic check catches wrong-file uploads.
+      if (body[0] !== 0x50 || body[1] !== 0x4b) {
+        return reply.code(400).send({ error: 'NOT_A_JAR' });
+      }
+      const rel = `${plugin.slug}-${plugin.version}.jar`;
+      const root = path.resolve(config.staticDir, 'plugins');
+      fs.mkdirSync(root, { recursive: true });
+      fs.writeFileSync(path.join(root, rel), body);
+      const sha256 = crypto.createHash('sha256').update(body).digest('hex');
+      db.prepare(
+        `UPDATE mc_plugins
+           SET file_name = ?, sha256 = ?, size_bytes = ?, updated_at = ?
+         WHERE slug = ?`
+      ).run(rel, sha256, body.length, nowIso(), plugin.slug);
+      audit(request.auth.userId, 'upload_mc_plugin', plugin.slug, {
+        sha256,
+        size_bytes: body.length,
+      });
+      return reply.code(201).send({
+        plugin: listAllMcPlugins(db).find((p) => p.slug === plugin.slug),
+      });
+    }
+  );
+
+  /** DELETE /api/admin/mc-plugins/:slug — removes row + jar file. */
+  app.delete('/mc-plugins/:slug', async (request, reply) => {
+    const plugin = findMcPlugin(db, request.params.slug);
+    if (!plugin) return reply.code(404).send({ error: 'PLUGIN_NOT_FOUND' });
+    if (plugin.file_name) {
+      const root = path.resolve(config.staticDir, 'plugins');
+      const p = path.resolve(root, plugin.file_name);
+      if (p.startsWith(root + path.sep) && fs.existsSync(p)) {
+        fs.unlinkSync(p);
+      }
+    }
+    db.prepare('DELETE FROM mc_plugins WHERE slug = ?').run(plugin.slug);
+    audit(request.auth.userId, 'delete_mc_plugin', plugin.slug, {});
+    return { ok: true };
   });
 
   // ---------------------------------------------------------------
