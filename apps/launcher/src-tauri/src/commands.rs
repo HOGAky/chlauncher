@@ -1653,6 +1653,46 @@ pub async fn save_points_cfg(
     s.save().map_err(|e| e.to_string())
 }
 
+/// Soundboard: plays a media-library sound through the alerts overlay —
+/// the capture window makes it audible on stream (LIVE Studio/OBS).
+#[tauri::command]
+pub async fn soundboard_play(id: String, state: State<'_, AppState>) -> Result<(), String> {
+    if id.len() != 32
+        || !id
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+    {
+        return Err("Некорректный id медиа".into());
+    }
+    let item = state
+        .settings
+        .lock()
+        .await
+        .data
+        .media
+        .iter()
+        .find(|m| m.id == id)
+        .cloned()
+        .ok_or_else(|| "Файл не найден".to_string())?;
+    if item.kind != "audio" {
+        return Err("Саундборд играет только аудиофайлы".into());
+    }
+    let _ = state.overlay_tx.send(OverlayFrame::Alert {
+        id: format!("sb-{id}-{}", crate::types::now_ms()),
+        text: item.name,
+        duration_ms: 1500,
+        sound: Some(FrameSound {
+            url: format!("/media/{id}"),
+            volume: 1.0,
+        }),
+        media: None,
+        position: "top".into(),
+        style: "soundboard".into(),
+        user: String::new(),
+    });
+    Ok(())
+}
+
 /// `!buy` shop items list.
 #[tauri::command]
 pub async fn get_shop_items(state: State<'_, AppState>) -> Result<Value, String> {

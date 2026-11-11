@@ -329,6 +329,9 @@ export const getPointsCfg = () => cmd<import('./types').PointsCfg>('get_points_c
 export const savePointsCfg = (cfg: import('./types').PointsCfg) =>
   cmd<void>('save_points_cfg', { cfg });
 
+/** Soundboard: plays a media sound through the alerts overlay. */
+export const soundboardPlay = (id: string) => cmd<void>('soundboard_play', { id });
+
 /** `!buy` shop items list. */
 export const getShopItems = () => cmd<import('./types').ShopItem[]>('get_shop_items');
 

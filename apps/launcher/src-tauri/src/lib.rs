@@ -533,6 +533,7 @@ pub fn run() {
             commands::points_adjust,
             commands::get_points_cfg,
             commands::save_points_cfg,
+            commands::soundboard_play,
             commands::get_shop_items,
             commands::save_shop_items,
         ])

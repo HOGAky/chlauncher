@@ -6,7 +6,7 @@
  */
 import React, { useEffect, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
-import { Film, Image as ImageIcon, Music, Plus, Trash2 } from 'lucide-react';
+import { Film, Image as ImageIcon, Music, Play, Plus, Trash2 } from 'lucide-react';
 import * as api from '../api';
 import { useApp } from '../App';
 import type { MediaItem } from '../types';
@@ -143,14 +143,27 @@ export default function MediaPage() {
                   {m.kind}
                 </Badge>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 mt-1 self-start text-red-400 hover:text-red-300"
-                onClick={() => remove(m)}
-              >
-                <Trash2 size={12} /> удалить
-              </Button>
+              <div className="flex items-center gap-1 mt-1">
+                {m.kind === 'audio' && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-emerald-400 hover:text-emerald-300"
+                    title="Саундборд — проиграть в оверлей на стрим"
+                    onClick={() => api.soundboardPlay(m.id).catch((e) => setError(humanError(e)))}
+                  >
+                    <Play size={12} /> на стрим
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-red-400 hover:text-red-300"
+                  onClick={() => remove(m)}
+                >
+                  <Trash2 size={12} /> удалить
+                </Button>
+              </div>
             </CardContent>
           </Card>
         ))}
