@@ -32,8 +32,10 @@ pub mod minecraft;
 pub mod overlay;
 pub mod polls;
 pub mod process;
+pub mod queue;
 pub mod scheduler;
 pub mod settings;
+pub mod subathon;
 pub mod tts;
 pub mod types;
 pub mod usage;
@@ -161,6 +163,12 @@ pub fn run() {
             // re-injected into the ingest pipeline as a synthetic `poll`
             // event so trigger rules can act on it.
             let polls = polls::PollTracker::new(raw_tx.clone(), overlay_tx.clone());
+            // Subathon countdown — paid events extend the clock
+            // (settings.subathon rates), rendered on /overlay/subathon.
+            let subathon = subathon::Subathon::new(settings.clone(), overlay_tx.clone());
+            // Viewer queue (!join) — `queue_next` injects a `queue` event
+            // into the pipeline so a rule can act on the called viewer.
+            let queue = queue::ViewerQueue::new(raw_tx.clone(), overlay_tx.clone());
             let overlay_port = match tauri::async_runtime::block_on(overlay::start_overlay_server(
                 hub.clone(),
                 overlay_tx.clone(),
@@ -171,6 +179,8 @@ pub fn run() {
                 tts.wavs.clone(),
                 goals.clone(),
                 polls.clone(),
+                subathon.clone(),
+                queue.clone(),
             )) {
                 Ok((port, fell_back)) => {
                     if fell_back {
@@ -298,6 +308,8 @@ pub fn run() {
                 usage: usage.clone(),
                 goals: goals.clone(),
                 polls: polls.clone(),
+                subathon: subathon.clone(),
+                queue: queue.clone(),
                 mc: mc.clone(),
                 adapter_key: adapter_key.clone(),
                 overlay_token: overlay_token.clone(),
@@ -317,6 +329,8 @@ pub fn run() {
                     usage.clone(),
                     goals.clone(),
                     polls.clone(),
+                    subathon.clone(),
+                    queue.clone(),
                 ));
             }
 
@@ -469,6 +483,17 @@ pub fn run() {
             commands::get_goals,
             commands::save_goals,
             commands::reset_goals,
+            commands::poll_start,
+            commands::poll_stop,
+            commands::poll_status,
+            commands::subathon_start,
+            commands::subathon_stop,
+            commands::subathon_status,
+            commands::save_subathon_cfg,
+            commands::queue_next,
+            commands::queue_status,
+            commands::queue_set_open,
+            commands::queue_clear,
         ])
         .build(tauri::generate_context!());
     let app = match app {
@@ -588,6 +613,8 @@ async fn mapper_loop(
     usage: Arc<usage::UsageMeter>,
     goals: Arc<goals::GoalTracker>,
     polls: Arc<polls::PollTracker>,
+    subathon: Arc<subathon::Subathon>,
+    queue: Arc<queue::ViewerQueue>,
 ) {
     let mut cache: Option<MappingCache> = None;
     while let Some(raw) = raw_rx.recv().await {
@@ -598,6 +625,8 @@ async fn mapper_loop(
         // independent of which profile maps it.
         goals.note_raw(&raw).await;
         polls.note_raw(&raw).await;
+        subathon.note_raw(&raw).await;
+        queue.note_raw(&raw).await;
         let slug = active_slug
             .lock()
             .await

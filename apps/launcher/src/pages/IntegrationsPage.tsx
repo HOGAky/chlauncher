@@ -19,6 +19,8 @@ import { Badge } from '../components/ui/badge';
 import { humanError } from '../errorMessages';
 import GoalsCard from '../components/GoalsCard';
 import PollCard from '../components/PollCard';
+import QueueCard from '../components/QueueCard';
+import SubathonCard from '../components/SubathonCard';
 /** Maps serde's IntegrationStatus union to badge + label. */
 function statusBadge(st: IntegrationStatus | undefined) {
   if (!st || st === 'disconnected') return <Badge variant="outline">Отключено</Badge>;
@@ -168,6 +170,8 @@ export default function IntegrationsPage() {
     ['leaderboard', 'overlay/leaderboard', 'Топ', 'топ дарителей за стрим'],
     ['goals', 'overlay/goals', 'Цели', 'бары целей стрима'],
     ['poll', 'overlay/poll', 'Опрос', 'живые столбики голосования'],
+    ['subathon', 'overlay/subathon', 'Субатон', 'обратный отсчёт'],
+    ['queue', 'overlay/queue', 'Очередь', 'список зрителей !join'],
   ];
 
   return (
@@ -466,6 +470,12 @@ export default function IntegrationsPage() {
 
       {/* Chat polls — the winner re-enters the pipeline as a `poll` event. */}
       <PollCard />
+
+      {/* Subathon - paid events extend the countdown on /overlay/subathon. */}
+      <SubathonCard />
+
+      {/* Viewer queue - next injects a queue event into the pipeline. */}
+      <QueueCard />
 
       {/* External game adapters (§10.1) — mods connect to the local
           game WS with the shared key instead of a launch token. */}

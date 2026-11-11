@@ -267,6 +267,35 @@ export const pollStop = () => cmd<void>('poll_stop');
 export const pollStatus = () =>
   cmd<import('./types').PollStatus>('poll_status');
 
+/** Starts (or restarts) the subathon countdown. */
+export const subathonStart = (durS: number) =>
+  cmd<void>('subathon_start', { durS });
+
+/** Stops the countdown without the end alert. */
+export const subathonStop = () => cmd<void>('subathon_stop');
+
+/** Live subathon status. */
+export const subathonStatus = () =>
+  cmd<import('./types').SubathonStatus>('subathon_status');
+
+/** Saves the subathon rate knobs. */
+export const saveSubathonCfg = (cfg: import('./types').SubathonCfg) =>
+  cmd<void>('save_subathon_cfg', { cfg });
+
+/** Pulls the next viewer from the `!join` queue. */
+export const queueNext = () => cmd<{ user: string }>('queue_next');
+
+/** Queue snapshot (open flag + ordered viewers + last called). */
+export const queueStatus = () =>
+  cmd<import('./types').QueueStatus>('queue_status');
+
+/** Opens or closes `!join`. */
+export const queueSetOpen = (open: boolean) =>
+  cmd<void>('queue_set_open', { open });
+
+/** Empties the queue. */
+export const queueClear = () => cmd<void>('queue_clear');
+
 /** Alert playback settings for the mapper status bar (§3.1–§3.2). */
 export const getAlertsSettings = () =>
   cmd<{

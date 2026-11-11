@@ -75,6 +75,9 @@ pub struct Settings {
     /// see `goals.rs`.
     #[serde(default)]
     pub goals: Vec<crate::types::StreamGoal>,
+    /// Subathon countdown config — see `subathon.rs`.
+    #[serde(default)]
+    pub subathon: crate::types::SubathonCfg,
 }
 
 /// Managed Minecraft server configuration (parity spec §9.2–§9.3).

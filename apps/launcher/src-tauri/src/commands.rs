@@ -62,6 +62,10 @@ pub struct AppState {
     /// Chat polls («Голосования») — votes counted on raw comments, the
     /// winner re-entering the pipeline as a `poll` event.
     pub polls: Arc<crate::polls::PollTracker>,
+    /// Subathon countdown — paid events extend the clock (§S2E parity).
+    pub subathon: Arc<crate::subathon::Subathon>,
+    /// Viewer queue (!join) — `queue_next` injects a `queue` event.
+    pub queue: Arc<crate::queue::ViewerQueue>,
     /// Managed Paper server lifecycle (§9).
     pub mc: Arc<crate::minecraft::MinecraftManager>,
     /// Shared adapter key for `hello_adapter` validation (§10.1).
@@ -1486,7 +1490,7 @@ pub async fn poll_start(
     state.polls.start(cfg).await
 }
 
-/// Ends the running poll: announces the winner and injects the `poll`
+/// Ends the running poll: announces the winner and injects the poll
 /// event into the ingest pipeline.
 #[tauri::command]
 pub async fn poll_stop(state: State<'_, AppState>) -> Result<(), String> {
@@ -1497,6 +1501,65 @@ pub async fn poll_stop(state: State<'_, AppState>) -> Result<(), String> {
 #[tauri::command]
 pub async fn poll_status(state: State<'_, AppState>) -> Result<Value, String> {
     Ok(json!(state.polls.status().await))
+}
+
+/// Starts (or restarts) the subathon countdown for N seconds.
+#[tauri::command]
+pub async fn subathon_start(dur_s: u64, state: State<'_, AppState>) -> Result<(), String> {
+    state.subathon.start(dur_s).await;
+    Ok(())
+}
+
+/// Stops the countdown without firing the end alert.
+#[tauri::command]
+pub async fn subathon_stop(state: State<'_, AppState>) -> Result<(), String> {
+    state.subathon.stop().await;
+    Ok(())
+}
+
+/// Live subathon status (remaining/added seconds + rates).
+#[tauri::command]
+pub async fn subathon_status(state: State<'_, AppState>) -> Result<Value, String> {
+    Ok(json!(state.subathon.status().await))
+}
+
+/// Saves the subathon rate knobs (sec/coin, sec/sub, cap).
+#[tauri::command]
+pub async fn save_subathon_cfg(
+    cfg: crate::types::SubathonCfg,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut s = state.settings.lock().await;
+    s.data.subathon = cfg;
+    s.save().map_err(|e| e.to_string())
+}
+
+/// Pulls the next viewer from the queue - announces them and injects
+/// the queue event into the ingest pipeline.
+#[tauri::command]
+pub async fn queue_next(state: State<'_, AppState>) -> Result<Value, String> {
+    let user = state.queue.next().await?;
+    Ok(json!({ "user": user }))
+}
+
+/// Queue snapshot (open flag + ordered viewers + last called).
+#[tauri::command]
+pub async fn queue_status(state: State<'_, AppState>) -> Result<Value, String> {
+    Ok(json!(state.queue.status().await))
+}
+
+/// Opens or closes join-commands.
+#[tauri::command]
+pub async fn queue_set_open(open: bool, state: State<'_, AppState>) -> Result<(), String> {
+    state.queue.set_open(open).await;
+    Ok(())
+}
+
+/// Empties the queue.
+#[tauri::command]
+pub async fn queue_clear(state: State<'_, AppState>) -> Result<(), String> {
+    state.queue.clear().await;
+    Ok(())
 }
 
 /// Toggles streamer mode (masks personal data in the UI).

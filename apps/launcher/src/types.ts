@@ -541,3 +541,33 @@ export interface PollStatus {
   ends_in_s: number;
   last_winner: string;
 }
+
+/** Subathon rate knobs — persisted in settings (`save_subathon_cfg`). */
+export interface SubathonCfg {
+  sec_per_coin: number;
+  sec_per_sub: number;
+  max_s: number;
+}
+
+/** Live subathon state — `subathon_status` / `/subathon.json`. */
+export interface SubathonStatus {
+  running: boolean;
+  remaining_s: number;
+  added_s: number;
+  sec_per_coin: number;
+  sec_per_sub: number;
+  max_s: number;
+}
+
+/** One viewer in the `!join` queue. */
+export interface QueueEntry {
+  user: string;
+  pos: number;
+}
+
+/** `queue_status` / `/queue.json`. */
+export interface QueueStatus {
+  open: boolean;
+  entries: QueueEntry[];
+  last_called: string;
+}

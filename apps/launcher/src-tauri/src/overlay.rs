@@ -89,6 +89,10 @@ struct OverlayState {
     goals: Arc<crate::goals::GoalTracker>,
     /// Chat-poll state for `/poll.json` + `/overlay/poll`.
     polls: Arc<crate::polls::PollTracker>,
+    /// Subathon countdown for `/subathon.json` + `/overlay/subathon`.
+    subathon: Arc<crate::subathon::Subathon>,
+    /// Viewer queue for `/queue.json` + `/overlay/queue`.
+    queue: Arc<crate::queue::ViewerQueue>,
 }
 
 /// Query-param extractor shared by all guarded routes.
@@ -260,6 +264,8 @@ pub async fn start_overlay_server(
     wavs: crate::tts::WavStore,
     goals: Arc<crate::goals::GoalTracker>,
     polls: Arc<crate::polls::PollTracker>,
+    subathon: Arc<crate::subathon::Subathon>,
+    queue: Arc<crate::queue::ViewerQueue>,
 ) -> std::io::Result<(u16, bool)> {
     let state = OverlayState {
         hub,
@@ -272,6 +278,8 @@ pub async fn start_overlay_server(
         wavs,
         goals,
         polls,
+        subathon,
+        queue,
     };
 
     // Recorder: remember the last frame per channel for late joiners.
@@ -304,9 +312,13 @@ pub async fn start_overlay_server(
         .route("/overlay/leaderboard", get(page_route(LEADERBOARD_HTML)))
         .route("/overlay/goals", get(page_route(GOALS_HTML)))
         .route("/overlay/poll", get(page_route(POLL_HTML)))
+        .route("/overlay/subathon", get(page_route(SUBATHON_HTML)))
+        .route("/overlay/queue", get(page_route(QUEUE_HTML)))
         .route("/top.json", get(serve_top))
         .route("/goals.json", get(serve_goals))
         .route("/poll.json", get(serve_poll))
+        .route("/subathon.json", get(serve_subathon))
+        .route("/queue.json", get(serve_queue))
         .route("/gifts/:file", get(serve_gift))
         .route("/media/:id", get(serve_media))
         .route("/tts/:file", get(serve_tts))
@@ -418,6 +430,28 @@ async fn serve_poll(
         return StatusCode::FORBIDDEN.into_response();
     }
     axum::Json(st.polls.status().await).into_response()
+}
+
+/// `/subathon.json` — remaining seconds, polled by the countdown page.
+async fn serve_subathon(
+    Query(q): Query<HashMap<String, String>>,
+    State(st): State<OverlayState>,
+) -> Response {
+    if !token_ok(q.get("t").map(String::as_str), &st.token) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    axum::Json(st.subathon.status().await).into_response()
+}
+
+/// `/queue.json` — the waiting viewers, polled by `/overlay/queue`.
+async fn serve_queue(
+    Query(q): Query<HashMap<String, String>>,
+    State(st): State<OverlayState>,
+) -> Response {
+    if !token_ok(q.get("t").map(String::as_str), &st.token) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    axum::Json(st.queue.status().await).into_response()
 }
 
 /// `/media/:id` — media-library file with byte-range support (§4.1:
@@ -632,6 +666,8 @@ const PROGRESS_HTML: &str = include_str!("../overlay/progress.html");
 const LEADERBOARD_HTML: &str = include_str!("../overlay/leaderboard.html");
 const GOALS_HTML: &str = include_str!("../overlay/goals.html");
 const POLL_HTML: &str = include_str!("../overlay/poll.html");
+const SUBATHON_HTML: &str = include_str!("../overlay/subathon.html");
+const QUEUE_HTML: &str = include_str!("../overlay/queue.html");
 const SPINNER_HTML: &str = include_str!("../overlay/spinner.html");
 const TTS_HTML: &str = include_str!("../overlay/tts.html");
 

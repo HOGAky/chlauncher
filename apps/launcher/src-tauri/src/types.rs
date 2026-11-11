@@ -300,6 +300,31 @@ pub struct StreamGoal {
     pub enabled: bool,
 }
 
+/// Subathon («субатон») config — paid events extend the countdown
+/// rendered on `/overlay/subathon`. Runtime is in-memory; only these
+/// knobs persist.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SubathonCfg {
+    /// Seconds added per TikTok coin of a gift (donations count via
+    /// their converted `coins`, same knob).
+    pub sec_per_coin: u32,
+    /// Flat seconds per `subscribe` event.
+    pub sec_per_sub: u32,
+    /// Hard cap on remaining time — a whale can't extend forever.
+    pub max_s: u32,
+}
+
+impl Default for SubathonCfg {
+    fn default() -> Self {
+        Self {
+            sec_per_coin: 5,
+            sec_per_sub: 300,
+            max_s: 12 * 3600,
+        }
+    }
+}
+
 impl Default for StreamGoal {
     fn default() -> Self {
         Self {

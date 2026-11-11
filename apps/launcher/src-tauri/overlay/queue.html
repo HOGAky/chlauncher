@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>chlauncher · queue</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: transparent; overflow: hidden;
+    font-family: 'Segoe UI', system-ui, sans-serif; color: #fff;
+  }
+  #q { position: absolute; left: 12px; top: 12px; width: 240px;
+       background: rgba(15,17,26,.88); border: 1px solid rgba(255,255,255,.12);
+       border-radius: 12px; padding: 10px 14px;
+       opacity: 0; transition: opacity .3s; }
+  #q.on { opacity: 1; }
+  #q .head { font-size: 13px; font-weight: 600; margin-bottom: 6px;
+             display: flex; justify-content: space-between; }
+  #q .head .n { color: rgba(255,255,255,.55); font-weight: 400; }
+  .row { display: flex; gap: 8px; font-size: 12px; padding: 3px 0;
+         border-bottom: 1px solid rgba(255,255,255,.06); }
+  .row:last-child { border-bottom: none; }
+  .row .pos { color: #38bdf8; font-variant-numeric: tabular-nums; width: 20px; }
+  .row .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row.first .name { font-weight: 700; color: #fbbf24; }
+  #q .hint { margin-top: 6px; font-size: 10px; color: rgba(255,255,255,.45); }
+  #q .called { margin-top: 6px; font-size: 11px; color: #22c55e; }
+</style>
+</head>
+<body>
+<div id="q"></div>
+<script>
+const params = new URLSearchParams(location.search);
+const token = params.get('t') || '';
+// ?bg=rrggbb — solid chroma background for LIVE Studio window capture.
+const _bg = params.get('bg');
+if (_bg && /^[0-9a-fA-F]{6}$/.test(_bg)) document.body.style.background = '#' + _bg;
+const box = document.getElementById('q');
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function render(q) {
+  if (!q || (!q.entries.length && !q.last_called)) {
+    box.classList.remove('on');
+    return;
+  }
+  const rows = (q.entries || []).slice(0, 10).map(e =>
+    `<div class="row${e.pos === 1 ? ' first' : ''}">` +
+    `<span class="pos">${e.pos}</span><span class="name">${esc(e.user)}</span></div>`
+  ).join('');
+  const more = q.entries.length > 10 ? ` +${q.entries.length - 10}` : '';
+  const called = q.last_called
+    ? `<div class="called">Сейчас: ${esc(q.last_called)}</div>` : '';
+  box.innerHTML =
+    `<div class="head"><span>Очередь${q.open ? '' : ' (закрыта)'}</span>` +
+    `<span class="n">${q.entries.length}${more}</span></div>` +
+    rows + called +
+    `<div class="hint">!join — встать · !leave — выйти</div>`;
+  box.classList.add('on');
+}
+
+async function tick() {
+  try {
+    const r = await fetch(`/queue.json?t=${encodeURIComponent(token)}`);
+    if (r.ok) render(await r.json());
+  } catch (_) { /* overlay server restarting — retry next tick */ }
+}
+tick();
+setInterval(tick, 1500);
+</script>
+</body>
+</html>
