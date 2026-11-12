@@ -355,6 +355,21 @@ function UsersTab() {
             </Badge>
             <select
               className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+              value={u.role}
+              title="Сменить роль"
+              onChange={(e) => {
+                const role = e.target.value as 'user' | 'publisher' | 'admin';
+                if (window.confirm(`Сменить роль ${u.email} на «${role}»?`)) {
+                  void act(() => api.adminSetRole(u.id, role))();
+                }
+              }}
+            >
+              <option value="user">user</option>
+              <option value="publisher">publisher</option>
+              <option value="admin">admin</option>
+            </select>
+            <select
+              className="h-8 rounded-md border border-input bg-background px-2 text-xs"
               value={u.subscription.status === 'active' ? (u.subscription.plan_code ?? u.plan_code ?? 'free') : 'free'}
               title="Сменить тариф (даты подписки не меняются)"
               onChange={(e) => void act(() => api.adminSetPlan(u.id, e.target.value))()}

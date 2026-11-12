@@ -2104,6 +2104,27 @@ pub async fn admin_grant_days(
         .map_err(|e| e.to_string())
 }
 
+/// `POST /api/admin/users/:id/set-role` — promote/demote roles from the
+/// admin UI (spec §5.2: bootstrap still uses tools/grant-admin.mjs for
+/// the very first admin).
+#[tauri::command]
+pub async fn admin_set_role(
+    user_id: i64,
+    role: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    state
+        .api
+        .admin_json(
+            Method::POST,
+            &format!("/api/admin/users/{user_id}/set-role"),
+            &token(&state).await?,
+            Some(json!({"role": role})),
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn admin_reset_hwid(user_id: i64, state: State<'_, AppState>) -> Result<Value, String> {
     state

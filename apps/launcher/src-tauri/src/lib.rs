@@ -489,6 +489,7 @@ pub fn run() {
             commands::admin_grant_days,
             commands::admin_reset_hwid,
             commands::admin_set_plan,
+            commands::admin_set_role,
             commands::admin_list_plans,
             commands::admin_create_plan,
             commands::admin_update_plan,

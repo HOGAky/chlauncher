@@ -521,6 +521,8 @@ export const adminResetHwid = (userId: number) =>
   cmd<{ ok: boolean }>('admin_reset_hwid', { userId });
 export const adminSetPlan = (userId: number, planCode: string) =>
   cmd<{ ok: boolean }>('admin_set_plan', { userId, planCode });
+export const adminSetRole = (userId: number, role: 'user' | 'publisher' | 'admin') =>
+  cmd<{ ok: boolean }>('admin_set_role', { userId, role });
 export const adminListPlans = () =>
   cmd<{ plans: Plan[] }>('admin_list_plans');
 export const adminCreatePlan = (plan: Record<string, unknown>) =>
