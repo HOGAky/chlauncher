@@ -62,6 +62,8 @@ function addScore(user, pts, team) {
   S.lastLeader = leader;
 }
 function spawnConfetti(team) {
+  // Cap concurrent particles — long victory streaks stay flat.
+  if (S.confetti.length > 400) S.confetti.splice(0, S.confetti.length - 400);
   for (let i = 0; i < 80; i++) {
     S.confetti.push({
       x: Math.random() * cv.width, y: -20 - Math.random() * 200,
@@ -192,6 +194,17 @@ async function main() {
   GameKit.watchSession(GAME, (status) => {
     document.getElementById('pause').style.display = status === 'paused' ? 'grid' : 'none';
     S.running = status === 'running' && !S.over;
+  });
+  GameKit.unloadReport(GAME, () => {
+    if (S.over || !S.cfg) return null;
+    const a = Math.round(S.score.A), b = Math.round(S.score.B);
+    return {
+      duration_s: Math.max(0, Math.round(S.cfg.round_sec - S.roundLeft)),
+      winner: (a === b ? 'draw' : a > b ? 'boy' : 'girl') + ' (partial)',
+      score: { boy: a, girl: b },
+      top: GameKit.leaderboard(Object.assign({}, S.supporters.A, S.supporters.B), 5),
+      stats: S.stats,
+    };
   });
   HUD.banners.push('BOY vs GIRL — выбирайте сторону: !boy / !girl', 'big');
   GameKit.loop(step, draw);

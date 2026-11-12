@@ -72,6 +72,8 @@ function spawnEnemy(tier, edge) {
   const T = TIER[tier] || TIER.weak;
   const a = edge ?? Math.random() * Math.PI * 2;
   const dist = Math.max(cv.width, cv.height) * 0.6;
+  // Hard cap — a gift flood can't OOM the page; drops land at the edge.
+  if (S.enemies.length >= 140) return;
   S.enemies.push({
     x: cv.width / 2 + Math.cos(a) * dist,
     y: cv.height / 2 + Math.sin(a) * dist,
@@ -95,6 +97,7 @@ function meteor(user) {
   }
 }
 function particle(x, y, col, n = 8) {
+  if (S.particles.length > 300) S.particles.splice(0, S.particles.length - 300);
   for (let i = 0; i < n; i++) {
     const a = Math.random() * 6.28, s = 40 + Math.random() * 120;
     S.particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: 0.5 + Math.random() * 0.4, col });
@@ -205,7 +208,7 @@ function step(dt) {
       const shots = w.spread || 1;
       for (let i = 0; i < shots; i++) {
         const a = Math.atan2(best.y - P.y, best.x - P.x) + (Math.random() - 0.5) * 0.25 * shots;
-        S.bullets.push({ x: P.x, y: P.y, vx: Math.cos(a) * w.speed, vy: Math.sin(a) * w.speed, dmg: w.dmg * (hasMod('dmg') ? 2 : 1), splash: w.splash || 0, life: 1.2 });
+        if (S.bullets.length < 200) S.bullets.push({ x: P.x, y: P.y, vx: Math.cos(a) * w.speed, vy: Math.sin(a) * w.speed, dmg: w.dmg * (hasMod('dmg') ? 2 : 1), splash: w.splash || 0, life: 1.2 });
       }
       P.cd = w.rate;
     }
@@ -310,6 +313,15 @@ async function main() {
   GameKit.watchSession(GAME, (status) => {
     document.getElementById('pause').style.display = status === 'paused' ? 'grid' : 'none';
     S.running = status === 'running' && !S.over;
+  });
+  GameKit.unloadReport(GAME, () => {
+    if (S.over || !S.cfg) return null;
+    return {
+      duration_s: Math.max(0, Math.round(S.cfg.round_sec - S.roundLeft)),
+      winner: 'interrupted', score: S.score, wave: S.wave,
+      top: GameKit.leaderboard(S.supporters, 5),
+      stats: S.stats,
+    };
   });
   HUD.banners.push('SURVIVE THE HORDE — кликните окно и играйте WASD!', 'big');
   GameKit.loop(step, draw);

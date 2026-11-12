@@ -1539,6 +1539,15 @@ pub async fn open_overlay_window(
     if chroma {
         url.push_str("&bg=ff00ff");
     }
+    // §12.1 free-tier watermark: enforced server-side so the flag can't
+    // be stripped by hand-editing the capture URL. A plan that gates
+    // games (allow-list smaller than the catalogue) gets `wm=1`.
+    if page.starts_with("overlay/game/") {
+        let ent = state.usage.entitlements().await;
+        if crate::builtin_games::allowed_games(&ent).len() < crate::builtin_games::GAMES.len() {
+            url.push_str("&wm=1");
+        }
+    }
     if let Some(w) = app.get_webview_window(&label) {
         // Re-opening a live window: navigate to the freshest URL (token
         // or chroma mode may have changed since it was created), keep its

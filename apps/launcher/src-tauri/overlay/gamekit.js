@@ -12,7 +12,9 @@
  */
 'use strict';
 (function () {
-  const TOKEN = new URLSearchParams(location.search).get('t') || '';
+  // `location` is absent under `node --test` — Engine is unit-tested headless.
+  const QS = typeof location !== 'undefined' ? location.search : '';
+  const TOKEN = new URLSearchParams(QS).get('t') || '';
 
   // ---- transport --------------------------------------------------------
 
@@ -47,7 +49,8 @@
 
   // ---- trigger engine -----------------------------------------------------
 
-  const CMD_RE = /^!([a-zа-яё0-9_]+)/i;
+  // §4.2 — leading whitespace tolerated; capture excludes the bang.
+  const CMD_RE = /^\s*!([a-zа-яё0-9_]+)/i;
   const lc = (s) => String(s || '').toLowerCase();
 
   /**
@@ -70,6 +73,7 @@
       this.userCd = new Map();      // ruleIdx|user → ts
       this.userMin = new Map();     // user → {windowStart, count}
       this.ruleMin = new Map();     // ruleIdx → {windowStart, count}
+      this.seen = new Map();        // dedupe key → ts (10 s window)
       this.dropped = 0;
     }
 
@@ -82,7 +86,8 @@
         if (!want.includes(lc(ev.raw_name))) return false;
       }
       if (m.commands && m.commands.length) {
-        const cmd = (lc(ev.raw_name).match(CMD_RE) || [])[0];
+        const cm = lc(ev.raw_name).match(CMD_RE);
+        const cmd = cm ? '!' + cm[1] : null;
         if (!cmd || !m.commands.map(lc).includes(cmd)) return false;
       }
       if (m.min_coins && (ev.coins || 0) < m.min_coins) return false;
@@ -110,13 +115,33 @@
       if (cd > 0) this.ruleCd.set(ruleIdx, now);
       if (ucd > 0) this.userCd.set(uk, now);
       bucket.n++; this.userMin.set(ev.user, bucket);
-      if (mpm > 0) { rb.n++; this.ruleMin.set(this.ruleMin, rb); this.ruleMin.set(ruleIdx, rb); }
+      if (mpm > 0) { rb.n++; this.ruleMin.set(ruleIdx, rb); }
       return true;
+    }
+
+    /**
+     * Dedupes replays: a reconnect or WS re-deliver can re-send the same
+     * payload — we drop any (kind,user,name,coins,count) tuple already
+     * seen inside a sliding window. Entries expire with the window and
+     * the map is hard-capped so memory stays flat on long streams.
+     */
+    _dedupe(ev, now) {
+      const key = `${ev.event_kind}|${ev.user}|${ev.raw_name}|${ev.coins || 0}|${ev.count || 1}`;
+      const seen = this.seen.get(key);
+      if (seen !== undefined && now - seen < 10000) return true;
+      this.seen.set(key, now);
+      if (this.seen.size > 4096) {
+        // Drop the oldest quarter — Map iterates in insertion order.
+        let n = 1024;
+        for (const k of this.seen.keys()) { this.seen.delete(k); if (--n <= 0) break; }
+      }
+      return false;
     }
 
     /** Feeds a normalized RawStreamEvent → enqueues actions. */
     feed(ev) {
       const now = Date.now();
+      if (this._dedupe(ev, now)) return;
       for (let i = 0; i < this.rules.length; i++) {
         const r = this.rules[i];
         if (!r || !this._match(r, ev)) continue;
@@ -166,10 +191,11 @@
     }
   }
 
-  /** Stacked center banners; auto-expire. */
+  /** Stacked center banners; auto-expire, queue capped at 8. */
   class Banners {
     constructor(root) { this.root = root; this.q = []; this.showing = null; }
     push(text, cls) {
+      if (this.q.length >= 8) this.q.shift();   // flood: drop oldest, keep latest
       this.q.push({ text, cls });
       this._next();
     }
@@ -264,12 +290,54 @@
     }
   }
 
-  /** Standard page chrome: connection dot, feed, banners. */
+  /**
+   * Sends a final session report as the capture window closes —
+   * `sendBeacon` survives page teardown where fetch() doesn't.
+   * `build()` returns the payload fields or null to skip (e.g. the
+   * round never started). Marks the entry `partial: true` so the
+   * ledger distinguishes it from a clean round end.
+   */
+  function unloadReport(gameId, build) {
+    addEventListener('pagehide', () => {
+      let body;
+      try {
+        const extra = build();
+        if (!extra) return;
+        body = JSON.stringify({
+          game_id: gameId,
+          ended_at: new Date().toISOString(),
+          partial: true,
+          ...extra,
+        });
+      } catch (_) { return; }
+      try {
+        navigator.sendBeacon(
+          `/games/report?t=${encodeURIComponent(TOKEN)}`,
+          new Blob([body], { type: 'application/json' })
+        );
+      } catch (_) { /* closing — nothing else to do */ }
+    });
+  }
+
+  /** Standard page chrome: connection dot, feed, banners, watermark. */
   function hud() {
     const wrap = el('div', 'hud', document.body);
     const dot = el('div', 'dot', wrap);
     const feedRoot = el('div', 'feed', document.body);
     const bannerRoot = el('div', 'banners', document.body);
+    // §12.1 — free tier keeps a watermark on captured game windows.
+    // Rust appends `&wm=1` to the URL when the plan gates games, so a
+    // free streamer can't strip it by editing the page URL themselves.
+    if (new URLSearchParams(QS).get('wm') === '1') {
+      const wm = el('div', '', document.body);
+      wm.textContent = 'chlauncher';
+      Object.assign(wm.style, {
+        position: 'fixed', bottom: '6px', left: '50%',
+        transform: 'translateX(-50%)', font: '600 13px system-ui',
+        color: 'rgba(255,255,255,.45)', letterSpacing: '1px',
+        textShadow: '0 1px 4px #000', pointerEvents: 'none',
+      });
+    }
     return {
       dot,
       feed: new Feed(feedRoot),
@@ -296,8 +364,14 @@
     return { pause: () => (running = false), resume: (now2) => { if (!running) { running = true; last = performance.now(); requestAnimationFrame(frame); } } };
   }
 
-  window.GameKit = {
+  const api = {
     TOKEN, connect, Engine, Feed, Banners, leaderboard, fmtTime, fmtNum,
-    fetchCfg, fetchTop, report, sessionState, watchSession, hud, loop, sfx, el,
+    fetchCfg, fetchTop, report, unloadReport, sessionState, watchSession,
+    hud, loop, sfx, el,
   };
+  if (typeof window !== 'undefined') window.GameKit = api;
+  // Headless unit tests (node --test) exercise Engine + helpers only.
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { Engine, Banners, Feed, leaderboard, fmtTime, fmtNum, CMD_RE };
+  }
 })();

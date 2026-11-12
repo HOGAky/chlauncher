@@ -59,6 +59,9 @@ function addBlock(user, n, team) {
       hue: team === 'A' ? 210 + Math.random() * 20 : 350 + Math.random() * 20,
     });
   }
+  // Long streams stay flat: beyond 800 blocks the tower fuses into a
+  // solid base (oldest blocks collapse instead of growing memory).
+  if (T.blocks.length > 800) T.blocks.splice(0, T.blocks.length - 800);
   T.supporters[user] = (T.supporters[user] || 0) + n;
   S.stats.events++;
   HUD.feed.push(`@${user}: +${n} блок → ${team === 'A' ? 'синие' : 'красные'}`);
@@ -196,6 +199,20 @@ async function main() {
     const paused = status === 'paused';
     document.getElementById('pause').style.display = paused ? 'grid' : 'none';
     S.running = status === 'running' && !S.over;
+  });
+  // Window closed mid-round → partial result still lands in the ledger.
+  GameKit.unloadReport(GAME, () => {
+    if (S.over || !S.cfg) return null;
+    const a = S.teams.A.blocks.length, b = S.teams.B.blocks.length;
+    const all = Object.assign({}, S.teams.A.supporters);
+    for (const [u, n] of Object.entries(S.teams.B.supporters)) all[u] = (all[u] || 0) + n;
+    return {
+      duration_s: Math.max(0, Math.round(S.cfg.round_sec - S.roundLeft)),
+      winner: a === b ? 'draw (partial)' : a > b ? 'A (partial)' : 'B (partial)',
+      score: { A: a, B: b },
+      top: GameKit.leaderboard(all, 5),
+      stats: S.stats,
+    };
   });
   HUD.banners.push('GIFT TOWER — стройте выше!', 'big');
   GameKit.loop(step, draw);

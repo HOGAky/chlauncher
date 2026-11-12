@@ -6,7 +6,7 @@
  * antiflood) and a JSON rules editor. Results ledger below.
  */
 import React, { useEffect, useState } from 'react';
-import { Gamepad2, Lock, MonitorPlay, Pause, Play, Square, Save, Trophy } from 'lucide-react';
+import { Gamepad2, Lock, MonitorPlay, Pause, Play, Square, Save, Trophy, Download, Upload } from 'lucide-react';
 import * as api from '../api';
 import type { BuiltinGameMeta, BuiltinGamesView, GameResult } from '../types';
 import { humanError } from '../errorMessages';
@@ -169,6 +169,28 @@ function GameCard({
     }
   };
 
+  // §11 — presets round-trip as plain JSON files between streamers.
+  const exportCfg = () => {
+    const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `chlauncher_${g.id}_preset.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  const importCfg = (f: File | null) => {
+    if (!f) return;
+    f.text()
+      .then((t) => {
+        const parsed = JSON.parse(t);
+        if (typeof parsed !== 'object' || parsed === null) throw new Error('not an object');
+        setCfg((c) => ({ ...c, ...parsed }));
+        if (Array.isArray(parsed.rules)) setRulesText(JSON.stringify(parsed.rules, null, 2));
+        setEdit(true);
+      })
+      .catch(() => onError('Невалидный JSON пресета'));
+  };
+
   return (
     <Card className={active ? 'border-primary/50' : ''}>
       <CardHeader>
@@ -254,16 +276,32 @@ function GameCard({
             </div>
           )}
           {!edit && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="mt-2"
-              disabled={saving}
-              onClick={save}
-              title="Сохранить раунд/звук/флаг включения без правки триггеров"
-            >
-              <Save size={14} className="mr-1" /> Сохранить
-            </Button>
+            <div className="mt-2 flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={saving}
+                onClick={save}
+                title="Сохранить раунд/звук/флаг включения без правки триггеров"
+              >
+                <Save size={14} className="mr-1" /> Сохранить
+              </Button>
+              <Button size="sm" variant="ghost" onClick={exportCfg} title="Скачать пресет JSON">
+                <Download size={14} />
+              </Button>
+              <label
+                className="inline-flex cursor-pointer items-center rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-secondary/60"
+                title="Загрузить пресет JSON"
+              >
+                <Upload size={14} />
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={(e) => importCfg(e.target.files?.[0] ?? null)}
+                />
+              </label>
+            </div>
           )}
         </div>
       </CardContent>
