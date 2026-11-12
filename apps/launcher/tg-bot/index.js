@@ -20,6 +20,17 @@
  * Env: TG_BOT_TOKEN, TG_BIND_SECRET, SERVER_URL (default 127.0.0.1:8787)
  */
 
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Hydrate from ./.env when present — real env vars still win, matching
+// the server's config behaviour (systemd EnvironmentFile / pm2 env).
+try {
+  process.loadEnvFile(path.join(path.dirname(fileURLToPath(import.meta.url)), '.env'));
+} catch {
+  /* no .env — rely on real environment */
+}
+
 const TOKEN = process.env.TG_BOT_TOKEN;
 const SECRET = process.env.TG_BIND_SECRET;
 const SERVER = (process.env.SERVER_URL || 'http://127.0.0.1:8787').replace(/\/+$/, '');
