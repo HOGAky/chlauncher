@@ -322,6 +322,46 @@ const MIGRATIONS = [
       ALTER TABLE games ADD COLUMN adapter_manifest TEXT NOT NULL DEFAULT '';
     `);
   },
+  // v8 → v9: Tribute (Telegram) billing provider. `tg_bindings` ties a
+  // chlauncher account to a Telegram user id — that id is the only stable
+  // identity Tribute webhooks carry. `billing_link_codes` holds one-shot
+  // deep-link codes the launcher hands to the user (`t.me/<bot>?start=<code>`)
+  // so our bind-bot can attach the Telegram id to the right account.
+  // `billing_events` is the provider webhook journal: every signed event
+  // lands here first (matched or not); unmatched ones replay automatically
+  // when the user binds their Telegram later.
+  (db) => {
+    db.exec(`
+      CREATE TABLE tg_bindings (
+        user_id           INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        telegram_user_id  INTEGER NOT NULL UNIQUE,
+        telegram_username TEXT NOT NULL DEFAULT '',
+        bound_at          TEXT NOT NULL
+      );
+
+      CREATE TABLE billing_link_codes (
+        code       TEXT PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        plan_code  TEXT,
+        expires_at TEXT NOT NULL,
+        used       INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE billing_events (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        provider         TEXT NOT NULL,
+        event            TEXT NOT NULL,
+        external_id      TEXT,
+        telegram_user_id INTEGER,
+        matched_user_id  INTEGER,
+        applied          INTEGER NOT NULL DEFAULT 0,
+        payload          TEXT NOT NULL DEFAULT '{}',
+        created_at       TEXT NOT NULL
+      );
+      CREATE INDEX idx_billing_events_tg ON billing_events(telegram_user_id, applied);
+    `);
+  },
 ];
 
 /** Runs all pending migrations in order. Idempotent via user_version. */

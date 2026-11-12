@@ -332,6 +332,52 @@ impl ApiClient {
         .await
     }
 
+    /// `GET /api/billing/providers` — which payment rails the server has
+    /// configured (yookassa / tribute + plan→product-link map).
+    pub async fn billing_providers(&self, token: &str) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::GET,
+            "/api/billing/providers",
+            Some(token),
+            None,
+        )
+        .await
+    }
+
+    /// `POST /api/tg/link-code` — one-shot Telegram bind code +
+    /// deep-link URL for the bind-bot.
+    pub async fn tg_link_code(&self, token: &str, plan_code: Option<&str>) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::POST,
+            "/api/tg/link-code",
+            Some(token),
+            Some(json!({"plan_code": plan_code})),
+        )
+        .await
+    }
+
+    /// `GET /api/tg/status` — the caller's Telegram binding.
+    pub async fn tg_status(&self, token: &str) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::GET,
+            "/api/tg/status",
+            Some(token),
+            None,
+        )
+        .await
+    }
+
+    /// `POST /api/tg/unbind` — detaches the caller's Telegram account.
+    pub async fn tg_unbind(&self, token: &str) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::POST,
+            "/api/tg/unbind",
+            Some(token),
+            Some(json!({})),
+        )
+        .await
+    }
+
     /// `POST /api/billing/mock-pay` — TEST endpoint, grants a plan period.
     pub async fn mock_pay(&self, token: &str, plan_code: &str) -> Result<Subscription, ApiError> {
         let v: Value = self

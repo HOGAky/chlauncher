@@ -32,6 +32,15 @@ try {
   /* no .env file — rely on real environment */
 }
 
+/** Parses an env JSON value, falling back on malformed input. */
+function safeJson(raw, fallback) {
+  try {
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 /**
  * Builds a normalized config from an env map (pure — safe to call in tests).
  * @param {Record<string, string|undefined>} [env]
@@ -97,6 +106,21 @@ export function loadConfig(env = process.env) {
     yookassaSecretKey: env.YOOKASSA_SECRET_KEY || '',
     /** Stripe signing secret — reserved for the v1.1 provider. */
     stripeWebhookSecret: env.STRIPE_WEBHOOK_SECRET || '',
+    /**
+     * Tribute (Telegram) provider. `TRIBUTE_API_KEY` signs webhook
+     * payloads (`trbt-signature` = HMAC-SHA256 of the raw body) and
+     * authorises api.tribute.tg calls. `TRIBUTE_BOT_URL` is the deep-link
+     * base of our bind-bot (`https://t.me/<bot>?start=`); a generated
+     * code is appended to it. `TRIBUTE_PRODUCT_LINKS` maps plan_code →
+     * the Tribute payment link shown after binding; `TRIBUTE_PLAN_MAP`
+     * maps Tribute `subscription_id` → our plan_code for webhooks.
+     * `TG_BIND_SECRET` authenticates the bind-bot on POST /api/tg/bind.
+     */
+    tributeApiKey: env.TRIBUTE_API_KEY || '',
+    tributeBotUrl: env.TRIBUTE_BOT_URL || '',
+    tributeProductLinks: safeJson(env.TRIBUTE_PRODUCT_LINKS, {}),
+    tributePlanMap: safeJson(env.TRIBUTE_PLAN_MAP, {}),
+    tgBindSecret: env.TG_BIND_SECRET || '',
     /** Escape hatch for dev/tunnels: trust webhook sources other than the
      *  official YooKassa subnets (Basic-auth check still applies). */
     webhookSkipIpCheck: env.BILLING_WEBHOOK_SKIP_IP_CHECK === '1',

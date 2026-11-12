@@ -285,6 +285,51 @@ pub async fn billing_checkout(
         .map_err(|e| e.to_string())
 }
 
+/// `GET /api/billing/providers` — configured payment rails + Tribute
+/// product links per plan.
+#[tauri::command]
+pub async fn billing_providers(state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .billing_providers(&token(&state).await?)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `POST /api/tg/link-code` → `{code, bot_url}` — the UI opens the
+/// deep link so the bind-bot can attach this account to a Telegram id.
+#[tauri::command]
+pub async fn tg_link_code(
+    plan_code: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    state
+        .api
+        .tg_link_code(&token(&state).await?, plan_code.as_deref())
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `GET /api/tg/status` → `{bound, telegram_username?}` for the UI.
+#[tauri::command]
+pub async fn tg_status(state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .tg_status(&token(&state).await?)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `POST /api/tg/unbind` — detaches Telegram from this account.
+#[tauri::command]
+pub async fn tg_unbind(state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .tg_unbind(&token(&state).await?)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// TEST billing: grants/extends one billing period of `plan_code`.
 #[tauri::command]
 pub async fn mock_pay(

@@ -89,6 +89,35 @@ export const getColdBillingReturn = async (): Promise<boolean> => {
   return !!urls?.some((u) => u.startsWith('chlauncher://billing'));
 };
 
+/** Which payment rails the server has configured + Tribute links per plan. */
+export interface BillingProviders {
+  yookassa: boolean;
+  tribute: boolean;
+  tribute_links: Record<string, string>;
+}
+export const getBillingProviders = () => cmd<BillingProviders>('billing_providers');
+
+/** Telegram binding state of the current account. */
+export interface TgStatus {
+  bound: boolean;
+  telegram_username: string | null;
+  bound_at: string | null;
+}
+export const getTgStatus = () => cmd<TgStatus>('tg_status');
+
+/**
+ * One-shot Telegram bind code → deep link for the bind-bot.
+ * The bot consumes the code, links the account to the Telegram id and
+ * (for a plan-scoped code) answers with the Tribute payment link.
+ */
+export const tgLinkCode = (planCode?: string) =>
+  cmd<{ code: string; bot_url: string; expires_at: string }>('tg_link_code', {
+    planCode: planCode ?? null,
+  });
+
+/** Detaches Telegram from the current account. */
+export const tgUnbind = () => cmd<{ ok: boolean }>('tg_unbind');
+
 /** TEST: pays for one billing period of the plan. */
 export const mockPay = (planCode?: string) =>
   cmd<Subscription>('mock_pay', { planCode: planCode ?? 'pro' });

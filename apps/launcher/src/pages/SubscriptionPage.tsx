@@ -5,7 +5,8 @@
  * per-plan checkout. Mock billing buttons stay dev-only.
  */
 import React, { useEffect, useMemo, useState } from 'react';
-import { CreditCard, ShieldAlert, FlaskConical, Check, X, Infinity as Inf } from 'lucide-react';
+import { CreditCard, ShieldAlert, FlaskConical, Check, X, Infinity as Inf, Send } from 'lucide-react';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import * as api from '../api';
 import { useApp } from '../App';
 import { Button } from '../components/ui/button';
@@ -49,12 +50,16 @@ export default function SubscriptionPage() {
   const [error, setError] = useState<string | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [ent, setEnt] = useState<EntitlementsResponse | null>(null);
+  const [providers, setProviders] = useState<api.BillingProviders | null>(null);
+  const [tg, setTg] = useState<api.TgStatus | null>(null);
   const active = subscription?.status === 'active';
   const currentPlan = ent?.plan.code ?? (active ? subscription?.plan_code ?? 'pro' : 'free');
 
   useEffect(() => {
     api.getPlans().then(setPlans).catch(() => setPlans([]));
     api.getEntitlements().then(setEnt).catch(() => setEnt(null));
+    api.getBillingProviders().then(setProviders).catch(() => setProviders(null));
+    api.getTgStatus().then(setTg).catch(() => setTg(null));
   }, [subscription?.status, subscription?.plan_code]);
 
   const earnLimit = ent?.entitlements.earn_limit_coins_month ?? null;
@@ -82,6 +87,25 @@ export default function SubscriptionPage() {
   const endDate = subscription?.current_period_end
     ? new Date(subscription.current_period_end)
     : null;
+
+  /**
+   * Telegram pay path: bound users go straight to the plan's Tribute
+   * product link; unbound users first get a one-shot bot deep link that
+   * attaches their Telegram id to this account (the bot replies with
+   * the payment link for `planCode`).
+   */
+  const payViaTelegram = (planCode: string) =>
+    act(async () => {
+      if (tg?.bound) {
+        const link = providers?.tribute_links?.[planCode];
+        if (!link) throw new Error('TRIBUTE_LINK_MISSING');
+        await openUrl(link);
+      } else {
+        const r = await api.tgLinkCode(planCode);
+        await openUrl(r.bot_url);
+      }
+      setTg(await api.getTgStatus().catch(() => tg));
+    });
 
   return (
     <div className="max-w-3xl flex flex-col gap-4">
@@ -194,6 +218,59 @@ export default function SubscriptionPage() {
         </CardContent>
       </Card>
 
+      {/* Telegram / Tribute payment card */}
+      {providers?.tribute && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Send size={16} /> Оплата в Telegram
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            {tg?.bound ? (
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm">
+                  Привязан аккаунт <b>@{tg.telegram_username || '—'}</b>. Оплата кнопкой
+                  «Telegram» у нужного плана продлит подписку автоматически.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={act(async () => {
+                    await api.tgUnbind();
+                    setTg(await api.getTgStatus().catch(() => null));
+                  })}
+                >
+                  Отвязать
+                </Button>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Оплата проходит через Telegram-бота (Tribute): карты и СБП. Сначала привяжите
+                Telegram-аккаунт — бот откроется по кнопке «Telegram» у плана, подтвердите
+                привязку и оплатите ссылкой из ответа бота.
+              </p>
+            )}
+            {!tg?.bound && (
+              <div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={act(async () => {
+                    const r = await api.tgLinkCode();
+                    await openUrl(r.bot_url);
+                  })}
+                >
+                  <Send size={14} /> Привязать Telegram
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* plan comparison cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {plans.map((p) => {
@@ -234,16 +311,31 @@ export default function SubscriptionPage() {
                     value={lim(e.earn_limit_coins_month)}
                   />
                 </ul>
-                {p.price_minor > 0 &&
-                  (isCurrent ? (
-                    <Button size="sm" variant="outline" disabled={busy} onClick={act(() => api.checkout(p.code))}>
-                      Продлить {p.title}
-                    </Button>
-                  ) : (
-                    <Button size="sm" disabled={busy} onClick={act(() => api.checkout(p.code))}>
-                      <CreditCard size={14} /> Выбрать {p.title}
-                    </Button>
-                  ))}
+                {p.price_minor > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    {providers?.yookassa !== false &&
+                      (isCurrent ? (
+                        <Button size="sm" variant="outline" disabled={busy} onClick={act(() => api.checkout(p.code))}>
+                          Продлить {p.title}
+                        </Button>
+                      ) : (
+                        <Button size="sm" disabled={busy} onClick={act(() => api.checkout(p.code))}>
+                          <CreditCard size={14} /> Выбрать {p.title}
+                        </Button>
+                      ))}
+                    {providers?.tribute && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        title="Оплата через Telegram-бота (карты, СБП)"
+                        onClick={() => payViaTelegram(p.code)()}
+                      >
+                        <Send size={13} /> Telegram
+                      </Button>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           );

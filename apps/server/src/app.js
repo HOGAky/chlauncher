@@ -24,6 +24,7 @@ import licenseRoutes from './routes/license.js';
 import publisherRoutes from './routes/publisher.js';
 import tiktokRoutes from './routes/tiktok.js';
 import plansRoutes, { entitlementsRoutes } from './routes/plans.js';
+import tributeRoutes, { tgRoutes } from './routes/tribute.js';
 import usageRoutes from './routes/usage.js';
 import mcRoutes from './routes/mc.js';
 
@@ -58,13 +59,17 @@ export async function buildApp(opts = {}) {
   });
 
   // The sign proxy needs the raw request body (the SDK sends JSON, but we
-  // forward it untouched). Everywhere else JSON keeps parsing normally.
+  // forward it untouched). The Tribute webhook keeps a raw copy for HMAC
+  // verification. Everywhere else JSON keeps parsing normally.
   app.addContentTypeParser(
     'application/json',
     { parseAs: 'buffer' },
     (req, body, done) => {
       if (req.raw.url?.startsWith('/api/tiktok-sign/')) {
         return done(null, body);
+      }
+      if (req.raw.url?.startsWith('/api/billing/tribute/webhook')) {
+        req.raw.rawBody = body;
       }
       try {
         done(null, body.length ? JSON.parse(body.toString('utf8')) : {});
@@ -114,6 +119,8 @@ export async function buildApp(opts = {}) {
   await app.register(usageRoutes, { prefix: '/api/usage', ...deps });
   await app.register(mcRoutes, { prefix: '/api/mc', ...deps });
   await app.register(billingRoutes, { prefix: '/api/billing', ...deps });
+  await app.register(tributeRoutes, { prefix: '/api/billing', ...deps });
+  await app.register(tgRoutes, { prefix: '/api/tg', ...deps });
   await app.register(gamesRoutes, { prefix: '/api/games', ...deps });
   await app.register(licenseRoutes, { prefix: '/api/license', ...deps });
   await app.register(publisherRoutes, { prefix: '/api/publisher', ...deps });
