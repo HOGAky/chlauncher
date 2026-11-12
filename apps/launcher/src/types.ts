@@ -26,6 +26,8 @@ export interface Entitlements {
   earn_limit_coins_month: number | null;
   paid_games: boolean;
   mc_premium_plugins: boolean;
+  /** Built-in game ids the plan may launch; absent = all games. */
+  interactive_games?: string[] | null;
 }
 
 /** Tariff plan row for the pricing table (`GET /api/plans`). */
@@ -618,4 +620,51 @@ export interface ShopItem {
 export interface PointsRow {
   user: string;
   points: number;
+}
+
+// --- Built-in interactive games (§7–§9) ---------------------------------------
+
+/** Per-game config — `rules` stays free-form JSON (page interprets it). */
+export interface BuiltinGameCfg {
+  enabled: boolean;
+  round_sec: number;
+  volume: number;
+  antiflood: {
+    max_actions_per_sec: number;
+    max_per_user_per_min: number;
+    queue_cap: number;
+  };
+  rules: unknown[];
+}
+
+export interface BuiltinGameMeta {
+  id: string;
+  title: string;
+  desc: string;
+  allowed: boolean;
+  cfg: BuiltinGameCfg;
+  overlay_path: string;
+}
+
+export interface GameSessionInfo {
+  game_id: string;
+  status: 'running' | 'paused';
+  started_at_ms: number;
+  paused_total_ms: number;
+  pause_began_ms: number;
+}
+
+export interface BuiltinGamesView {
+  games: BuiltinGameMeta[];
+  session: { active: GameSessionInfo | null };
+}
+
+export interface GameResult {
+  game_id: string;
+  ended_at: string;
+  duration_s?: number;
+  winner?: string;
+  score?: unknown;
+  top?: { user: string; score: number }[];
+  stats?: Record<string, unknown>;
 }

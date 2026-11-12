@@ -18,6 +18,7 @@
 // Modules are `pub` so integration tests under `tests/` can exercise the
 // internals (e.g. the game WS handshake) without the Tauri shell.
 pub mod api;
+pub mod builtin_games;
 pub mod commands;
 pub mod downloads;
 pub mod events;
@@ -98,6 +99,13 @@ pub fn run() {
             let settings = Arc::new(Mutex::new(SettingsStore::load(&data_dir)));
             let hub = Arc::new(EventHub::new());
             let (raw_tx, raw_rx) = mpsc::channel::<RawStreamEvent>(256);
+            // Raw-event fan-out for built-in interactive games: the
+            // mapper re-broadcasts every normalized event here and the
+            // overlay /ws "game" channel streams them to game pages.
+            // Capacity 512 absorbs bursts; Lagged receivers resync.
+            let game_events = broadcast::channel::<RawStreamEvent>(512).0;
+            // Built-in game sessions + results ledger (<data>/game_results.json).
+            let builtin = Arc::new(builtin_games::BuiltinGames::new(&data_dir));
 
             // Local services bind 127.0.0.1:0 — the OS picks free ports.
             // A bind failure is recorded (not fatal): the UI shows the
@@ -207,6 +215,8 @@ pub fn run() {
                 subathon.clone(),
                 queue.clone(),
                 hype.clone(),
+                game_events.clone(),
+                builtin.clone(),
             )) {
                 Ok((port, fell_back)) => {
                     if fell_back {
@@ -338,6 +348,7 @@ pub fn run() {
                 queue: queue.clone(),
                 hype: hype.clone(),
                 points: points.clone(),
+                games: builtin.clone(),
                 mc: mc.clone(),
                 adapter_key: adapter_key.clone(),
                 overlay_token: overlay_token.clone(),
@@ -361,6 +372,7 @@ pub fn run() {
                     queue.clone(),
                     hype.clone(),
                     points.clone(),
+                    game_events.clone(),
                 ));
             }
 
@@ -419,6 +431,14 @@ pub fn run() {
             commands::tg_link_code,
             commands::tg_status,
             commands::tg_unbind,
+            commands::builtin_games,
+            commands::game_start,
+            commands::game_pause,
+            commands::game_resume,
+            commands::game_stop,
+            commands::game_cfg,
+            commands::game_set_cfg,
+            commands::game_results,
             commands::mock_pay,
             commands::mock_expire,
             commands::get_plans,
@@ -664,9 +684,13 @@ async fn mapper_loop(
     queue: Arc<queue::ViewerQueue>,
     hype: Arc<hype::HypeTracker>,
     points: Arc<points::ViewerPoints>,
+    game_events: broadcast::Sender<RawStreamEvent>,
 ) {
     let mut cache: Option<MappingCache> = None;
     while let Some(raw) = raw_rx.recv().await {
+        // Built-in game pages get every raw event — gifts arrive already
+        // streak-deduplicated by the sidecar (repeatEnd only).
+        let _ = game_events.send(raw.clone());
         // Chat-to-speech sees every event — gifter tracking, comment and
         // gift reading per `read_*` modes (§6.2).
         tts.note_event(&raw).await;

@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>Gift Tower</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:transparent;font-family:system-ui,sans-serif;color:#fff}
+  canvas{position:fixed;inset:0;width:100%;height:100%}
+  .hud{position:fixed;top:10px;right:10px}.dot{width:10px;height:10px;border-radius:50%;background:#3f8}
+  .dot[data-s=reconnecting]{background:#f80}
+  #timer{position:fixed;top:14px;left:50%;transform:translateX(-50%);font:700 34px/1 monospace;text-shadow:0 2px 8px #000}
+  #teamA,#teamB{position:fixed;top:14px;font:700 20px/1 monospace;text-shadow:0 2px 6px #000}
+  #teamA{left:18%;color:#7db4ff}#teamB{right:18%;color:#ff8d8d}
+  .feed{position:fixed;left:12px;bottom:12px;font:13px/1.5 monospace;text-shadow:0 1px 4px #000;opacity:.9}
+  .banners{position:fixed;top:22%;left:50%;transform:translateX(-50%);text-align:center;pointer-events:none}
+  .banner{font:800 40px/1.2 system-ui;text-shadow:0 3px 14px #000;animation:pop .3s}
+  .banner.big{color:#ffd34d}.banner.destroy{color:#ff6b6b}
+  #board{position:fixed;top:56px;right:12px;font:12px/1.6 monospace;text-align:right;text-shadow:0 1px 4px #000;opacity:.85}
+  #event{position:fixed;bottom:40px;left:50%;transform:translateX(-50%);font:600 15px/1 system-ui;color:#ffd34d;text-shadow:0 2px 6px #000;opacity:0;transition:opacity .3s}
+  @keyframes pop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+  #pause{position:fixed;inset:0;display:none;place-items:center;font:800 46px/1 system-ui;background:rgba(0,0,0,.5);text-shadow:0 3px 10px #000}
+</style></head><body>
+<canvas id="cv"></canvas>
+<div id="timer">05:00</div>
+<div id="teamA">СИНИЕ: 0</div><div id="teamB">КРАСНЫЕ: 0</div>
+<div id="board"></div><div id="event"></div><div id="pause">ПАУЗА</div>
+<script>
+'use strict';
+// --- Gift Tower: viewers stack blocks via gifts; random world events,
+//     enemy-tower destruction, winner by height at the round end. ---
+const BG = new URLSearchParams(location.search).get('bg');
+if (BG) document.body.style.background = '#' + BG;
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let HUD = null;
+const GAME = 'gift_tower';
+
+const S = {
+  cfg: null, eng: null, running: true, over: false,
+  teams: { A: { blocks: [], boost: 0, supporters: {} }, B: { blocks: [], boost: 0, supporters: {} } },
+  teamOf: {},           // user → 'A'|'B'
+  nextAuto: 'A',
+  roundLeft: 0, worldEvtAt: 0, worldEvt: null, frozenUntil: 0,
+  wind: 0, stats: { events: 0, gifts: 0, coins: 0 },
+};
+
+function teamOf(user) {
+  let t = S.teamOf[user];
+  if (!t) { t = S.nextAuto; S.nextAuto = t === 'A' ? 'B' : 'A'; S.teamOf[user] = t; }
+  return t;
+}
+const enemyOf = (t) => (t === 'A' ? 'B' : 'A');
+
+function addBlock(user, n, team) {
+  if (Date.now() < S.frozenUntil) return;
+  const T = S.teams[team];
+  if (T.boost > 0) { n *= 2; T.boost--; }
+  for (let i = 0; i < n; i++) {
+    T.blocks.push({
+      h: 16 + Math.random() * 10,
+      w: 60 + Math.random() * 26,
+      wob: Math.random() * Math.PI * 2,
+      hue: team === 'A' ? 210 + Math.random() * 20 : 350 + Math.random() * 20,
+    });
+  }
+  T.supporters[user] = (T.supporters[user] || 0) + n;
+  S.stats.events++;
+  HUD.feed.push(`@${user}: +${n} блок → ${team === 'A' ? 'синие' : 'красные'}`);
+  GameKit.sfx('add', S.cfg.volume);
+}
+function destroy(team, lo, hi, user) {
+  const T = S.teams[team];
+  const n = Math.min(T.blocks.length, lo + Math.floor(Math.random() * (hi - lo + 1)));
+  T.blocks.splice(Math.max(0, T.blocks.length - Math.ceil(n * Math.random()) - 1), n);
+  HUD.banners.push(`@${user} разрушает ${n} блок. у ${team === 'A' ? 'синих' : 'красных'}!`, 'destroy');
+  GameKit.sfx('hit', S.cfg.volume);
+  S.stats.events++;
+}
+
+function applyAction(a) {
+  const u = a._user || 'anon';
+  switch (a.type) {
+    case 'add_block': {
+      const n = Math.max(1, Math.round((a.value || 1) * (a.per ? (a._count || 1) / a.per : 1)));
+      if (n < 1) break;
+      addBlock(u, n, teamOf(u));
+      break;
+    }
+    case 'destroy': destroy(enemyOf(teamOf(u)), a.min || 1, a.max || 3, u); break;
+    case 'join_team': {
+      const cmd = (a._gift || '').toLowerCase();
+      const want = cmd.includes('red') ? 'B' : cmd.includes('blue') ? 'A' : null;
+      if (want) { S.teamOf[u] = want; HUD.feed.push(`@${u} → ${want === 'A' ? 'синие' : 'красные'}`); }
+      break;
+    }
+  }
+}
+
+function worldEvent() {
+  const kinds = ['wind', 'quake', 'boost', 'freeze'];
+  const k = kinds[Math.floor(Math.random() * kinds.length)];
+  const t = ['A', 'B'][Math.floor(Math.random() * 2)];
+  const el = document.getElementById('event');
+  const show = (txt) => { el.textContent = '⚡ ' + txt; el.style.opacity = 1; setTimeout(() => (el.style.opacity = 0), 4000); };
+  if (k === 'wind') { S.wind = 14; show('ветер! башни качаются'); }
+  if (k === 'quake') { destroy(t, 1, 2, 'землетрясение'); show('землетрясение!'); }
+  if (k === 'boost') { S.teams[t].boost = 3; show(`ускорение: ${t === 'A' ? 'синие' : 'красные'} ×2 на 3 блока`); }
+  if (k === 'freeze') { S.frozenUntil = Date.now() + 10000; show('заморозка на 10 сек — блоки не ставятся'); }
+  GameKit.sfx('warn', S.cfg.volume);
+}
+
+function endRound() {
+  if (S.over) return;
+  S.over = true; S.running = false;
+  const a = S.teams.A.blocks.length, b = S.teams.B.blocks.length;
+  const win = a === b ? 'НИЧЬЯ' : a > b ? 'СИНИЕ ПОБЕДИЛИ' : 'КРАСНЫЕ ПОБЕДИЛИ';
+  HUD.banners.push(`🏆 ${win} (${a} : ${b})`, 'big');
+  GameKit.sfx('win', S.cfg.volume);
+  const all = Object.assign({}, S.teams.A.supporters);
+  for (const [u, n] of Object.entries(S.teams.B.supporters)) all[u] = (all[u] || 0) + n;
+  GameKit.report({
+    game_id: GAME, ended_at: new Date().toISOString(),
+    duration_s: S.cfg.round_sec, winner: win,
+    score: { A: a, B: b },
+    top: GameKit.leaderboard(all, 5),
+    stats: S.stats,
+  });
+}
+
+function resize() { cv.width = innerWidth; cv.height = innerHeight; }
+addEventListener('resize', resize); resize();
+
+let drift = 0;
+function step(dt) {
+  if (!S.running) return;
+  for (const a of S.eng.pump()) applyAction(a);
+  S.roundLeft -= dt;
+  S.worldEvtAt -= dt;
+  S.wind = Math.max(0, S.wind - dt * 6);
+  drift += dt;
+  if (S.worldEvtAt <= 0) { worldEvent(); S.worldEvtAt = 30 + Math.random() * 30; }
+  if (S.roundLeft <= 0) endRound();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  const groundY = cv.height - 60;
+  const sway = Math.sin(drift * 2) * S.wind;
+  // ground
+  ctx.fillStyle = 'rgba(0,0,0,.35)';
+  ctx.fillRect(0, groundY, cv.width, 4);
+  for (const [team, cx] of [['A', cv.width * 0.3], ['B', cv.width * 0.7]]) {
+    const T = S.teams[team];
+    let y = groundY;
+    const lean = Math.min(30, T.blocks.length * 0.3);
+    T.blocks.forEach((b, i) => {
+      y -= b.h;
+      const wob = Math.sin(drift * 2 + b.wob) * (S.wind + i * lean * 0.05);
+      ctx.save();
+      ctx.translate(cx + wob + sway * (i / 60), y);
+      ctx.fillStyle = `hsl(${b.hue} 70% 55% / .95)`;
+      ctx.strokeStyle = 'rgba(0,0,0,.5)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(-b.w / 2, 0, b.w, b.h - 2, 4);
+      ctx.fill(); ctx.stroke();
+      ctx.restore();
+    });
+    // crown marker
+    if (T.blocks.length) {
+      ctx.fillStyle = '#ffd34d';
+      ctx.font = '16px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText('👑', cx + sway, y - 6);
+    }
+  }
+  document.getElementById('teamA').textContent = `СИНИЕ: ${S.teams.A.blocks.length}`;
+  document.getElementById('teamB').textContent = `КРАСНЫЕ: ${S.teams.B.blocks.length}`;
+  document.getElementById('timer').textContent = GameKit.fmtTime(S.roundLeft);
+  const all = Object.assign({}, S.teams.A.supporters);
+  for (const [u, n] of Object.entries(S.teams.B.supporters)) all[u] = (all[u] || 0) + n;
+  document.getElementById('board').innerHTML =
+    GameKit.leaderboard(all, 5)
+      .map((r, i) => `${i + 1}. ${r.user} — ${r.score}`)
+      .join('<br>');
+}
+
+async function main() {
+  HUD = GameKit.hud();
+  const { cfg } = await GameKit.fetchCfg(GAME);
+  S.cfg = cfg;
+  S.eng = new GameKit.Engine(cfg);
+  S.roundLeft = cfg.round_sec || 300;
+  S.worldEvtAt = 20 + Math.random() * 20;
+  GameKit.connect(['game'], (ev) => {
+    if (ev.event_kind === 'gift') { S.stats.gifts++; S.stats.coins += ev.coins || 0; }
+    S.eng.feed(ev);
+  }, (s) => HUD.setStatus(s));
+  GameKit.watchSession(GAME, (status) => {
+    const paused = status === 'paused';
+    document.getElementById('pause').style.display = paused ? 'grid' : 'none';
+    S.running = status === 'running' && !S.over;
+  });
+  HUD.banners.push('GIFT TOWER — стройте выше!', 'big');
+  GameKit.loop(step, draw);
+}
+// gamekit loads after the page (token lives in our own ?t= param)
+{
+  const s = document.createElement('script');
+  s.src = '/gamekit.js?t=' + encodeURIComponent(new URLSearchParams(location.search).get('t') || '');
+  s.onload = () => main().catch((e) => {
+    document.body.innerHTML = `<pre style="color:#f66;padding:20px">${e}</pre>`;
+  });
+  s.onerror = () => { document.body.innerHTML = '<pre style="color:#f66;padding:20px">gamekit: 403 — проверьте токен</pre>'; };
+  document.head.appendChild(s);
+}
+</script></body></html>

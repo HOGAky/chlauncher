@@ -17,12 +17,13 @@ import MapperPage from '../pages/MapperPage';
 import SimulatorPage from '../pages/SimulatorPage';
 import MediaPage from '../pages/MediaPage';
 import OverlaysPage from '../pages/OverlaysPage';
+import GamesPage from '../pages/GamesPage';
 import TtsPage from '../pages/TtsPage';
 import SpinnerPage from '../pages/SpinnerPage';
 import MinecraftPage from '../pages/MinecraftPage';
 import AdminPage from '../pages/AdminPage';
 
-type Page = 'library' | 'subscription' | 'integrations' | 'mapper' | 'overlays' | 'tts' | 'spinner' | 'media' | 'minecraft' | 'simulator' | 'admin';
+type Page = 'library' | 'subscription' | 'integrations' | 'mapper' | 'overlays' | 'games' | 'tts' | 'spinner' | 'media' | 'minecraft' | 'simulator' | 'admin';
 
 const NAV: { id: Page; label: string; icon: React.ReactNode }[] = [
   { id: 'library', label: 'Библиотека', icon: <Gamepad2 size={16} /> },
@@ -30,6 +31,7 @@ const NAV: { id: Page; label: string; icon: React.ReactNode }[] = [
   { id: 'integrations', label: 'Интеграции', icon: <Radio size={16} /> },
   { id: 'mapper', label: 'Маппер триггеров', icon: <SlidersHorizontal size={16} /> },
   { id: 'overlays', label: 'Оверлеи', icon: <MonitorPlay size={16} /> },
+  { id: 'games', label: 'Игры LIVE', icon: <Gamepad2 size={16} /> },
   { id: 'tts', label: 'TTS', icon: <Mic size={16} /> },
   { id: 'spinner', label: 'Спиннер', icon: <Dices size={16} /> },
   { id: 'media', label: 'Медиатека', icon: <FolderOpen size={16} /> },
@@ -89,6 +91,7 @@ export default function MainScreen() {
           {page === 'integrations' && <IntegrationsPage />}
           {page === 'mapper' && <MapperPage />}
           {page === 'overlays' && <OverlaysPage />}
+          {page === 'games' && <GamesPage />}
           {page === 'tts' && <TtsPage />}
           {page === 'spinner' && <SpinnerPage />}
           {page === 'media' && <MediaPage />}

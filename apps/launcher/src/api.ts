@@ -18,6 +18,10 @@ import type {
   AdminUser,
   AuditEntry,
   Bootstrap,
+  BuiltinGameCfg,
+  BuiltinGamesView,
+  GameResult,
+  GameSessionInfo,
   FeedItem,
   ForwardStatus,
   LibraryEntry,
@@ -569,3 +573,19 @@ export const mcRemovePlugin = (file: string) =>
 // --- External game adapters (§10.1) -------------------------------------------
 export const adapterStatus = () => cmd<AdapterStatus>('adapter_status');
 export const regenerateAdapterKey = () => cmd<string>('regenerate_adapter_key');
+
+// --- Built-in interactive games (§7–§9) ----------------------------------------
+export const builtinGames = () => cmd<BuiltinGamesView>('builtin_games');
+export const gameStart = (gameId: string) =>
+  cmd<{ session: GameSessionInfo | null }>('game_start', { gameId });
+export const gamePause = () =>
+  cmd<{ session: GameSessionInfo | null }>('game_pause');
+export const gameResume = () =>
+  cmd<{ session: GameSessionInfo | null }>('game_resume');
+export const gameStop = () =>
+  cmd<{ session: GameSessionInfo | null }>('game_stop');
+export const gameCfg = (gameId: string) =>
+  cmd<{ cfg: BuiltinGameCfg }>('game_cfg', { gameId });
+export const gameSetCfg = (gameId: string, cfg: BuiltinGameCfg) =>
+  cmd<{ cfg: BuiltinGameCfg }>('game_set_cfg', { gameId, cfg });
+export const gameResults = () => cmd<{ results: GameResult[] }>('game_results');

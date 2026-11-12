@@ -27,8 +27,8 @@ use axum::{
     },
     http::StatusCode,
     response::{Html, IntoResponse, Response},
-    routing::get,
-    Router,
+    routing::{get, post},
+    Json, Router,
 };
 use futures_util::{SinkExt, StreamExt};
 use serde::Serialize;
@@ -49,6 +49,8 @@ const CH_PRESET: &str = "preset";
 const CH_SPINNER: &str = "spinner";
 const CH_TTS: &str = "tts";
 const CH_PROGRESS: &str = "progress";
+/// Raw ingest events for built-in game pages (`/overlay/game/<id>`).
+const CH_GAME: &str = "game";
 
 /// Maps an overlay frame to its channel name.
 fn frame_channel(f: &OverlayFrame) -> &'static str {
@@ -95,6 +97,11 @@ struct OverlayState {
     queue: Arc<crate::queue::ViewerQueue>,
     /// Hype meter for `/hype.json` + `/overlay/hype`.
     hype: Arc<crate::hype::HypeTracker>,
+    /// Raw ingest events re-broadcast by the mapper — the `game` WS
+    /// channel streams them to built-in game pages.
+    game_events: broadcast::Sender<crate::types::RawStreamEvent>,
+    /// Built-in game sessions/results — `/games/state.json` + `/games/report`.
+    games: Arc<crate::builtin_games::BuiltinGames>,
 }
 
 /// Query-param extractor shared by all guarded routes.
@@ -269,6 +276,8 @@ pub async fn start_overlay_server(
     subathon: Arc<crate::subathon::Subathon>,
     queue: Arc<crate::queue::ViewerQueue>,
     hype: Arc<crate::hype::HypeTracker>,
+    game_events: broadcast::Sender<crate::types::RawStreamEvent>,
+    games: Arc<crate::builtin_games::BuiltinGames>,
 ) -> std::io::Result<(u16, bool)> {
     let state = OverlayState {
         hub,
@@ -284,6 +293,8 @@ pub async fn start_overlay_server(
         subathon,
         queue,
         hype,
+        game_events,
+        games,
     };
 
     // Recorder: remember the last frame per channel for late joiners.
@@ -319,6 +330,20 @@ pub async fn start_overlay_server(
         .route("/overlay/subathon", get(page_route(SUBATHON_HTML)))
         .route("/overlay/queue", get(page_route(QUEUE_HTML)))
         .route("/overlay/hype", get(page_route(HYPE_HTML)))
+        // Built-in interactive games — one token-guarded page per id.
+        .route("/overlay/game/gift_tower", get(page_route(GIFT_TOWER_HTML)))
+        .route(
+            "/overlay/game/boy_vs_girl",
+            get(page_route(BOY_VS_GIRL_HTML)),
+        )
+        .route(
+            "/overlay/game/survive_horde",
+            get(page_route(SURVIVE_HORDE_HTML)),
+        )
+        .route("/gamekit.js", get(serve_gamekit))
+        .route("/games/cfg/:id", get(serve_game_cfg))
+        .route("/games/state.json", get(serve_game_state))
+        .route("/games/report", post(serve_game_report))
         .route("/top.json", get(serve_top))
         .route("/goals.json", get(serve_goals))
         .route("/poll.json", get(serve_poll))
@@ -471,6 +496,80 @@ async fn serve_hype(
     axum::Json(st.hype.status().await).into_response()
 }
 
+/// `/gamekit.js` — shared runtime for built-in game pages (WS client,
+/// trigger engine, antiflood, HUD). Served with a JS mime so pages can
+/// `<script src>` it directly.
+async fn serve_gamekit(
+    Query(q): Query<HashMap<String, String>>,
+    State(st): State<OverlayState>,
+) -> Response {
+    if !token_ok(q.get("t").map(String::as_str), &st.token) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    (
+        [("content-type", "text/javascript; charset=utf-8")],
+        GAMEKIT_JS,
+    )
+        .into_response()
+}
+
+/// `/games/cfg/:id` — per-game cfg (seeded on first read) + session
+/// status so a freshly opened page lands mid-round correctly.
+async fn serve_game_cfg(
+    Path(id): Path<String>,
+    Query(q): Query<HashMap<String, String>>,
+    State(st): State<OverlayState>,
+) -> Response {
+    if !token_ok(q.get("t").map(String::as_str), &st.token) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    if crate::builtin_games::find(&id).is_none() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let cfg = {
+        let mut s = st.settings.lock().await;
+        crate::builtin_games::cfg_for(&mut s, &id)
+    };
+    Json(serde_json::json!({
+        "game_id": id,
+        "cfg": cfg,
+        "session": st.games.status().active,
+    }))
+    .into_response()
+}
+
+/// POST `/games/report` — the page reports a finished round; appended
+/// to the bounded results ledger (token via `?t=`).
+async fn serve_game_report(
+    Query(q): Query<HashMap<String, String>>,
+    State(st): State<OverlayState>,
+    Json(body): Json<serde_json::Value>,
+) -> Response {
+    if !token_ok(q.get("t").map(String::as_str), &st.token) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let game_id = body["game_id"].as_str().unwrap_or("");
+    if crate::builtin_games::find(game_id).is_none() {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+    match st.games.record_result(body) {
+        Ok(()) => StatusCode::OK.into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// `/games/state.json` — session snapshot for late-joining pages and
+/// the Games page status badge.
+async fn serve_game_state(
+    Query(q): Query<HashMap<String, String>>,
+    State(st): State<OverlayState>,
+) -> Response {
+    if !token_ok(q.get("t").map(String::as_str), &st.token) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    Json(st.games.status()).into_response()
+}
+
 /// `/media/:id` — media-library file with byte-range support (§4.1:
 /// video in a Browser Source won't seek — and sometimes won't play —
 /// without Range). The id must be a 32-hex index row; paths never come
@@ -577,6 +676,7 @@ async fn overlay_ws(socket: WebSocket, st: OverlayState) {
     let (mut tx, mut rx) = socket.split();
     let mut events = st.hub.tx.subscribe();
     let mut frames = st.frames.subscribe();
+    let mut game_events = st.game_events.subscribe();
     // `None` = legacy (all event traffic); Some(set) = subscribed channels.
     let mut channels: Option<HashSet<String>> = None;
 
@@ -614,6 +714,21 @@ async fn overlay_ws(socket: WebSocket, st: OverlayState) {
                         let Some(set) = &channels else { continue }; // legacy: no frames
                         if !set.contains(ch) { continue; }
                         let text = serde_json::to_string(&frame).unwrap_or_default();
+                        if !send(&mut tx, text).await { break; }
+                    }
+                    Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(_) => break,
+                }
+            }
+            gev = game_events.recv() => {
+                match gev {
+                    Ok(raw) => {
+                        let Some(set) = &channels else { continue }; // game pages only
+                        if !set.contains(CH_GAME) { continue; }
+                        let text = serde_json::json!({
+                            "type": "game_event",
+                            "event": raw,
+                        }).to_string();
                         if !send(&mut tx, text).await { break; }
                     }
                     Err(broadcast::error::RecvError::Lagged(_)) => continue,
@@ -688,6 +803,10 @@ const QUEUE_HTML: &str = include_str!("../overlay/queue.html");
 const HYPE_HTML: &str = include_str!("../overlay/hype.html");
 const SPINNER_HTML: &str = include_str!("../overlay/spinner.html");
 const TTS_HTML: &str = include_str!("../overlay/tts.html");
+const GIFT_TOWER_HTML: &str = include_str!("../overlay/gift_tower.html");
+const BOY_VS_GIRL_HTML: &str = include_str!("../overlay/boy_vs_girl.html");
+const SURVIVE_HORDE_HTML: &str = include_str!("../overlay/survive_horde.html");
+const GAMEKIT_JS: &str = include_str!("../overlay/gamekit.js");
 
 #[cfg(test)]
 mod tests {

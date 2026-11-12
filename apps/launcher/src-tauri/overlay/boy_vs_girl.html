@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>Boy vs Girl</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:transparent;font-family:system-ui,sans-serif;color:#fff}
+  canvas{position:fixed;inset:0;width:100%;height:100%}
+  .hud{position:fixed;top:10px;right:10px}.dot{width:10px;height:10px;border-radius:50%;background:#3f8}
+  .dot[data-s=reconnecting]{background:#f80}
+  #timer{position:fixed;top:14px;left:50%;transform:translateX(-50%);font:700 34px/1 monospace;text-shadow:0 2px 8px #000}
+  #power{position:fixed;top:52px;left:50%;transform:translateX(-50%);font:700 16px/1 monospace;color:#ffd34d;text-shadow:0 2px 6px #000;opacity:0}
+  #lblA,#lblB{position:fixed;top:60px;font:800 22px/1 monospace;text-shadow:0 2px 6px #000}
+  #lblA{left:8%;color:#6ea8ff}#lblB{right:8%;color:#ff7dc8}
+  .feed{position:fixed;left:12px;bottom:12px;font:13px/1.5 monospace;text-shadow:0 1px 4px #000;opacity:.9}
+  .banners{position:fixed;top:22%;left:50%;transform:translateX(-50%);text-align:center;pointer-events:none}
+  .banner{font:800 40px/1.2 system-ui;text-shadow:0 3px 14px #000;animation:pop .3s}
+  .banner.big{color:#ffd34d}.banner.flip{color:#8ef}
+  #boardA{position:fixed;top:96px;left:8%;font:12px/1.6 monospace;text-shadow:0 1px 4px #000;opacity:.85}
+  #boardB{position:fixed;top:96px;right:8%;font:12px/1.6 monospace;text-align:right;text-shadow:0 1px 4px #000;opacity:.85}
+  #pause{position:fixed;inset:0;display:none;place-items:center;font:800 46px/1 system-ui;background:rgba(0,0,0,.5)}
+  @keyframes pop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+</style></head><body>
+<canvas id="cv"></canvas>
+<div id="timer">05:00</div><div id="power">⚡ POWER ROUND ×2</div>
+<div id="lblA">BOY: 0</div><div id="lblB">GIRL: 0</div>
+<div id="boardA"></div><div id="boardB"></div><div id="pause">ПАУЗА</div>
+<script>
+'use strict';
+// --- Boy vs Girl: two teams tug the power bar. Gifts/likes/comments
+//     score points; power round doubles effects every 60 s. ---
+const BG = new URLSearchParams(location.search).get('bg');
+if (BG) document.body.style.background = '#' + BG;
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let HUD = null;
+const GAME = 'boy_vs_girl';
+const TEAM = { A: 'boy', B: 'girl' };
+
+const S = {
+  cfg: null, eng: null, running: true, over: false,
+  score: { A: 0, B: 0 }, teamOf: {}, members: { A: 0, B: 0 },
+  supporters: { A: {}, B: {} },
+  powerUntil: 0, nextPowerAt: 60,
+  lastLeader: null, shake: 0, confetti: [],
+  stats: { events: 0, gifts: 0, coins: 0 },
+};
+
+function teamOf(user) {
+  let t = S.teamOf[user];
+  if (!t) { t = S.members.A <= S.members.B ? 'A' : 'B'; S.teamOf[user] = t; S.members[t]++; }
+  return t;
+}
+const mult = () => (Date.now() < S.powerUntil ? 2 : 1);
+
+function addScore(user, pts, team) {
+  pts = Math.round(pts * mult());
+  S.score[team] += pts;
+  S.supporters[team][user] = (S.supporters[team][user] || 0) + pts;
+  S.stats.events++;
+  const leader = S.score.A === S.score.B ? null : S.score.A > S.score.B ? 'A' : 'B';
+  if (leader && leader !== S.lastLeader && S.lastLeader !== null) {
+    HUD.banners.push(`${TEAM[leader].toUpperCase()} перехватывает лидерство!`, 'flip');
+    GameKit.sfx('warn', S.cfg.volume);
+  }
+  S.lastLeader = leader;
+}
+function spawnConfetti(team) {
+  for (let i = 0; i < 80; i++) {
+    S.confetti.push({
+      x: Math.random() * cv.width, y: -20 - Math.random() * 200,
+      vx: (Math.random() - 0.5) * 2, vy: 2 + Math.random() * 4,
+      rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.2,
+      col: team === 'A' ? '#6ea8ff' : '#ff7dc8', life: 5 + Math.random() * 3,
+    });
+  }
+}
+
+function applyAction(a) {
+  const u = a._user || 'anon';
+  const team = teamOf(u);
+  switch (a.type) {
+    case 'add_score': {
+      let pts = a.value || 0;
+      if (a.per_coin) pts = (a._coins || 0) * a.per_coin;
+      if (a.per) pts = ((a._count || 1) / a.per) * (a.value || 1);
+      if (pts >= 1) { addScore(u, pts, team); if (a.fx === 'big') { S.shake = 14; GameKit.sfx('big', S.cfg.volume); } else if (a.fx === 'hit') { S.shake = 8; GameKit.sfx('hit', S.cfg.volume); } }
+      break;
+    }
+    case 'join_team': {
+      const cmd = (a._gift || '').toLowerCase();
+      const want = cmd.includes('boy') ? 'A' : cmd.includes('girl') ? 'B' : null;
+      if (want && S.teamOf[u] !== want) {
+        if (S.teamOf[u]) S.members[S.teamOf[u]]--;
+        S.teamOf[u] = want; S.members[want]++;
+        HUD.feed.push(`@${u} → ${TEAM[want]}`);
+      }
+      break;
+    }
+    case 'attack': {
+      addScore(u, a.value || 5, team);
+      S.shake = Math.max(S.shake, 4);
+      HUD.feed.push(`@${u} атакует! −${a.value || 5} у соперника`);
+      const enemy = team === 'A' ? 'B' : 'A';
+      S.score[enemy] = Math.max(0, S.score[enemy] - (a.value || 5) / 2);
+      break;
+    }
+  }
+}
+
+function endRound() {
+  if (S.over) return;
+  S.over = true; S.running = false;
+  const a = Math.round(S.score.A), b = Math.round(S.score.B);
+  const win = a === b ? 'НИЧЬЯ' : a > b ? 'BOY WINS' : 'GIRL WINS';
+  HUD.banners.push(`🏆 ${win} — ${a} : ${b}`, 'big');
+  spawnConfetti(a > b ? 'A' : 'B');
+  GameKit.sfx('win', S.cfg.volume);
+  GameKit.report({
+    game_id: GAME, ended_at: new Date().toISOString(),
+    duration_s: S.cfg.round_sec, winner: win,
+    score: { boy: a, girl: b },
+    top: GameKit.leaderboard(Object.assign({}, S.supporters.A, S.supporters.B), 5),
+    stats: S.stats,
+  });
+}
+
+function resize() { cv.width = innerWidth; cv.height = innerHeight; }
+addEventListener('resize', resize); resize();
+
+function step(dt) {
+  if (!S.running) return;
+  for (const a of S.eng.pump()) applyAction(a);
+  S.roundLeft -= dt; S.nextPowerAt -= dt; S.shake = Math.max(0, S.shake - dt * 20);
+  if (S.nextPowerAt <= 0) {
+    S.nextPowerAt = 60;
+    S.powerUntil = Date.now() + 10000;
+    HUD.banners.push('⚡ POWER ROUND — очки ×2 на 10 сек!', 'flip');
+    GameKit.sfx('warn', S.cfg.volume);
+  }
+  document.getElementById('power').style.opacity = Date.now() < S.powerUntil ? 1 : 0;
+  for (const c of S.confetti) { c.x += c.vx; c.y += c.vy; c.rot += c.vr; c.life -= dt; }
+  S.confetti = S.confetti.filter((c) => c.life > 0 && c.y < cv.height + 30);
+  if (S.roundLeft <= 0) endRound();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  const cx = cv.width / 2, cy = cv.height * 0.45;
+  const total = S.score.A + S.score.B;
+  const p = total === 0 ? 0.5 : S.score.A / total;   // 0..1 → A share
+  const shx = (Math.random() - 0.5) * S.shake;
+  ctx.save(); ctx.translate(shx, 0);
+  // power bar
+  const W = cv.width * 0.8, H = 44, x0 = cx - W / 2, y0 = cy - H / 2;
+  ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(x0 - 4, y0 - 4, W + 8, H + 8);
+  const grad = ctx.createLinearGradient(x0, 0, x0 + W, 0);
+  grad.addColorStop(0, '#6ea8ff'); grad.addColorStop(0.5, '#888'); grad.addColorStop(1, '#ff7dc8');
+  ctx.fillStyle = grad; ctx.fillRect(x0, y0, W, H);
+  // marker
+  const mx = x0 + W * p;
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(mx - 3, y0 - 8, 6, H + 16);
+  // avatars as circles
+  ctx.font = '900 26px system-ui'; ctx.textAlign = 'center';
+  ctx.fillStyle = '#6ea8ff'; ctx.fillText('BOY', x0 - 70, cy + 9);
+  ctx.fillStyle = '#ff7dc8'; ctx.fillText('GIRL', x0 + W + 70, cy + 9);
+  ctx.fillStyle = '#fff'; ctx.font = '700 22px monospace';
+  ctx.fillText(GameKit.fmtNum(S.score.A), x0 - 70, cy + 38);
+  ctx.fillText(GameKit.fmtNum(S.score.B), x0 + W + 70, cy + 38);
+  ctx.restore();
+  // confetti
+  for (const c of S.confetti) {
+    ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.rot);
+    ctx.fillStyle = c.col; ctx.fillRect(-4, -2, 8, 4);
+    ctx.restore();
+  }
+  document.getElementById('lblA').textContent = `BOY: ${S.members.A} зрит.`;
+  document.getElementById('lblB').textContent = `GIRL: ${S.members.B} зрит.`;
+  document.getElementById('timer').textContent = GameKit.fmtTime(S.roundLeft);
+  document.getElementById('boardA').innerHTML =
+    GameKit.leaderboard(S.supporters.A, 3).map((r, i) => `${i + 1}. ${r.user} — ${GameKit.fmtNum(r.score)}`).join('<br>');
+  document.getElementById('boardB').innerHTML =
+    GameKit.leaderboard(S.supporters.B, 3).map((r, i) => `${i + 1}. ${r.user} — ${GameKit.fmtNum(r.score)}`).join('<br>');
+}
+
+async function main() {
+  HUD = GameKit.hud();
+  const { cfg } = await GameKit.fetchCfg(GAME);
+  S.cfg = cfg; S.eng = new GameKit.Engine(cfg);
+  S.roundLeft = cfg.round_sec || 300;
+  GameKit.connect(['game'], (ev) => {
+    if (ev.event_kind === 'gift') { S.stats.gifts++; S.stats.coins += ev.coins || 0; }
+    S.eng.feed(ev);
+  }, (s) => HUD.setStatus(s));
+  GameKit.watchSession(GAME, (status) => {
+    document.getElementById('pause').style.display = status === 'paused' ? 'grid' : 'none';
+    S.running = status === 'running' && !S.over;
+  });
+  HUD.banners.push('BOY vs GIRL — выбирайте сторону: !boy / !girl', 'big');
+  GameKit.loop(step, draw);
+}
+{
+  const s = document.createElement('script');
+  s.src = '/gamekit.js?t=' + encodeURIComponent(new URLSearchParams(location.search).get('t') || '');
+  s.onload = () => main().catch((e) => {
+    document.body.innerHTML = `<pre style="color:#f66;padding:20px">${e}</pre>`;
+  });
+  s.onerror = () => { document.body.innerHTML = '<pre style="color:#f66;padding:20px">gamekit: 403 — проверьте токен</pre>'; };
+  document.head.appendChild(s);
+}
+</script></body></html>

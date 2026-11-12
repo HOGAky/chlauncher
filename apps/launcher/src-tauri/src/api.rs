@@ -346,7 +346,11 @@ impl ApiClient {
 
     /// `POST /api/tg/link-code` — one-shot Telegram bind code +
     /// deep-link URL for the bind-bot.
-    pub async fn tg_link_code(&self, token: &str, plan_code: Option<&str>) -> Result<Value, ApiError> {
+    pub async fn tg_link_code(
+        &self,
+        token: &str,
+        plan_code: Option<&str>,
+    ) -> Result<Value, ApiError> {
         self.req(
             reqwest::Method::POST,
             "/api/tg/link-code",
@@ -358,13 +362,8 @@ impl ApiClient {
 
     /// `GET /api/tg/status` — the caller's Telegram binding.
     pub async fn tg_status(&self, token: &str) -> Result<Value, ApiError> {
-        self.req(
-            reqwest::Method::GET,
-            "/api/tg/status",
-            Some(token),
-            None,
-        )
-        .await
+        self.req(reqwest::Method::GET, "/api/tg/status", Some(token), None)
+            .await
     }
 
     /// `POST /api/tg/unbind` — detaches the caller's Telegram account.

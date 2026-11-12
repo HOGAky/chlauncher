@@ -374,6 +374,58 @@ impl Default for TimedEvent {
     }
 }
 
+/// Per-game antiflood knobs — enforced in the overlay page by gamekit.js
+/// (Rust only stores/transports them).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GameFloodCfg {
+    /// Global action budget per second across all rules.
+    pub max_per_sec: u32,
+    /// Per-viewer action cap per minute (comment commands etc.).
+    pub per_user_per_min: u32,
+    /// Pending-action queue; overflow drops visual-only effects first.
+    pub queue_cap: u32,
+}
+
+impl Default for GameFloodCfg {
+    fn default() -> Self {
+        Self {
+            max_per_sec: 20,
+            per_user_per_min: 30,
+            queue_cap: 500,
+        }
+    }
+}
+
+/// Built-in interactive game config. `rules` stays free-form JSON so the
+/// overlay game pages can grow their action vocabulary without a schema
+/// migration — the page validates and applies them via gamekit.js.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BuiltinGameCfg {
+    pub enabled: bool,
+    /// Round length in seconds (0 = endless until manual stop).
+    pub round_sec: u32,
+    /// Sound volume 0..1 for game SFX.
+    pub volume: f32,
+    #[serde(default)]
+    pub antiflood: GameFloodCfg,
+    /// Rule table: `[{event, match{names,min_coins,command}, action{type,...}}]`.
+    #[serde(default)]
+    pub rules: serde_json::Value,
+}
+
+/// Live session of a built-in game — what `/games/state.json` reports.
+#[derive(Debug, Clone, Serialize)]
+pub struct GameSessionInfo {
+    pub game_id: String,
+    /// `running` | `paused`
+    pub status: String,
+    pub started_at_ms: u64,
+    /// Accumulated paused milliseconds — pages subtract it from the timer.
+    pub paused_total_ms: u64,
+    /// When the last pause began (0 = not paused).
+    pub pause_began_ms: u64,
+}
+
 /// Viewer-points economy config — how chat activity converts to points.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -829,6 +881,10 @@ pub struct Entitlements {
     pub paid_games: bool,
     #[serde(default)]
     pub mc_premium_plugins: bool,
+    /// Built-in interactive games the plan may launch (game ids).
+    /// Missing/`None` = all games (offline fallback never degrades).
+    #[serde(default)]
+    pub interactive_games: Option<Vec<String>>,
 }
 
 /// Unrestricted map — used when the entitlements fetch fails (offline /
@@ -846,6 +902,7 @@ impl Default for Entitlements {
             earn_limit_coins_month: None,
             paid_games: true,
             mc_premium_plugins: true,
+            interactive_games: None,
         }
     }
 }

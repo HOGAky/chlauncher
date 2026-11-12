@@ -90,6 +90,11 @@ pub struct Settings {
     /// `!buy` shop items — see `points.rs`.
     #[serde(default)]
     pub shop_items: Vec<crate::types::ShopItem>,
+    /// Built-in interactive games keyed by id (`gift_tower`,
+    /// `boy_vs_girl`, `survive_horde`) — per-game rules/round/antiflood
+    /// config, applied by the overlay game pages via gamekit.js.
+    #[serde(default)]
+    pub builtin_games: HashMap<String, crate::types::BuiltinGameCfg>,
 }
 
 /// Managed Minecraft server configuration (parity spec §9.2–§9.3).

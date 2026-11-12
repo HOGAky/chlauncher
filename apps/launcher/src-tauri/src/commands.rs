@@ -70,6 +70,8 @@ pub struct AppState {
     pub hype: Arc<crate::hype::HypeTracker>,
     /// Viewer points + !buy shop - see `points.rs`.
     pub points: Arc<crate::points::ViewerPoints>,
+    /// Built-in interactive games — session registry + results ledger.
+    pub games: Arc<crate::builtin_games::BuiltinGames>,
     /// Managed Paper server lifecycle (§9).
     pub mc: Arc<crate::minecraft::MinecraftManager>,
     /// Shared adapter key for `hello_adapter` validation (§10.1).
@@ -328,6 +330,88 @@ pub async fn tg_unbind(state: State<'_, AppState>) -> Result<Value, String> {
         .tg_unbind(&token(&state).await?)
         .await
         .map_err(|e| e.to_string())
+}
+
+/// Built-in game catalogue + live session + per-game cfg + plan
+/// allow-list — the Games page renders straight from this.
+#[tauri::command]
+pub async fn builtin_games(state: State<'_, AppState>) -> Result<Value, String> {
+    let ent = state.usage.entitlements().await;
+    let mut s = state.settings.lock().await;
+    Ok(crate::builtin_games::catalog_view(
+        &mut s,
+        &ent,
+        &state.games,
+    ))
+}
+
+/// Starts a built-in game session. The plan's `interactive_games`
+/// allow-list is enforced here (client-side commands can't be trusted —
+/// see spec §12.2).
+#[tauri::command]
+pub async fn game_start(game_id: String, state: State<'_, AppState>) -> Result<Value, String> {
+    if crate::builtin_games::find(&game_id).is_none() {
+        return Err("UNKNOWN_GAME".into());
+    }
+    let ent = state.usage.entitlements().await;
+    let allowed = crate::builtin_games::allowed_games(&ent);
+    if !allowed.contains(&game_id.as_str()) {
+        return Err("SUBSCRIPTION_REQUIRED".into());
+    }
+    // Only one capture window per stream — starting a second game
+    // replaces the first session.
+    let session = state.games.start(&game_id);
+    Ok(json!({ "session": session }))
+}
+
+#[tauri::command]
+pub async fn game_pause(state: State<'_, AppState>) -> Result<Value, String> {
+    Ok(json!({ "session": state.games.pause() }))
+}
+
+#[tauri::command]
+pub async fn game_resume(state: State<'_, AppState>) -> Result<Value, String> {
+    Ok(json!({ "session": state.games.resume() }))
+}
+
+#[tauri::command]
+pub async fn game_stop(state: State<'_, AppState>) -> Result<Value, String> {
+    Ok(json!({ "session": state.games.stop() }))
+}
+
+/// Reads the per-game cfg blob (seeded with defaults on first call).
+#[tauri::command]
+pub async fn game_cfg(game_id: String, state: State<'_, AppState>) -> Result<Value, String> {
+    if crate::builtin_games::find(&game_id).is_none() {
+        return Err("UNKNOWN_GAME".into());
+    }
+    let mut s = state.settings.lock().await;
+    Ok(json!({ "cfg": crate::builtin_games::cfg_for(&mut s, &game_id) }))
+}
+
+/// Saves a streamer-edited cfg (rules table, round length, antiflood).
+#[tauri::command]
+pub async fn game_set_cfg(
+    game_id: String,
+    cfg: Value,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    if crate::builtin_games::find(&game_id).is_none() {
+        return Err("UNKNOWN_GAME".into());
+    }
+    crate::builtin_games::validate_cfg(&cfg)?;
+    let parsed: crate::types::BuiltinGameCfg =
+        serde_json::from_value(cfg).map_err(|e| e.to_string())?;
+    let mut s = state.settings.lock().await;
+    s.data.builtin_games.insert(game_id.clone(), parsed.clone());
+    let _ = s.save();
+    Ok(json!({ "cfg": parsed }))
+}
+
+/// Result history for the Games page (newest first).
+#[tauri::command]
+pub async fn game_results(state: State<'_, AppState>) -> Result<Value, String> {
+    Ok(crate::builtin_games::results_view(&state.games))
 }
 
 /// TEST billing: grants/extends one billing period of `plan_code`.
@@ -1423,6 +1507,9 @@ const OVERLAY_WINDOW_PAGES: &[&str] = &[
     "overlay/progress",
     "overlay/leaderboard",
     "overlay/goals",
+    "overlay/game/gift_tower",
+    "overlay/game/boy_vs_girl",
+    "overlay/game/survive_horde",
 ];
 
 /// Opens (or focuses) a transparent always-on-top window hosting one of
