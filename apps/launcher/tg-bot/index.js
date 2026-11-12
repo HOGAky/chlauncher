@@ -1,5 +1,5 @@
 /**
- * @file tools/tg-bot/index.js
+ * @file apps/launcher/tg-bot/index.js
  * chlauncher Telegram bind-bot — the link between a chlauncher account
  * and a Telegram user id (which Tribute webhooks identify payers by).
  *

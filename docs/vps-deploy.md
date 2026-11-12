@@ -117,13 +117,13 @@ API-ключу, ретраи идемпотентны).
 3. Там же укажите Webhook URL: `https://api.<домен>/api/billing/tribute/webhook`.
 4. Скопируйте ссылку оплаты каждого продукта → `TRIBUTE_PRODUCT_LINKS`.
 
-### Bind-бот (BotFather + tools/tg-bot)
+### Bind-бот (BotFather + apps/launcher/tg-bot)
 
 ```bash
 # 1. @BotFather → /newbot → токен
 # 2. На VPS: отдельный systemd-сервис рядом с сервером
-sudo -u chlauncher mkdir -p /opt/chlauncher/tools/tg-bot
-cat | sudo -u chlauncher tee /opt/chlauncher/tools/tg-bot/.env <<'EOF'
+sudo -u chlauncher mkdir -p /opt/chlauncher/apps/launcher/tg-bot
+cat | sudo -u chlauncher tee /opt/chlauncher/apps/launcher/tg-bot/.env <<'EOF'
 TG_BOT_TOKEN=<токен BotFather>
 TG_BIND_SECRET=<openssl rand -hex 32>
 SERVER_URL=http://127.0.0.1:8787
@@ -131,7 +131,7 @@ EOF
 ```
 
 `/etc/systemd/system/chlauncher-tgbot.service` — аналогичный unit, только
-`WorkingDirectory=/opt/chlauncher/tools/tg-bot`, `EnvironmentFile=.../.env`,
+`WorkingDirectory=/opt/chlauncher/apps/launcher/tg-bot`, `EnvironmentFile=.../.env`,
 `ExecStart=/usr/bin/node index.js`. Бот сам делает `deleteWebhook` и
 работает через long-polling — публичный endpoint ему не нужен.
 

@@ -5,7 +5,7 @@
  * Flow:
  *  1. Launcher calls POST /api/tg/link-code → deep-link
  *     `TRIBUTE_BOT_URL<code>` — the user opens it in Telegram.
- *  2. Our bind-bot (tools/tg-bot) receives /start <code> and calls
+ *  2. Our bind-bot (apps/launcher/tg-bot) receives /start <code> and calls
  *     POST /api/tg/bind with the shared TG_BIND_SECRET → the account is
  *     linked to `telegram_user_id` — the only stable identity Tribute
  *     webhooks carry.
