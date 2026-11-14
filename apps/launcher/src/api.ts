@@ -178,6 +178,16 @@ export const tiktokBindStatus = () => cmd<TikTokBindStatus>('tiktok_bind_status'
 /** Detach the bound TikTok account. */
 export const tiktokUnbind = () => cmd<TikTokBindStatus>('tiktok_unbind');
 
+/** TikTok Login Kit authorize URL — open in the system browser. */
+export const tiktokOAuthUrl = () =>
+  cmd<{ url: string; redirect_uri: string }>('tiktok_oauth_url');
+
+/** Fires when the OS delivers the `chlauncher://tiktok-bind` callback. */
+export const onTiktokBindReturn = (cb: () => void): Promise<UnlistenFn> =>
+  onOpenUrl((urls) => {
+    if (urls.some((u) => u.startsWith('chlauncher://tiktok-bind'))) cb();
+  });
+
 /** Lightweight status snapshot (statuses + last activity) for UI polling. */
 export const getIntegrationStatus = () =>
   cmd<Bootstrap['integrations']>('get_integration_status');

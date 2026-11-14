@@ -150,6 +150,25 @@ export function loadConfig(env = process.env) {
       .replace(/\/+$/, ''),
     /** Per-user proxy rate cap — a connect burst is ~5 calls. */
     tiktokSignMaxPerMin: Number(env.TIKTOK_SIGN_MAX_PER_MIN || 120),
+    /**
+     * Public base URL of this API — used to derive the TikTok OAuth
+     * redirect URI and shown in docs. Must be the https origin nginx
+     * exposes (e.g. https://api.example.com), NOT the bind address.
+     */
+    publicBaseUrl: (
+      env.PUBLIC_BASE_URL || `http://127.0.0.1:${env.SERVER_PORT || 8787}`
+    ).replace(/\/+$/, ''),
+    /**
+     * TikTok Login Kit OAuth. Credentials come from
+     * developers.tiktok.com → your app → Login Kit. `TIKTOK_REDIRECT_URI`
+     * must match the URI registered in the TikTok app EXACTLY; when empty
+     * it derives as `${PUBLIC_BASE_URL}/api/tiktok/oauth/callback`.
+     * Empty client_key → OAuth endpoints answer 501 and the UI falls back
+     * to the bio/comment code flow.
+     */
+    tiktokClientKey: env.TIKTOK_CLIENT_KEY || '',
+    tiktokClientSecret: env.TIKTOK_CLIENT_SECRET || '',
+    tiktokRedirectUri: env.TIKTOK_REDIRECT_URI || '',
   };
 }
 

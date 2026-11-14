@@ -432,6 +432,12 @@ export interface TikTokBindStatus {
   code_expires_at: string | null;
   bound_at: string | null;
   verified_at: string | null;
+  /** Set for OAuth-verified bindings — TikTok's stable per-app identity. */
+  open_id: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  /** 'oauth' | null (bio/comment code). */
+  auth_method: string | null;
 }
 
 export interface Bootstrap {

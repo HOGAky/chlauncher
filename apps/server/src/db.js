@@ -386,6 +386,30 @@ const MIGRATIONS = [
         ON tiktok_bindings(username) WHERE verified = 1;
     `);
   },
+  // v10 → v11: official TikTok Login Kit OAuth. `tiktok_oauth_states`
+  // holds one-shot CSRF states between the launcher → TikTok → callback
+  // hop; identity columns on tiktok_bindings store what user.info
+  // returned (open_id is the stable per-app TikTok identity — unique
+  // across accounts, NULL for bio/comment-verified legacy rows).
+  (db) => {
+    db.exec(`
+      ALTER TABLE tiktok_bindings ADD COLUMN open_id TEXT;
+      ALTER TABLE tiktok_bindings ADD COLUMN union_id TEXT;
+      ALTER TABLE tiktok_bindings ADD COLUMN display_name TEXT;
+      ALTER TABLE tiktok_bindings ADD COLUMN avatar_url TEXT;
+      ALTER TABLE tiktok_bindings ADD COLUMN auth_method TEXT;
+
+      CREATE UNIQUE INDEX idx_tiktok_bindings_openid
+        ON tiktok_bindings(open_id) WHERE open_id IS NOT NULL;
+
+      CREATE TABLE tiktok_oauth_states (
+        state      TEXT PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+    `);
+  },
 ];
 
 /** Runs all pending migrations in order. Idempotent via user_version. */

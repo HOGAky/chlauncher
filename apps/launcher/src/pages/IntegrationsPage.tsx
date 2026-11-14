@@ -5,7 +5,8 @@
  * URL for TikTok Live Studio.
  */
 import React, { useEffect, useState } from 'react';
-import { Radio, Copy, Wallet, Cloud, RefreshCw, Plug, Play, AppWindow, BadgeCheck } from 'lucide-react';
+import { Radio, Copy, Wallet, Cloud, RefreshCw, Plug, Play, AppWindow, BadgeCheck, LogIn } from 'lucide-react';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import * as api from '../api';
 import { useApp } from '../App';
 import { maskSecret } from '../lib/utils';
@@ -139,14 +140,23 @@ export default function IntegrationsPage() {
       setTtBind(s);
       if (s.username) setBindName(s.username);
     }).catch(() => {});
+    const refresh = () => api.tiktokBindStatus().then(setTtBind).catch(() => {});
     let un: (() => void) | undefined;
-    api
-      .onTiktokBindVerified(() => {
-        api.tiktokBindStatus().then(setTtBind).catch(() => {});
-      })
-      .then((u) => (un = u));
-    return () => un?.();
+    api.onTiktokBindVerified(refresh).then((u) => (un = u));
+    let un2: (() => void) | undefined;
+    api.onTiktokBindReturn(refresh).then((u) => (un2 = u));
+    return () => {
+      un?.();
+      un2?.();
+    };
   }, []);
+  const startOAuth = () => {
+    setBindErr('');
+    api
+      .tiktokOAuthUrl()
+      .then((r) => openUrl(r.url))
+      .catch((e) => setBindErr(humanError(e)));
+  };
   const bindAct = (fn: () => Promise<TikTokBindStatus>) => {
     setBindErr('');
     setBindBusy(true);
@@ -231,8 +241,18 @@ export default function IntegrationsPage() {
         <CardContent className="flex flex-col gap-3">
           {ttBind?.verified ? (
             <div className="flex items-center gap-2">
+              {ttBind.avatar_url && (
+                <img
+                  src={ttBind.avatar_url}
+                  alt=""
+                  className="h-7 w-7 rounded-full"
+                  referrerPolicy="no-referrer"
+                />
+              )}
               <span className="text-sm">
-                @{ttBind.username} — аккаунт подтверждён
+                @{ttBind.username}
+                {ttBind.display_name ? ` (${ttBind.display_name})` : ''} — аккаунт
+                подтверждён{ttBind.auth_method === 'oauth' ? ' через TikTok' : ''}
               </span>
               <Button variant="outline" onClick={useBoundName}>
                 Подставить в ник комнаты
@@ -290,22 +310,39 @@ export default function IntegrationsPage() {
           ) : (
             <>
               <p className="text-xs text-muted-foreground">
-                Привяжите свой TikTok — подтверждение через код в био. Дальше
-                ник подставится в подключение к эфиру и в персональные фичи.
+                Войдите через TikTok — подтвердим владение аккаунтом официально
+                и подставим ник в подключение к эфиру.
               </p>
               <div className="flex gap-2">
-                <Input
-                  placeholder="Ваш TikTok username (без @)"
-                  value={bindName}
-                  onChange={(e) => setBindName(e.target.value.replace(/^@/, ''))}
-                />
-                <Button
-                  disabled={!bindName.trim() || bindBusy}
-                  onClick={() => bindAct(() => api.tiktokBind(bindName.trim()))}
-                >
-                  Привязать
+                <Button onClick={startOAuth}>
+                  <LogIn size={14} /> Войти через TikTok
                 </Button>
               </div>
+              <details className="text-xs">
+                <summary className="cursor-pointer text-muted-foreground">
+                  Или привязать кодом (без авторизации TikTok)
+                </summary>
+                <div className="mt-2 flex flex-col gap-2">
+                  <p className="text-muted-foreground">
+                    Введите ник → получите код → подтвердите через комментарий
+                    в чате или через био.
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Ваш TikTok username (без @)"
+                      value={bindName}
+                      onChange={(e) => setBindName(e.target.value.replace(/^@/, ''))}
+                    />
+                    <Button
+                      variant="secondary"
+                      disabled={!bindName.trim() || bindBusy}
+                      onClick={() => bindAct(() => api.tiktokBind(bindName.trim()))}
+                    >
+                      Получить код
+                    </Button>
+                  </div>
+                </div>
+              </details>
             </>
           )}
           {bindErr && <p className="text-xs text-destructive">{bindErr}</p>}

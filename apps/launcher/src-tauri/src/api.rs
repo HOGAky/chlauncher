@@ -418,6 +418,17 @@ impl ApiClient {
             .await
     }
 
+    /// `GET /api/tiktok/oauth/url` — Login Kit authorize URL + state.
+    pub async fn tiktok_oauth_url(&self, token: &str) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::GET,
+            "/api/tiktok/oauth/url",
+            Some(token),
+            None,
+        )
+        .await
+    }
+
     /// `POST /api/tiktok/unbind` — detaches the caller's TikTok account.
     pub async fn tiktok_unbind(&self, token: &str) -> Result<Value, ApiError> {
         self.req(

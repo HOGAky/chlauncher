@@ -8,6 +8,10 @@
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 
+process.env.TIKTOK_CLIENT_KEY = 'tt-client-key';
+process.env.TIKTOK_CLIENT_SECRET = 'tt-client-secret';
+process.env.TIKTOK_REDIRECT_URI = 'http://localhost:8787/api/tiktok/oauth/callback';
+
 const { buildApp } = await import('../src/app.js');
 
 let app;
@@ -47,8 +51,32 @@ const status = (t) =>
     .inject({ method: 'GET', url: '/api/tiktok/bind', headers: auth(t) })
     .then((r) => r.json());
 
+/** User the oauthFetch stub hands back — per-call override in tests. */
+let oauthUser = {
+  open_id: 'oid-1',
+  union_id: 'uid-1',
+  username: 'oauth_user',
+  display_name: 'OAuth User',
+  avatar_url: 'https://x/a.png',
+};
+
 before(async () => {
   ({ app, db } = await buildApp({
+    tiktokOauthFetch: async (url, init) => {
+      if (url.includes('/oauth/token')) {
+        return new Response(
+          JSON.stringify({ access_token: 'at-1', token_type: 'Bearer' }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      if (url.includes('/user/info')) {
+        return new Response(JSON.stringify({ data: { user: oauthUser } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response('{}', { status: 404 });
+    },
     tiktokFetchBio: async (username) => {
       if (!bios.has(username)) return { ok: false, error: 'USER_NOT_FOUND' };
       return {
@@ -169,6 +197,82 @@ test('verify-comment verifies when the code matches, no bio needed', async () =>
   }).then((x) => ({ code: x.statusCode, body: x.json() }));
   assert.equal(ok.code, 200, JSON.stringify(ok.body));
   assert.equal(ok.body.verified, true);
+});
+
+// ------------------------------------------------------------- OAuth
+
+/** Runs the full OAuth hop: url → state → callback. Returns the HTML. */
+async function oauthFlow(token) {
+  const urlRes = await app
+    .inject({ method: 'GET', url: '/api/tiktok/oauth/url', headers: auth(token) })
+    .then((r) => r.json());
+  const state = new URL(urlRes.url).searchParams.get('state');
+  const cb = await app.inject({
+    method: 'GET',
+    url: `/api/tiktok/oauth/callback?code=AUTH_CODE&state=${state}`,
+  });
+  return { html: cb.body, statusCode: cb.statusCode };
+}
+
+test('oauth/url issues an authorize link with a bound state', async () => {
+  const { token } = await register('oauth1@test.dev');
+  const r = await app.inject({
+    method: 'GET',
+    url: '/api/tiktok/oauth/url',
+    headers: auth(token),
+  });
+  assert.equal(r.statusCode, 200);
+  const { url } = r.json();
+  assert.ok(url.startsWith('https://www.tiktok.com/v2/auth/authorize/'));
+  assert.ok(url.includes('client_key=tt-client-key'));
+  assert.ok(url.includes('user.info.profile'));
+});
+
+test('oauth callback binds the account with open_id identity', async () => {
+  const { token } = await register('oauth2@test.dev');
+  oauthUser = { ...oauthUser, open_id: 'oid-oauth2', username: 'oauth_bound' };
+  const { html } = await oauthFlow(token);
+  assert.ok(html.includes('chlauncher://tiktok-bind?status=ok&username=oauth_bound'), html);
+
+  const s = await status(token);
+  assert.equal(s.verified, true);
+  assert.equal(s.username, 'oauth_bound');
+  assert.equal(s.open_id, 'oid-oauth2');
+  assert.equal(s.auth_method, 'oauth');
+});
+
+test('oauth: one TikTok identity cannot bind two accounts', async () => {
+  const a = await register('oauth3a@test.dev');
+  const b = await register('oauth3b@test.dev');
+  oauthUser = { ...oauthUser, open_id: 'oid-shared', username: 'shared_tt' };
+  assert.ok((await oauthFlow(a.token)).html.includes('status=ok'));
+  const second = await oauthFlow(b.token);
+  assert.ok(second.html.includes('status=error'));
+  assert.ok(second.html.includes('taken'));
+});
+
+test('oauth callback: unknown state and user denial yield error pages', async () => {
+  const bad = await app.inject({
+    method: 'GET',
+    url: '/api/tiktok/oauth/callback?code=X&state=nope',
+  });
+  assert.ok(bad.body.includes('state_expired'));
+
+  const denied = await app.inject({
+    method: 'GET',
+    url: '/api/tiktok/oauth/callback?error=access_denied&error_description=user+denied',
+  });
+  assert.ok(denied.body.includes('chlauncher://tiktok-bind?status=error'));
+});
+
+test('oauth: rebind via oauth replaces a code-pending binding', async () => {
+  const { token } = await register('oauth4@test.dev');
+  await bind(token, 'old_name');
+  oauthUser = { ...oauthUser, open_id: 'oid-oauth4', username: 'new_oauth_name' };
+  assert.ok((await oauthFlow(token)).html.includes('status=ok'));
+  const s = await status(token);
+  assert.equal(s.username, 'new_oauth_name');
+  assert.equal(s.code, null);
 });
 
 test('all endpoints require auth', async () => {

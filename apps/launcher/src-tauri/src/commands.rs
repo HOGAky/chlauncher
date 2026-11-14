@@ -383,6 +383,16 @@ pub async fn tiktok_bind_status(state: State<'_, AppState>) -> Result<Value, Str
     Ok(v)
 }
 
+/// `GET /api/tiktok/oauth/url` — Login Kit authorize URL for the browser.
+#[tauri::command]
+pub async fn tiktok_oauth_url(state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .tiktok_oauth_url(&token(&state).await?)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// `POST /api/tiktok/unbind` — detaches TikTok from this account.
 #[tauri::command]
 pub async fn tiktok_unbind(state: State<'_, AppState>) -> Result<Value, String> {

@@ -434,6 +434,7 @@ pub fn run() {
             commands::tiktok_bind,
             commands::tiktok_verify,
             commands::tiktok_bind_status,
+            commands::tiktok_oauth_url,
             commands::tiktok_unbind,
             commands::builtin_games,
             commands::game_start,

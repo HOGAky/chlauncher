@@ -116,6 +116,8 @@ export async function buildApp(opts = {}) {
     requirePublisher,
     // Test hook: stub the TikTok profile fetch so bind tests stay offline.
     fetchBio: opts.tiktokFetchBio,
+    // Test hook: stub TikTok OAuth HTTP calls (token + userinfo).
+    oauthFetch: opts.tiktokOauthFetch,
   };
 
   app.get('/api/health', async () => ({ ok: true, ts: Date.now() }));
