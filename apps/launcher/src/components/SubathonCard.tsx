@@ -37,9 +37,9 @@ export default function SubathonCard() {
         .subathonStatus()
         .then((s) => {
           setSt(s);
-          setSecCoin(s.sec_per_coin);
-          setSecSub(s.sec_per_sub);
-          setMaxH(Math.round(s.max_s / 3600));
+          setSecCoin(s.cfg.sec_per_coin);
+          setSecSub(s.cfg.sec_per_sub);
+          setMaxH(Math.round(s.cfg.max_s / 3600));
         })
         .catch(() => {});
     poll();

@@ -172,7 +172,8 @@ export default function IntegrationsPage() {
     ['leaderboard', 'overlay/leaderboard', 'Топ', 'топ дарителей за стрим'],
     ['goals', 'overlay/goals', 'Цели', 'бары целей стрима'],
     ['poll', 'overlay/poll', 'Опрос', 'живые столбики голосования'],
-    ['subathon', 'overlay/subathon', 'Субатон', 'обратный отсчёт'],
+    ['timer', 'overlay/timer', 'Таймер эфира', 'отсчёт за подарки и лайки'],
+    ['subathon', 'overlay/subathon', 'Субатон', 'компактный уголок (legacy)'],
     ['queue', 'overlay/queue', 'Очередь', 'список зрителей !join'],
     ['hype', 'overlay/hype', 'Хайп', 'шкала активности'],
   ];

@@ -1507,6 +1507,7 @@ const OVERLAY_WINDOW_PAGES: &[&str] = &[
     "overlay/progress",
     "overlay/leaderboard",
     "overlay/goals",
+    "overlay/timer",
     "overlay/game/gift_tower",
     "overlay/game/boy_vs_girl",
     "overlay/game/survive_horde",
@@ -1661,6 +1662,18 @@ pub async fn subathon_start(dur_s: u64, state: State<'_, AppState>) -> Result<()
 pub async fn subathon_stop(state: State<'_, AppState>) -> Result<(), String> {
     state.subathon.stop().await;
     Ok(())
+}
+
+/// Freezes the countdown — events still add time while paused.
+#[tauri::command]
+pub async fn subathon_pause(state: State<'_, AppState>) -> Result<bool, String> {
+    Ok(state.subathon.pause().await)
+}
+
+/// Resumes a frozen countdown.
+#[tauri::command]
+pub async fn subathon_resume(state: State<'_, AppState>) -> Result<bool, String> {
+    Ok(state.subathon.resume().await)
 }
 
 /// Live subathon status (remaining/added seconds + rates).

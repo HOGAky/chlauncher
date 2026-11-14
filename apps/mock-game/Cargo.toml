@@ -1,6 +1,6 @@
 [package]
 name = "mock-game"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 description = "Test game for chlauncher: verifies DRM handshake, launcher window flags and live event rendering."
 

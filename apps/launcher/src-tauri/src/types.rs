@@ -307,24 +307,87 @@ pub struct StreamGoal {
 /// Subathon («субатон») config — paid events extend the countdown
 /// rendered on `/overlay/subathon`. Runtime is in-memory; only these
 /// knobs persist.
+/// Gift-specific time rule for the timer app: exact gift-name match
+/// (case-insensitive) → flat `sec` per gift unit. Negative values
+/// STEAL time — the classic "Rose −10 s" prank rule.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct GiftTimeRule {
+    pub name: String,
+    pub sec: i64,
+}
+
+impl Default for GiftTimeRule {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            sec: 0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SubathonCfg {
+    /// Master switch — off = events never touch the clock.
+    pub enabled: bool,
+    /// Default start duration when the page's "start" has no explicit
+    /// override, seconds.
+    pub start_s: u32,
     /// Seconds added per TikTok coin of a gift (donations count via
-    /// their converted `coins`, same knob).
+    /// their converted `coins`, same knob). Ignored for gifts that
+    /// match an entry in `gift_rules`.
     pub sec_per_coin: u32,
     /// Flat seconds per `subscribe` event.
     pub sec_per_sub: u32,
+    /// Flat seconds per `follow`.
+    pub sec_per_follow: u32,
+    /// Flat seconds per `share`.
+    pub sec_per_share: u32,
+    /// Likes needed for one `like_add_s` batch (0 = likes don't count).
+    /// Carried over between batched LikeEvents.
+    pub likes_per_add: u32,
+    /// Seconds added per `likes_per_add` likes.
+    pub like_add_s: u32,
     /// Hard cap on remaining time — a whale can't extend forever.
     pub max_s: u32,
+    /// Per-gift overrides (checked before the coin-rate fallback);
+    /// negative `sec` subtracts time.
+    pub gift_rules: Vec<GiftTimeRule>,
+    // --- overlay app styling ---
+    /// `dark` | `light` | `neon` | `minimal`.
+    pub theme: String,
+    /// Accent hex color (`#rrggbb`).
+    pub accent: String,
+    /// UI scale multiplier (0.5–2.0).
+    pub scale: f32,
+    /// `center` | `top-right` | `top-left` | `bottom-right` | `bottom-left`.
+    pub position: String,
+    /// Show the "+Ns @user" ticker under the clock.
+    pub show_feed: bool,
+    /// Beep when time is added.
+    pub sound: bool,
 }
 
 impl Default for SubathonCfg {
     fn default() -> Self {
         Self {
+            enabled: true,
+            start_s: 3600,
             sec_per_coin: 5,
             sec_per_sub: 300,
+            sec_per_follow: 10,
+            sec_per_share: 20,
+            likes_per_add: 100,
+            like_add_s: 10,
             max_s: 12 * 3600,
+            gift_rules: Vec::new(),
+            theme: "dark".into(),
+            accent: "#f472b6".into(),
+            scale: 1.0,
+            position: "center".into(),
+            show_feed: true,
+            sound: true,
         }
     }
 }

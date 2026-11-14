@@ -544,21 +544,49 @@ export interface PollStatus {
   last_winner: string;
 }
 
-/** Subathon rate knobs — persisted in settings (`save_subathon_cfg`). */
+/** Per-gift override: exact name → flat ±seconds per unit. */
+export interface GiftTimeRule {
+  name: string;
+  sec: number;
+}
+
+/** Timer app config — persisted in settings (`save_subathon_cfg`).
+ *  New fields are optional on the wire: Rust fills serde defaults. */
 export interface SubathonCfg {
+  enabled?: boolean;
+  start_s?: number;
   sec_per_coin: number;
   sec_per_sub: number;
+  sec_per_follow?: number;
+  sec_per_share?: number;
+  likes_per_add?: number;
+  like_add_s?: number;
   max_s: number;
+  gift_rules?: GiftTimeRule[];
+  theme?: 'dark' | 'light' | 'neon' | 'minimal' | string;
+  accent?: string;
+  scale?: number;
+  position?: 'center' | 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left' | string;
+  show_feed?: boolean;
+  sound?: boolean;
+}
+
+/** One "+Ns @user" ticker entry. */
+export interface TimeAdd {
+  user: string;
+  sec: number;
+  via: string;
 }
 
 /** Live subathon state — `subathon_status` / `/subathon.json`. */
 export interface SubathonStatus {
   running: boolean;
+  paused: boolean;
   remaining_s: number;
+  ends_at_ms: number;
   added_s: number;
-  sec_per_coin: number;
-  sec_per_sub: number;
-  max_s: number;
+  last_adds: TimeAdd[];
+  cfg: SubathonCfg;
 }
 
 /** One viewer in the `!join` queue. */

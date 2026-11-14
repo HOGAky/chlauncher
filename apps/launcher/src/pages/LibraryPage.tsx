@@ -5,7 +5,7 @@
  * always-on-top, chroma key).
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { Download, Play, RefreshCw, Square, Lock } from 'lucide-react';
+import { Download, Play, RefreshCw, Square, Lock, Timer } from 'lucide-react';
 import * as api from '../api';
 import { useApp } from '../App';
 import type { LibraryEntry, WindowOptions } from '../types';
@@ -126,6 +126,46 @@ export default function LibraryPage() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {/* Built-in app — the stream timer; viewers extend the countdown
+            via gifts/likes/subs. Rendered by /overlay/timer in a capture
+            window, configured on the «Таймер» page. */}
+        <Card className="overflow-hidden border-primary/40">
+          <div className="h-24 bg-gradient-to-br from-pink-500/30 to-violet-500/30 flex items-end p-3">
+            <span className="text-2xl font-black opacity-70 flex items-center gap-2">
+              <Timer size={22} /> Таймер эфира
+            </span>
+          </div>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle>Таймер эфира</CardTitle>
+              <Badge variant="success">Встроено</Badge>
+            </div>
+            <p className="text-xs text-muted-foreground">приложение лаунчера</p>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground line-clamp-2">
+              Обратный отсчёт на экране: зрители продлевают эфир подарками,
+              лайками, подписками и репостами. Правила и темы — на странице «Таймер».
+            </p>
+          </CardContent>
+          <CardFooter>
+            <Button
+              size="sm"
+              disabled={!!busy.__timer}
+              onClick={act('__timer', 'open', () => api.openOverlayWindow('overlay/timer', false))}
+            >
+              <Play size={14} /> Открыть окно
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              title="Пурпурный фон — для chroma-key в LIVE Studio"
+              onClick={act('__timer', 'open', () => api.openOverlayWindow('overlay/timer', true))}
+            >
+              Chroma
+            </Button>
+          </CardFooter>
+        </Card>
         {games.map((g) => {
           const isBusy = !!busy[g.slug];
           // §8.3: Free accounts play is_free titles; paid titles need an

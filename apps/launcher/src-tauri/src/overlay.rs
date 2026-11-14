@@ -328,6 +328,7 @@ pub async fn start_overlay_server(
         .route("/overlay/goals", get(page_route(GOALS_HTML)))
         .route("/overlay/poll", get(page_route(POLL_HTML)))
         .route("/overlay/subathon", get(page_route(SUBATHON_HTML)))
+        .route("/overlay/timer", get(page_route(TIMER_HTML)))
         .route("/overlay/queue", get(page_route(QUEUE_HTML)))
         .route("/overlay/hype", get(page_route(HYPE_HTML)))
         // Built-in interactive games — one token-guarded page per id.
@@ -799,6 +800,7 @@ const LEADERBOARD_HTML: &str = include_str!("../overlay/leaderboard.html");
 const GOALS_HTML: &str = include_str!("../overlay/goals.html");
 const POLL_HTML: &str = include_str!("../overlay/poll.html");
 const SUBATHON_HTML: &str = include_str!("../overlay/subathon.html");
+const TIMER_HTML: &str = include_str!("../overlay/timer.html");
 const QUEUE_HTML: &str = include_str!("../overlay/queue.html");
 const HYPE_HTML: &str = include_str!("../overlay/hype.html");
 const SPINNER_HTML: &str = include_str!("../overlay/spinner.html");

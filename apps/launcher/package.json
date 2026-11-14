@@ -1,6 +1,6 @@
 {
   "name": "@chlauncher/launcher",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "description": "Tauri v2 desktop launcher & streamer hub for TikTok Live interactive games.",

@@ -1,6 +1,6 @@
 {
   "name": "chlauncher",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Monorepo: TikTok Live interactive games launcher, licensing backend, Rust game SDK and mock game.",
   "workspaces": [

@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>chlauncher — таймер эфира</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:transparent;
+    font-family:system-ui,'Segoe UI',sans-serif}
+  /* positions: center (default) or a corner */
+  #wrap{position:fixed;display:flex;flex-direction:column;align-items:center;gap:10px}
+  #wrap.center{inset:0;justify-content:center}
+  #wrap.top-right{top:16px;right:16px}
+  #wrap.top-left{top:16px;left:16px}
+  #wrap.bottom-right{bottom:16px;right:16px}
+  #wrap.bottom-left{bottom:16px;left:16px}
+
+  /* themes — accent color comes from cfg */
+  #clock{--ac:#f472b6;line-height:1;font-variant-numeric:tabular-nums;
+    letter-spacing:.04em;transition:color .3s}
+  #clock small{display:block;font-size:.22em;font-weight:600;letter-spacing:.35em;
+    opacity:.65;margin-top:.35em;text-transform:uppercase}
+  .theme-dark #clock{color:var(--ac);text-shadow:0 0 34px color-mix(in srgb,var(--ac) 60%,transparent)}
+  .theme-dark #card{background:rgba(10,12,20,.82);border:1px solid rgba(255,255,255,.1);
+    border-radius:20px;padding:.55em 1em}
+  .theme-light #clock{color:var(--ac)}
+  .theme-light #card{background:rgba(255,255,255,.9);border:1px solid rgba(0,0,0,.08);
+    border-radius:20px;padding:.55em 1em;color:#111}
+  .theme-light #card *{color:inherit}
+  .theme-neon #clock{color:#fff;
+    text-shadow:0 0 8px var(--ac),0 0 24px var(--ac),0 0 60px var(--ac)}
+  .theme-neon #card{background:rgba(0,0,0,.55);border:2px solid var(--ac);
+    border-radius:24px;padding:.55em 1.1em;
+    box-shadow:0 0 18px color-mix(in srgb,var(--ac) 55%,transparent),inset 0 0 18px rgba(0,0,0,.4)}
+  .theme-minimal #clock{color:var(--ac)}
+  .theme-minimal #card{padding:.3em .6em}
+
+  #digits{font-weight:800;font-size:1em}
+  #paused{font-size:.18em;font-weight:700;letter-spacing:.4em;color:#fbbf24;
+    margin-top:.4em;display:none;text-transform:uppercase}
+  #card.paused #paused{display:block}
+  #card.ended #digits{color:#ef4444 !important;text-shadow:none;animation:blink 1s infinite}
+  @keyframes blink{50%{opacity:.45}}
+
+  /* "+Ns @user" ticker */
+  #feed{display:flex;flex-direction:column;align-items:center;gap:4px;
+    font-size:.28em;min-height:1.4em}
+  .add{animation:rise .35s ease-out;color:#fff;text-shadow:0 1px 6px #000;
+    background:rgba(0,0,0,.45);border-radius:999px;padding:.18em .9em;font-weight:600}
+  .add.neg{color:#ff8080}
+  @keyframes rise{from{transform:translateY(12px);opacity:0}}
+
+  #bar{width:100%;height:.12em;border-radius:999px;background:rgba(255,255,255,.14);
+    overflow:hidden;margin-top:.15em;display:none}
+  #bar i{display:block;height:100%;background:var(--ac);transition:width .4s}
+  #card.withbar #bar{display:block}
+</style></head><body>
+<div id="wrap" class="center theme-dark">
+  <div id="card">
+    <div id="clock">
+      <div id="digits">00:00:00</div>
+      <small id="label">Таймер эфира</small>
+      <div id="paused">Пауза</div>
+    </div>
+    <div id="bar"><i style="width:0%"></i></div>
+  </div>
+  <div id="feed"></div>
+</div>
+<script>
+'use strict';
+const Q = new URLSearchParams(location.search);
+const TOKEN = Q.get('t') || '';
+const BG = Q.get('bg');
+if (BG && /^[0-9a-f]{6}$/i.test(BG)) document.body.style.background = '#' + BG;
+
+const wrap = document.getElementById('wrap'), card = document.getElementById('card'),
+      digits = document.getElementById('digits'), feed = document.getElementById('feed'),
+      bar = document.querySelector('#bar i'), label = document.getElementById('label'),
+      clock = document.getElementById('clock');
+
+let endsAtMs = 0, paused = false, running = false, cfg = null, seenAdds = 0, ended = false;
+let AC = null;
+
+function beep(freq = 660) {
+  if (!cfg || !cfg.sound) return;
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    const o = AC.createOscillator(), g = AC.createGain(), t = AC.currentTime;
+    o.frequency.setValueAtTime(freq, t);
+    o.frequency.exponentialRampToValueAtTime(freq * 1.35, t + .09);
+    g.gain.setValueAtTime(.12, t); g.gain.exponentialRampToValueAtTime(.001, t + .1);
+    o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + .11);
+  } catch (_) {}
+}
+
+function applyStyle() {
+  if (!cfg) return;
+  wrap.className = `${cfg.position || 'center'} theme-${cfg.theme || 'dark'}`;
+  clock.style.setProperty('--ac', /^#[0-9a-f]{6}$/i.test(cfg.accent || '') ? cfg.accent : '#f472b6');
+  // Clock digits scale with window height so it fills the capture region.
+  const base = Math.min(innerHeight * 0.42, innerWidth * 0.9 / 6);
+  clock.style.fontSize = `${Math.max(60, base) * (cfg.scale || 1)}px`;
+  feed.style.display = cfg.show_feed ? 'flex' : 'none';
+  card.classList.toggle('withbar', (cfg.position || 'center') === 'center');
+  label.textContent = 'Таймер эфира';
+}
+addEventListener('resize', applyStyle);
+
+function fmt(ms) {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  const h = String(Math.floor(s / 3600)).padStart(2, '0');
+  const m = String(Math.floor(s / 60) % 60).padStart(2, '0');
+  const ss = String(s % 60).padStart(2, '0');
+  return `${h}:${m}:${ss}`;
+}
+
+// Smooth local clock — resynced by each poll (ends_at_ms is absolute).
+setInterval(() => {
+  if (!running) { digits.textContent = '00:00:00'; return; }
+  digits.textContent = paused ? digits.textContent : fmt(endsAtMs - Date.now());
+}, 120);
+
+function renderAdds(adds) {
+  // Only animate NEW entries since the last poll.
+  const fresh = adds.slice(seenAdds);
+  seenAdds = adds.length;
+  for (const a of fresh) {
+    const d = document.createElement('div');
+    d.className = 'add' + (a.sec < 0 ? ' neg' : '');
+    const sign = a.sec > 0 ? '+' : '−';
+    const abs = Math.abs(a.sec);
+    const txt = abs >= 3600 ? `${sign}${(abs / 3600).toFixed(1)}ч` : abs >= 60 ? `${sign}${Math.round(abs / 60)}м` : `${sign}${abs}с`;
+    d.textContent = `@${a.user} ${txt}${a.via ? ' · ' + a.via : ''}`;
+    feed.prepend(d);
+    while (feed.children.length > 4) feed.lastChild.remove();
+    if (a.sec > 0) beep(660); else beep(240);
+  }
+}
+
+async function poll() {
+  try {
+    const r = await fetch(`/subathon.json?t=${encodeURIComponent(TOKEN)}`);
+    if (!r.ok) return;
+    const st = await r.json();
+    const wasRunning = running;
+    running = st.running; paused = st.paused;
+    cfg = st.cfg || cfg;
+    applyStyle();
+    if (st.ends_at_ms) endsAtMs = st.ends_at_ms;
+    if (paused) digits.textContent = fmt(st.remaining_s * 1000);
+    if (st.last_adds && st.last_adds.length !== seenAdds) renderAdds(st.last_adds);
+    card.classList.toggle('paused', paused);
+    if (running) ended = false;
+    if (wasRunning && !running && !ended) {
+      ended = true;
+      card.classList.add('ended');
+      digits.textContent = '00:00:00';
+      label.textContent = 'Время вышло!';
+      setTimeout(() => { card.classList.remove('ended'); label.textContent = 'Таймер эфира'; }, 15000);
+    }
+    if (!running && !ended) { digits.textContent = '00:00:00'; }
+  } catch (_) { /* overlay restarting — next poll recovers */ }
+}
+setInterval(poll, 800); poll();
+</script></body></html>

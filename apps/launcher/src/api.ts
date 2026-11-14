@@ -311,6 +311,12 @@ export const subathonStop = () => cmd<void>('subathon_stop');
 export const subathonStatus = () =>
   cmd<import('./types').SubathonStatus>('subathon_status');
 
+/** Freezes the timer (events still add time while paused). */
+export const subathonPause = () => cmd<boolean>('subathon_pause');
+
+/** Resumes a frozen timer. */
+export const subathonResume = () => cmd<boolean>('subathon_resume');
+
 /** Saves the subathon rate knobs. */
 export const saveSubathonCfg = (cfg: import('./types').SubathonCfg) =>
   cmd<void>('save_subathon_cfg', { cfg });

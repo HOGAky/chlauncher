@@ -543,6 +543,8 @@ pub fn run() {
             commands::poll_status,
             commands::subathon_start,
             commands::subathon_stop,
+            commands::subathon_pause,
+            commands::subathon_resume,
             commands::subathon_status,
             commands::save_subathon_cfg,
             commands::queue_next,
