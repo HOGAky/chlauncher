@@ -344,6 +344,41 @@ export async function tgRoutes(app, { db, authenticate }) {
   });
 
   /**
+   * POST /api/tg/login-claim — bot-side half of "sign in with Telegram".
+   * The launcher generated a tg_login_codes row via
+   * POST /api/auth/telegram-start; the user pressed
+   * `t.me/<bot>?start=login_<code>`; the bot claims it here with the
+   * sender's Telegram id. The next /telegram-status poll consumes the
+   * code and issues the session. Same shared-secret auth as /bind.
+   */
+  app.post('/login-claim', async (request, reply) => {
+    if (!config.tgBindSecret) {
+      return reply.code(501).send({ error: 'PROVIDER_NOT_CONFIGURED' });
+    }
+    if (!safeEqual(request.headers['x-bot-secret'] || '', config.tgBindSecret)) {
+      return reply.code(401).send({ error: 'INVALID_SECRET' });
+    }
+    const { code, telegram_user_id: tgId, telegram_username: tgName } =
+      request.body || {};
+    if (!code || !Number.isInteger(tgId)) {
+      return reply.code(400).send({ error: 'INVALID_PAYLOAD' });
+    }
+    const raw = String(code);
+    const codeValue = raw.startsWith('login_') ? raw.slice(6) : raw;
+    const row = db
+      .prepare('SELECT * FROM tg_login_codes WHERE code = ?')
+      .get(codeValue);
+    if (!row || row.consumed || row.expires_at <= nowIso() || row.telegram_user_id != null) {
+      return reply.code(410).send({ error: 'CODE_INVALID' });
+    }
+    db.prepare(
+      `UPDATE tg_login_codes SET telegram_user_id = ?, telegram_username = ?
+       WHERE code = ? AND telegram_user_id IS NULL`
+    ).run(tgId, String(tgName || ''), codeValue);
+    return { ok: true };
+  });
+
+  /**
    * GET /api/tg/bind-status?telegram_user_id=… — bot-side lookup for
    * `/status` replies. Same shared-secret auth as /bind.
    */

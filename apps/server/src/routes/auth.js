@@ -15,10 +15,13 @@
  * (ip, email) pair per 15 minutes → 429 TOO_MANY_ATTEMPTS + retry_after_ms.
  */
 
+import crypto from 'node:crypto';
+import { config } from '../config.js';
 import {
   findUserByEmail,
   createUser,
   setUserHwid,
+  nowIso,
   recordDeviceEvent,
   bumpTokenVersion,
   getLoginAttempts,
@@ -155,6 +158,106 @@ export default async function authRoutes(app, { db, authenticate }) {
       }
       const subscription = refreshSubscription(db, user.id);
       return {
+        token: signToken(user),
+        user: publicUser(user),
+        subscription: subscriptionView(subscription),
+      };
+    }
+  );
+
+  /**
+   * POST /api/auth/telegram-start — begins a "sign in with Telegram"
+   * session (EFIR parity: TG is the primary login for the CIS audience).
+   * Returns a one-shot code; the launcher opens
+   * `t.me/<bot>?start=login_<code>` and polls /telegram-status.
+   */
+  app.post(
+    '/telegram-start',
+    { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      if (!config.tributeBotUrl) {
+        return reply.code(503).send({ error: 'TG_LOGIN_UNAVAILABLE' });
+      }
+      const code = crypto.randomBytes(12).toString('base64url');
+      db.prepare(
+        `INSERT INTO tg_login_codes (code, expires_at, created_at) VALUES (?,?,?)`
+      ).run(code, new Date(Date.now() + 10 * 60 * 1000).toISOString(), nowIso());
+      return { code, url: `${config.tributeBotUrl}login_${code}`, expires_in: 600 };
+    }
+  );
+
+  /**
+   * POST /api/auth/telegram-status {code, hwid?}
+   * 'pending' until the bind-bot claims the code; on the first status
+   * call after claiming, the code is consumed and a session is issued:
+   * existing user bound to that Telegram id, or a fresh tg_* account
+   * (random password — the owner can add email/password later).
+   * HWID rules mirror /login (non-admin accounts only).
+   */
+  app.post(
+    '/telegram-status',
+    { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const { code, hwid } = request.body || {};
+      const row = code
+        ? db.prepare('SELECT * FROM tg_login_codes WHERE code = ?').get(String(code))
+        : undefined;
+      if (!row || row.consumed || row.expires_at < nowIso()) {
+        return reply.code(404).send({ error: 'CODE_INVALID' });
+      }
+      if (row.telegram_user_id == null) {
+        return { status: 'pending' };
+      }
+
+      const claimed = db
+        .prepare('UPDATE tg_login_codes SET consumed = 1 WHERE code = ? AND consumed = 0')
+        .run(row.code);
+      if (claimed.changes === 0) {
+        return reply.code(404).send({ error: 'CODE_INVALID' });
+      }
+
+      const tgId = row.telegram_user_id;
+      let user = db
+        .prepare(
+          `SELECT u.* FROM users u
+           JOIN tg_bindings b ON b.user_id = u.id
+           WHERE b.telegram_user_id = ?`
+        )
+        .get(tgId);
+      if (!user) {
+        const email = `tg_${tgId}@telegram.local`;
+        user = createUser(db, {
+          email,
+          passwordHash: hashPassword(crypto.randomBytes(24).toString('hex')),
+          hwid: hwid && isUsableHwid(hwid) ? hwidHash(hwid) : null,
+        });
+        db.prepare(
+          `INSERT INTO tg_bindings (user_id, telegram_user_id, telegram_username, bound_at)
+           VALUES (?,?,?,?)`
+        ).run(user.id, tgId, row.telegram_username || '', nowIso());
+      }
+      syncAdminRole(db, user);
+
+      if (user.role !== 'admin') {
+        if (!hwid) {
+          return reply.code(400).send({ error: 'HWID_REQUIRED' });
+        }
+        if (!isUsableHwid(hwid)) {
+          return reply.code(400).send({ error: 'HWID_UNAVAILABLE' });
+        }
+        const hash = hwidHash(hwid);
+        if (user.hwid && user.hwid !== hash) {
+          recordDeviceEvent(db, user.id, 'login_denied', hash, ipHash(request.ip));
+          return reply.code(403).send({ error: 'HWID_MISMATCH' });
+        }
+        if (!user.hwid) {
+          setUserHwid(db, user.id, hash);
+          recordDeviceEvent(db, user.id, 'bound', hash, ipHash(request.ip));
+        }
+      }
+      const subscription = refreshSubscription(db, user.id);
+      return {
+        status: 'ready',
         token: signToken(user),
         user: publicUser(user),
         subscription: subscriptionView(subscription),

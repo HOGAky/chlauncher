@@ -571,6 +571,44 @@ export const adminUpdatePlan = (code: string, patch: Record<string, unknown>) =>
   cmd<{ plan: Plan }>('admin_update_plan', { code, patch });
 export const adminAudit = () => cmd<{ entries: AuditEntry[] }>('admin_audit');
 
+// --- Admin: promo codes + support queue (v12) ----------------------------------
+export interface PromoCode {
+  code: string;
+  days: number;
+  max_uses: number;
+  uses: number;
+  expires_at: string | null;
+  created_by_email?: string | null;
+  created_at: string;
+}
+export const adminPromoList = () => cmd<{ codes: PromoCode[] }>('admin_promo_list');
+export const adminPromoCreate = (args: {
+  days: number;
+  code?: string;
+  max_uses?: number;
+  expires_at?: string;
+}) => cmd<{ ok: boolean; code: string }>('admin_promo_create', args);
+export const adminPromoRetire = (code: string) =>
+  cmd<{ ok: boolean }>('admin_promo_retire', { code });
+
+export interface AdminTicket {
+  id: number;
+  user_id: number;
+  email: string;
+  subject: string;
+  status: 'open' | 'answered' | 'closed';
+  created_at: string;
+  updated_at: string;
+}
+export const adminSupportTickets = (status?: string) =>
+  cmd<{ tickets: AdminTicket[] }>('admin_support_tickets', { status: status ?? null });
+export const adminSupportTicket = (id: number) =>
+  cmd<{ ticket: AdminTicket; messages: SupportMessage[] }>('admin_support_ticket', { id });
+export const adminSupportReply = (id: number, body: string) =>
+  cmd<{ ok: boolean }>('admin_support_reply', { id, body });
+export const adminSupportStatus = (id: number, status: string) =>
+  cmd<{ ok: boolean }>('admin_support_status', { id, status });
+
 /** Upload progress events emitted by adminUploadBuild. */
 export const onBuildUploadProgress = (
   cb: (p: { slug: string; sent: number; total: number }) => void
@@ -605,6 +643,58 @@ export const mcInstallPlugin = (slug: string) =>
   cmd<void>('mc_install_plugin', { slug });
 export const mcRemovePlugin = (file: string) =>
   cmd<void>('mc_remove_plugin', { file });
+
+// --- Growth: promo codes + referrals (EFIR parity) ----------------------------
+export const promoRedeem = (code: string) =>
+  cmd<{ ok: boolean; days: number; subscription: Subscription }>('promo_redeem', { code });
+export const getReferrals = () =>
+  cmd<{
+    code: string;
+    applied: number;
+    days_earned: number;
+    cap: number;
+    referred: boolean;
+    reward_days: number;
+    referee_days: number;
+  }>('get_referrals');
+export const referralApply = (code: string) =>
+  cmd<{ ok: boolean; days: number; subscription: Subscription }>('referral_apply', { code });
+
+// --- Telegram login ------------------------------------------------------------
+export const tgLoginStart = () =>
+  cmd<{ code: string; url: string; expires_in: number }>('tg_login_start');
+export const tgLoginStatus = (code: string) =>
+  cmd<{
+    status: 'pending' | 'ready';
+    user?: { email: string };
+    subscription?: Subscription;
+  }>('tg_login_status', { code });
+
+// --- Support messenger ---------------------------------------------------------
+export interface SupportTicket {
+  id: number;
+  subject: string;
+  status: 'open' | 'answered' | 'closed';
+  created_at: string;
+  updated_at: string;
+  last_message?: { body: string; is_admin: number; created_at: string } | null;
+}
+export interface SupportMessage {
+  id: number;
+  is_admin: boolean;
+  body: string;
+  created_at: string;
+}
+export const supportTickets = () =>
+  cmd<{ tickets: SupportTicket[] }>('support_tickets');
+export const supportTicketCreate = (subject: string, body: string) =>
+  cmd<{ ok: boolean; id: number }>('support_ticket_create', { subject, body });
+export const supportTicket = (id: number) =>
+  cmd<{ ticket: SupportTicket; messages: SupportMessage[] }>('support_ticket', { id });
+export const supportReply = (id: number, body: string) =>
+  cmd<{ ok: boolean }>('support_reply', { id, body });
+export const supportClose = (id: number) =>
+  cmd<{ ok: boolean }>('support_close', { id });
 
 // --- External game adapters (§10.1) -------------------------------------------
 export const adapterStatus = () => cmd<AdapterStatus>('adapter_status');

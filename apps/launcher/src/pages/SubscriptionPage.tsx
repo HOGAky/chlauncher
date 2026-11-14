@@ -10,6 +10,7 @@ import { openUrl } from '@tauri-apps/plugin-opener';
 import * as api from '../api';
 import { useApp } from '../App';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import type { Plan, EntitlementsResponse } from '../types';
@@ -52,6 +53,11 @@ export default function SubscriptionPage() {
   const [ent, setEnt] = useState<EntitlementsResponse | null>(null);
   const [providers, setProviders] = useState<api.BillingProviders | null>(null);
   const [tg, setTg] = useState<api.TgStatus | null>(null);
+  const [promoCode, setPromoCode] = useState('');
+  const [promoMsg, setPromoMsg] = useState<string | null>(null);
+  const [ref, setRef] = useState<Awaited<ReturnType<typeof api.getReferrals>> | null>(null);
+  const [refCode, setRefCode] = useState('');
+  const [refMsg, setRefMsg] = useState<string | null>(null);
   const active = subscription?.status === 'active';
   const currentPlan = ent?.plan.code ?? (active ? subscription?.plan_code ?? 'pro' : 'free');
 
@@ -60,6 +66,7 @@ export default function SubscriptionPage() {
     api.getEntitlements().then(setEnt).catch(() => setEnt(null));
     api.getBillingProviders().then(setProviders).catch(() => setProviders(null));
     api.getTgStatus().then(setTg).catch(() => setTg(null));
+    api.getReferrals().then(setRef).catch(() => setRef(null));
   }, [subscription?.status, subscription?.plan_code]);
 
   const earnLimit = ent?.entitlements.earn_limit_coins_month ?? null;
@@ -340,6 +347,99 @@ export default function SubscriptionPage() {
             </Card>
           );
         })}
+      </div>
+
+      {/* promo + referrals — growth surface (EFIR parity) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Промокод</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              <Input
+                placeholder="XXXX-XXXX"
+                value={promoCode}
+                onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && promoCode.trim()) {
+                    setBusy(true); setPromoMsg(null); setError(null);
+                    api.promoRedeem(promoCode.trim())
+                      .then((r) => { setPromoMsg(`+${r.days} дн подписки!`); setPromoCode(''); refreshSubscription(); })
+                      .catch((err) => setPromoMsg(humanError(err)))
+                      .finally(() => setBusy(false));
+                  }
+                }}
+              />
+              <Button
+                size="sm"
+                disabled={busy || !promoCode.trim()}
+                onClick={() => {
+                  setBusy(true); setPromoMsg(null); setError(null);
+                  api.promoRedeem(promoCode.trim())
+                    .then((r) => { setPromoMsg(`+${r.days} дн подписки!`); setPromoCode(''); refreshSubscription(); })
+                    .catch((err) => setPromoMsg(humanError(err)))
+                    .finally(() => setBusy(false));
+                }}
+              >
+                Активировать
+              </Button>
+            </div>
+            {promoMsg && <p className="text-xs text-muted-foreground">{promoMsg}</p>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Пригласи друга</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            {ref && (
+              <>
+                <div className="flex items-center gap-2">
+                  <code className="rounded bg-muted px-2 py-1 text-sm font-bold tracking-widest">
+                    {ref.code}
+                  </code>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigator.clipboard.writeText(ref.code).catch(() => {})}
+                  >
+                    Копировать
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Друг вводит код — ему +{ref.referee_days} дн, вам +{ref.reward_days} дн.
+                  Приглашено: {ref.applied}/{ref.cap} · заработано {ref.days_earned} дн.
+                </p>
+                {!ref.referred && (
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Код друга"
+                      value={refCode}
+                      onChange={(e) => setRefCode(e.target.value.toUpperCase())}
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy || !refCode.trim()}
+                      onClick={() => {
+                        setBusy(true); setRefMsg(null); setError(null);
+                        api.referralApply(refCode.trim())
+                          .then((r) => { setRefMsg(`+${r.days} дн!`); setRefCode(''); refreshSubscription(); api.getReferrals().then(setRef).catch(() => {}); })
+                          .catch((err) => setRefMsg(humanError(err)))
+                          .finally(() => setBusy(false));
+                      }}
+                    >
+                      Применить
+                    </Button>
+                  </div>
+                )}
+                {refMsg && <p className="text-xs text-muted-foreground">{refMsg}</p>}
+              </>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

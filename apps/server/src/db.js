@@ -410,6 +410,89 @@ const MIGRATIONS = [
       );
     `);
   },
+  // v11 → v12: growth + retention surface adopted from the competitor
+  // teardown (docs/competitor-efir.md):
+  //  * promo_codes/promo_redemptions — admin-issued codes that grant
+  //    subscription days; UNIQUE(code, user_id) makes redeeming the
+  //    same code twice impossible; payments row keeps the grant in the
+  //    normal ledger (provider='promo').
+  //  * referrals — every user owns a permanent referral_code (generated
+  //    lazily on first /api/referrals call). A code may be applied to an
+  //    account once (users.referred_by); the reward journal lets us
+  //    credit the referrer immediately and audit later.
+  //  * tg_login_codes — one-shot deep-link codes for "sign in with
+  //    Telegram": the launcher opens t.me/<bot>?start=login_<code> and
+  //    polls until the bind-bot claims the code with a telegram id.
+  //  * support_tickets/support_messages — in-launcher support chat.
+  (db) => {
+    db.exec(`
+      CREATE TABLE promo_codes (
+        code       TEXT PRIMARY KEY,
+        days       INTEGER NOT NULL,
+        max_uses   INTEGER NOT NULL DEFAULT 1,
+        uses       INTEGER NOT NULL DEFAULT 0,
+        expires_at TEXT,
+        created_by INTEGER REFERENCES users(id),
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE promo_redemptions (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        code       TEXT NOT NULL REFERENCES promo_codes(code),
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        days       INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(code, user_id)
+      );
+
+      ALTER TABLE users ADD COLUMN referral_code TEXT;
+      ALTER TABLE users ADD COLUMN referred_by INTEGER REFERENCES users(id);
+      CREATE UNIQUE INDEX idx_users_referral_code
+        ON users(referral_code) WHERE referral_code IS NOT NULL;
+
+      CREATE TABLE referral_rewards (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        referrer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        referee_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind        TEXT NOT NULL,
+        days        INTEGER NOT NULL,
+        created_at  TEXT NOT NULL,
+        UNIQUE(referrer_id, referee_id, kind)
+      );
+
+      CREATE TABLE tg_login_codes (
+        code              TEXT PRIMARY KEY,
+        telegram_user_id  INTEGER,
+        telegram_username TEXT,
+        expires_at        TEXT NOT NULL,
+        consumed          INTEGER NOT NULL DEFAULT 0,
+        created_at        TEXT NOT NULL
+      );
+
+      CREATE TABLE support_tickets (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        subject    TEXT NOT NULL,
+        status     TEXT NOT NULL DEFAULT 'open'
+                   CHECK (status IN ('open','answered','closed')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_support_tickets_user
+        ON support_tickets(user_id, updated_at DESC);
+
+      CREATE TABLE support_messages (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        ticket_id  INTEGER NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+        author_id  INTEGER NOT NULL,
+        is_admin   INTEGER NOT NULL DEFAULT 0,
+        body       TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_support_messages_ticket
+        ON support_messages(ticket_id, id);
+    `);
+  },
 ];
 
 /** Runs all pending migrations in order. Idempotent via user_version. */

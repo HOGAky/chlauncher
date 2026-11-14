@@ -341,6 +341,18 @@ pub async fn start_overlay_server(
             "/overlay/game/survive_horde",
             get(page_route(SURVIVE_HORDE_HTML)),
         )
+        .route(
+            "/overlay/game/snake_gifts",
+            get(page_route(SNAKE_GIFTS_HTML)),
+        )
+        .route(
+            "/overlay/game/flappy_gifts",
+            get(page_route(FLAPPY_GIFTS_HTML)),
+        )
+        .route(
+            "/overlay/game/prism_break",
+            get(page_route(PRISM_BREAK_HTML)),
+        )
         .route("/gamekit.js", get(serve_gamekit))
         .route("/games/cfg/:id", get(serve_game_cfg))
         .route("/games/state.json", get(serve_game_state))
@@ -808,6 +820,9 @@ const TTS_HTML: &str = include_str!("../overlay/tts.html");
 const GIFT_TOWER_HTML: &str = include_str!("../overlay/gift_tower.html");
 const BOY_VS_GIRL_HTML: &str = include_str!("../overlay/boy_vs_girl.html");
 const SURVIVE_HORDE_HTML: &str = include_str!("../overlay/survive_horde.html");
+const SNAKE_GIFTS_HTML: &str = include_str!("../overlay/snake_gifts.html");
+const FLAPPY_GIFTS_HTML: &str = include_str!("../overlay/flappy_gifts.html");
+const PRISM_BREAK_HTML: &str = include_str!("../overlay/prism_break.html");
 const GAMEKIT_JS: &str = include_str!("../overlay/gamekit.js");
 
 #[cfg(test)]

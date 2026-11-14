@@ -418,7 +418,61 @@ pub fn run() {
                     }
                 }
             }
+
+            // --- system tray (EFIR parity) --------------------------------
+            // Closing the window hides to tray — the stream connection,
+            // game sessions and overlay server keep running in the
+            // background. Quit only via the tray menu (or Ctrl+Q).
+            {
+                use tauri::menu::{MenuBuilder, MenuItemBuilder};
+                use tauri::tray::TrayIconBuilder;
+                let show = MenuItemBuilder::with_id("show", "Открыть chlauncher").build(app)?;
+                let quit = MenuItemBuilder::with_id("quit", "Выход").build(app)?;
+                let menu = MenuBuilder::new(app).items(&[&show, &quit]).build()?;
+                let mut tray = TrayIconBuilder::with_id("main").menu(&menu);
+                if let Some(icon) = app.default_window_icon() {
+                    tray = tray.icon(icon.clone());
+                }
+                tray.on_menu_event(|app, event| match event.id().as_ref() {
+                    "show" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.unminimize();
+                            let _ = w.set_focus();
+                        }
+                    }
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    // Left-click toggles the window like most launchers.
+                    if let tauri::tray::TrayIconEvent::Click {
+                        button: tauri::tray::MouseButton::Left,
+                        button_state: tauri::tray::MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        let app = tray.app_handle();
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.unminimize();
+                            let _ = w.set_focus();
+                        }
+                    }
+                })
+                .build(app)?;
+            }
             Ok(())
+        })
+        // Close button → hide to tray (stream/game sessions keep running).
+        // Real exit lives in the tray menu and Ctrl+Q / app.exit.
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::get_bootstrap,
@@ -431,6 +485,16 @@ pub fn run() {
             commands::tg_link_code,
             commands::tg_status,
             commands::tg_unbind,
+            commands::tg_login_start,
+            commands::tg_login_status,
+            commands::promo_redeem,
+            commands::get_referrals,
+            commands::referral_apply,
+            commands::support_tickets,
+            commands::support_ticket_create,
+            commands::support_ticket,
+            commands::support_reply,
+            commands::support_close,
             commands::tiktok_bind,
             commands::tiktok_verify,
             commands::tiktok_bind_status,
@@ -519,6 +583,13 @@ pub fn run() {
             commands::admin_create_plan,
             commands::admin_update_plan,
             commands::admin_audit,
+            commands::admin_promo_list,
+            commands::admin_promo_create,
+            commands::admin_promo_retire,
+            commands::admin_support_tickets,
+            commands::admin_support_ticket,
+            commands::admin_support_reply,
+            commands::admin_support_status,
             commands::services_health,
             commands::get_proc_info,
             commands::get_diagnostics,

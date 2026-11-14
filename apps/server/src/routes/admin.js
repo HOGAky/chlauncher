@@ -645,6 +645,137 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
   });
 
   // ---------------------------------------------------------------
+  // Promo codes — growth lever (EFIR parity). A code grants `days` of
+  // subscription to each redeemer, up to max_uses total.
+  // ---------------------------------------------------------------
+
+  /** GET /api/admin/promo — all codes with use counters. */
+  app.get('/promo', async () => ({
+    codes: db
+      .prepare(
+        `SELECT p.*, u.email AS created_by_email
+         FROM promo_codes p LEFT JOIN users u ON u.id = p.created_by
+         ORDER BY p.created_at DESC LIMIT 200`
+      )
+      .all(),
+  }));
+
+  /** POST /api/admin/promo {code?, days, max_uses?, expires_at?} */
+  app.post('/promo', async (request, reply) => {
+    const { days, max_uses, expires_at } = request.body || {};
+    let { code } = request.body || {};
+    const n = Number(days);
+    if (!Number.isInteger(n) || n <= 0 || n > 3650) {
+      return reply.code(400).send({ error: 'INVALID_DAYS' });
+    }
+    const uses = max_uses == null ? 1 : Number(max_uses);
+    if (!Number.isInteger(uses) || uses <= 0 || uses > 100000) {
+      return reply.code(400).send({ error: 'INVALID_MAX_USES' });
+    }
+    code = (code || crypto.randomBytes(5).toString('hex').toUpperCase())
+      .trim()
+      .toUpperCase();
+    if (!/^[A-Z0-9_-]{4,32}$/.test(code)) {
+      return reply.code(400).send({ error: 'INVALID_CODE' });
+    }
+    const exists = db.prepare('SELECT 1 FROM promo_codes WHERE code = ?').get(code);
+    if (exists) return reply.code(409).send({ error: 'CODE_TAKEN' });
+    db.prepare(
+      `INSERT INTO promo_codes (code, days, max_uses, expires_at, created_by, created_at)
+       VALUES (?,?,?,?,?,?)`
+    ).run(code, n, uses, expires_at || null, request.auth.userId, nowIso());
+    audit(request.auth.userId, 'promo_create', code, { days: n, max_uses: uses });
+    return { ok: true, code };
+  });
+
+  /** DELETE /api/admin/promo/:code — retires a code (keeps redemptions). */
+  app.delete('/promo/:code', async (request, reply) => {
+    const code = String(request.params.code || '').toUpperCase();
+    const info = db
+      .prepare('UPDATE promo_codes SET max_uses = uses WHERE code = ?')
+      .run(code);
+    if (info.changes === 0) return reply.code(404).send({ error: 'PROMO_NOT_FOUND' });
+    audit(request.auth.userId, 'promo_retire', code, {});
+    return { ok: true };
+  });
+
+  // ---------------------------------------------------------------
+  // Support messenger — admin side of /api/support.
+  // ---------------------------------------------------------------
+
+  /** GET /api/admin/support/tickets?status= — ticket queue. */
+  app.get('/support/tickets', async (request) => {
+    const status = String(request.query?.status || '');
+    const rows = status
+      ? db
+          .prepare(
+            `SELECT t.*, u.email FROM support_tickets t
+             JOIN users u ON u.id = t.user_id
+             WHERE t.status = ? ORDER BY t.updated_at DESC LIMIT 200`
+          )
+          .all(status)
+      : db
+          .prepare(
+            `SELECT t.*, u.email FROM support_tickets t
+             JOIN users u ON u.id = t.user_id
+             ORDER BY t.updated_at DESC LIMIT 200`
+          )
+          .all();
+    return { tickets: rows };
+  });
+
+  /** GET /api/admin/support/tickets/:id — full thread. */
+  app.get('/support/tickets/:id', async (request, reply) => {
+    const ticket = db
+      .prepare(
+        `SELECT t.*, u.email FROM support_tickets t
+         JOIN users u ON u.id = t.user_id WHERE t.id = ?`
+      )
+      .get(Number(request.params.id) || 0);
+    if (!ticket) return reply.code(404).send({ error: 'NOT_FOUND' });
+    const messages = db
+      .prepare('SELECT * FROM support_messages WHERE ticket_id = ? ORDER BY id')
+      .all(ticket.id);
+    return { ticket, messages };
+  });
+
+  /** POST /api/admin/support/tickets/:id/reply {body} — admin answer. */
+  app.post('/support/tickets/:id/reply', async (request, reply) => {
+    const ticket = db
+      .prepare('SELECT * FROM support_tickets WHERE id = ?')
+      .get(Number(request.params.id) || 0);
+    if (!ticket) return reply.code(404).send({ error: 'NOT_FOUND' });
+    if (ticket.status === 'closed') {
+      return reply.code(409).send({ error: 'TICKET_CLOSED' });
+    }
+    const body = String(request.body?.body || '').trim().slice(0, 4000);
+    if (!body) return reply.code(400).send({ error: 'EMPTY_BODY' });
+    const now = nowIso();
+    db.prepare(
+      'INSERT INTO support_messages (ticket_id, author_id, is_admin, body, created_at) VALUES (?,?,1,?,?)'
+    ).run(ticket.id, request.auth.userId, body, now);
+    db.prepare(
+      `UPDATE support_tickets SET status = 'answered', updated_at = ? WHERE id = ?`
+    ).run(now, ticket.id);
+    audit(request.auth.userId, 'support_reply', `ticket:${ticket.id}`, {});
+    return { ok: true };
+  });
+
+  /** POST /api/admin/support/tickets/:id/status {status} */
+  app.post('/support/tickets/:id/status', async (request, reply) => {
+    const { status } = request.body || {};
+    if (!['open', 'answered', 'closed'].includes(status)) {
+      return reply.code(400).send({ error: 'INVALID_STATUS' });
+    }
+    const info = db
+      .prepare('UPDATE support_tickets SET status = ?, updated_at = ? WHERE id = ?')
+      .run(status, nowIso(), Number(request.params.id) || 0);
+    if (info.changes === 0) return reply.code(404).send({ error: 'NOT_FOUND' });
+    audit(request.auth.userId, 'support_status', `ticket:${request.params.id}`, { status });
+    return { ok: true };
+  });
+
+  // ---------------------------------------------------------------
   // Audit log
   // ---------------------------------------------------------------
 

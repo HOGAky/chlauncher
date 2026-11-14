@@ -21,6 +21,39 @@ export default function AuthScreen() {
   const [serverUrl, setServerUrl] = useState('');
   const [showServer, setShowServer] = useState(false);
   const [serverSaved, setServerSaved] = useState(false);
+  const [tgWaiting, setTgWaiting] = useState(false);
+
+  /**
+   * "Sign in with Telegram" (EFIR parity): opens the bind-bot deep link
+   * and polls until the user presses Start — then the server issues a
+   * session (a tg_* account is created on first use).
+   */
+  const loginViaTelegram = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const { code, url } = await api.tgLoginStart();
+      const { openUrl } = await import('@tauri-apps/plugin-opener');
+      await openUrl(url);
+      setBusy(false);
+      setTgWaiting(true);
+      // Poll until the bot claims the code (10 min TTL server-side).
+      for (let i = 0; i < 100; i++) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const res = await api.tgLoginStatus(code);
+        if (res.status === 'ready') {
+          setSession(res.user?.email ?? '', res.subscription ?? null);
+          return;
+        }
+      }
+      setError('Код входа истёк — попробуйте ещё раз.');
+    } catch (e) {
+      setError(humanError(e));
+    } finally {
+      setBusy(false);
+      setTgWaiting(false);
+    }
+  };
 
   /** Prefills the backend URL field on mount. */
   useEffect(() => {
@@ -62,9 +95,12 @@ export default function AuthScreen() {
     <div className="h-full flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/10">
       <Card className="w-[380px] border-border/60">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-2 h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-2xl font-black">
-            ▶
-          </div>
+          <img
+            src="/logo.svg"
+            alt="chlauncher"
+            className="mx-auto mb-2 h-14 w-14 select-none"
+            draggable={false}
+          />
           <CardTitle className="text-xl">chlauncher</CardTitle>
           <p className="text-sm text-muted-foreground">
             Хаб интерактивных игр для TikTok Live
@@ -96,6 +132,19 @@ export default function AuthScreen() {
             <Button type="submit" disabled={busy}>
               {busy ? 'Подождите…' : mode === 'login' ? 'Войти' : 'Создать аккаунт'}
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy || tgWaiting}
+              onClick={loginViaTelegram}
+            >
+              {tgWaiting ? 'Подтвердите вход в Telegram…' : 'Войти через Telegram'}
+            </Button>
+            {tgWaiting && (
+              <p className="text-center text-[11px] text-muted-foreground">
+                Открылся Telegram — нажмите Start у бота, вход продолжится автоматически.
+              </p>
+            )}
             <button
               type="button"
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"

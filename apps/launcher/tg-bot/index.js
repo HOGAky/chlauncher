@@ -98,6 +98,30 @@ async function bind(chatId, from, code) {
   await send(chatId, lines.join('\n'));
 }
 
+async function loginClaim(chatId, from, code) {
+  const res = await fetch(`${SERVER}/api/tg/login-claim`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-bot-secret': SECRET,
+    },
+    body: JSON.stringify({
+      code: `login_${code}`,
+      telegram_user_id: from.id,
+      telegram_username: from.username || '',
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg =
+      data.error === 'CODE_INVALID'
+        ? 'Ссылка для входа устарела. Запросите новую в лаунчере — «Войти через Telegram».'
+        : `Ошибка входа (${data.error || res.status}). Попробуйте позже.`;
+    return send(chatId, msg);
+  }
+  await send(chatId, 'Вход подтверждён — возвращайтесь в лаунчер, он продолжит автоматически.');
+}
+
 async function status(chatId, from) {
   const res = await fetch(
     `${SERVER}/api/tg/bind-status?telegram_user_id=${from.id}`,
@@ -126,7 +150,12 @@ async function handleMessage(msg) {
   if (!chatId || !msg.from) return;
 
   if (text.startsWith('/start')) {
-    const code = text.slice('/start'.length).trim().toUpperCase();
+    const rawCode = text.slice('/start'.length).trim();
+    if (rawCode.toLowerCase().startsWith('login_')) {
+      // "Sign in with Telegram" — the code is base64url, don't uppercase.
+      return loginClaim(chatId, msg.from, rawCode.slice(6));
+    }
+    const code = rawCode.toUpperCase();
     if (!code) {
       return send(
         chatId,

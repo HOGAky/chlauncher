@@ -332,6 +332,137 @@ pub async fn tg_unbind(state: State<'_, AppState>) -> Result<Value, String> {
         .map_err(|e| e.to_string())
 }
 
+/// `POST /api/promo/redeem` — promo code → subscription days.
+#[tauri::command]
+pub async fn promo_redeem(code: String, state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .promo_redeem(&token(&state).await?, &code)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `GET /api/referrals` — my referral code + stats.
+#[tauri::command]
+pub async fn get_referrals(state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .referrals(&token(&state).await?)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `POST /api/referrals/apply` — apply someone's referral code once.
+#[tauri::command]
+pub async fn referral_apply(code: String, state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .referral_apply(&token(&state).await?, &code)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `POST /api/auth/telegram-start` — begins a Telegram login flow.
+/// Returns {code, url} — the UI opens `url` and polls tg_login_status.
+#[tauri::command]
+pub async fn tg_login_start(state: State<'_, AppState>) -> Result<Value, String> {
+    state.api.tg_login_start().await.map_err(|e| e.to_string())
+}
+
+/// `POST /api/auth/telegram-status` — polls the code; on claim installs
+/// the returned session like a normal login (same HWID rules).
+#[tauri::command]
+pub async fn tg_login_status(code: String, state: State<'_, AppState>) -> Result<Value, String> {
+    let res = state
+        .api
+        .tg_login_status(&code, require_hwid(&state)?)
+        .await
+        .map_err(|e| e.to_string())?;
+    if res.get("status").and_then(|s| s.as_str()) == Some("ready") {
+        // Install the issued session exactly like /login does.
+        let token = res
+            .get("token")
+            .and_then(|t| t.as_str())
+            .ok_or("telegram login: server returned no token")?;
+        let email = res
+            .pointer("/user/email")
+            .and_then(|e| e.as_str())
+            .unwrap_or_default()
+            .to_string();
+        let role = res
+            .pointer("/user/role")
+            .and_then(|r| r.as_str())
+            .unwrap_or("user")
+            .to_string();
+        {
+            let mut s = state.settings.lock().await;
+            s.data.auth_token = Some(token.to_string());
+            s.data.email = Some(email);
+            s.data.role = Some(role);
+            let _ = s.save();
+        }
+    }
+    Ok(res)
+}
+
+/// `GET /api/support/tickets` — my tickets.
+#[tauri::command]
+pub async fn support_tickets(state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .support_tickets(&token(&state).await?)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `POST /api/support/tickets` — {subject, body} → new ticket id.
+#[tauri::command]
+pub async fn support_ticket_create(
+    subject: String,
+    body: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    state
+        .api
+        .support_ticket_create(&token(&state).await?, &subject, &body)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `GET /api/support/tickets/:id` — the full thread.
+#[tauri::command]
+pub async fn support_ticket(id: i64, state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .support_ticket(&token(&state).await?, id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `POST /api/support/tickets/:id/messages` — user reply.
+#[tauri::command]
+pub async fn support_reply(
+    id: i64,
+    body: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    state
+        .api
+        .support_reply(&token(&state).await?, id, &body)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `POST /api/support/tickets/:id/close` — closes my ticket.
+#[tauri::command]
+pub async fn support_close(id: i64, state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .support_close(&token(&state).await?, id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// Syncs the sidecar's pending-bind watcher with a bind-status payload:
 /// set while `{bound, !verified, code}` — cleared otherwise (verified or
 /// unbound). Lets the watcher spot the proof comment in LIVE chat.
@@ -2748,4 +2879,130 @@ pub async fn regenerate_adapter_key(state: State<'_, AppState>) -> Result<String
     *state.adapter_key.write().map_err(|_| "LOCK")? = key.clone();
     state.game_server.disconnect_adapters().await;
     Ok(key)
+}
+
+// ---------------------------------------------------------------------------
+// Growth admin — promo codes + support queue (v12 routes)
+// ---------------------------------------------------------------------------
+
+/// `GET /api/admin/promo` — all codes with use counters.
+#[tauri::command]
+pub async fn admin_promo_list(state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .admin_json(Method::GET, "/api/admin/promo", &token(&state).await?, None)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `POST /api/admin/promo` — creates a code (server generates one when
+/// `code` is empty).
+#[tauri::command]
+pub async fn admin_promo_create(
+    days: i64,
+    code: Option<String>,
+    max_uses: Option<i64>,
+    expires_at: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    state
+        .api
+        .admin_json(
+            Method::POST,
+            "/api/admin/promo",
+            &token(&state).await?,
+            Some(json!({
+                "days": days,
+                "code": code,
+                "max_uses": max_uses,
+                "expires_at": expires_at,
+            })),
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `DELETE /api/admin/promo/:code` — retires a code.
+#[tauri::command]
+pub async fn admin_promo_retire(code: String, state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .admin_json(
+            Method::DELETE,
+            &format!("/api/admin/promo/{code}"),
+            &token(&state).await?,
+            None,
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `GET /api/admin/support/tickets?status=` — the support queue.
+#[tauri::command]
+pub async fn admin_support_tickets(
+    status: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let path = match status.as_deref() {
+        Some(s) if !s.is_empty() => format!("/api/admin/support/tickets?status={s}"),
+        _ => "/api/admin/support/tickets".to_string(),
+    };
+    state
+        .api
+        .admin_json(Method::GET, &path, &token(&state).await?, None)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `GET /api/admin/support/tickets/:id` — full thread.
+#[tauri::command]
+pub async fn admin_support_ticket(id: i64, state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .admin_json(
+            Method::GET,
+            &format!("/api/admin/support/tickets/{id}"),
+            &token(&state).await?,
+            None,
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `POST /api/admin/support/tickets/:id/reply` — admin answer.
+#[tauri::command]
+pub async fn admin_support_reply(
+    id: i64,
+    body: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    state
+        .api
+        .admin_json(
+            Method::POST,
+            &format!("/api/admin/support/tickets/{id}/reply"),
+            &token(&state).await?,
+            Some(json!({"body": body})),
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `POST /api/admin/support/tickets/:id/status` — open/answered/closed.
+#[tauri::command]
+pub async fn admin_support_status(
+    id: i64,
+    status: String,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    state
+        .api
+        .admin_json(
+            Method::POST,
+            &format!("/api/admin/support/tickets/{id}/status"),
+            &token(&state).await?,
+            Some(json!({"status": status})),
+        )
+        .await
+        .map_err(|e| e.to_string())
 }

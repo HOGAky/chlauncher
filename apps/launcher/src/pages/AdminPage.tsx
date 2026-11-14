@@ -22,7 +22,7 @@ import { Input } from '../components/ui/input';
 import { cn } from '../lib/utils';
 
 import { humanError } from '../errorMessages';
-type Tab = 'games' | 'users' | 'plans' | 'audit';
+type Tab = 'games' | 'users' | 'plans' | 'promo' | 'support' | 'audit';
 const fmtSize = (n: number) => `${(n / 1024 / 1024).toFixed(1)} МБ`;
 
 export default function AdminPage() {
@@ -32,7 +32,7 @@ export default function AdminPage() {
       <div className="flex items-center gap-3">
         <h1 className="text-lg font-semibold">Управление</h1>
         <div className="flex gap-1 text-sm">
-          {(['games', 'users', 'plans', 'audit'] as Tab[]).map((t) => (
+          {(['games', 'users', 'plans', 'promo', 'support', 'audit'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -47,7 +47,11 @@ export default function AdminPage() {
                   ? 'Пользователи'
                   : t === 'plans'
                     ? 'Тарифы'
-                    : 'Аудит'}
+                    : t === 'promo'
+                      ? 'Промокоды'
+                      : t === 'support'
+                        ? 'Поддержка'
+                        : 'Аудит'}
             </button>
           ))}
         </div>
@@ -55,6 +59,8 @@ export default function AdminPage() {
       {tab === 'games' && <GamesTab />}
       {tab === 'users' && <UsersTab />}
       {tab === 'plans' && <PlansTab />}
+      {tab === 'promo' && <PromoTab />}
+      {tab === 'support' && <SupportTab />}
       {tab === 'audit' && <AuditTab />}
     </div>
   );
@@ -575,6 +581,295 @@ function AuditTab() {
           <code className="ml-auto max-w-72 truncate text-muted-foreground">{e.meta}</code>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ================================================================ Promo
+
+function PromoTab() {
+  const [codes, setCodes] = useState<api.PromoCode[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState({ code: '', days: 7, max_uses: 1 });
+  const [created, setCreated] = useState<string | null>(null);
+
+  const refresh = useCallback(() => {
+    api.adminPromoList().then((r) => setCodes(r.codes)).catch((e) => setError(humanError(e)));
+  }, []);
+  useEffect(refresh, [refresh]);
+
+  const create = () => {
+    setError(null);
+    setCreated(null);
+    api
+      .adminPromoCreate({
+        days: form.days,
+        code: form.code.trim() || undefined,
+        max_uses: form.max_uses,
+      })
+      .then((r) => {
+        setCreated(r.code);
+        setForm({ code: '', days: 7, max_uses: 1 });
+        refresh();
+      })
+      .catch((e) => setError(humanError(e)));
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Новый промокод</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">Код (пусто — сгенерируется)</label>
+            <Input
+              value={form.code}
+              onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+              className="w-44"
+              placeholder="PROMO2025"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">Дней подписки</label>
+            <Input
+              type="number"
+              min={1}
+              value={form.days}
+              onChange={(e) => setForm({ ...form, days: Number(e.target.value) })}
+              className="w-24"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-muted-foreground">Использований</label>
+            <Input
+              type="number"
+              min={1}
+              value={form.max_uses}
+              onChange={(e) => setForm({ ...form, max_uses: Number(e.target.value) })}
+              className="w-24"
+            />
+          </div>
+          <Button size="sm" onClick={create} disabled={form.days < 1 || form.max_uses < 1}>
+            Создать
+          </Button>
+          {created && (
+            <Badge variant="success" className="text-sm">
+              {created}
+            </Badge>
+          )}
+        </CardContent>
+      </Card>
+      {error && <div className="text-sm text-red-400">{error}</div>}
+      <Card>
+        <CardContent className="p-3">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-muted-foreground">
+                <th className="pb-2">Код</th>
+                <th className="pb-2">Дней</th>
+                <th className="pb-2">Использовано</th>
+                <th className="pb-2">Создан</th>
+                <th className="pb-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {codes.map((c) => (
+                <tr key={c.code} className="border-t border-border/50">
+                  <td className="py-2 font-mono font-bold">{c.code}</td>
+                  <td>{c.days}</td>
+                  <td>
+                    {c.uses}/{c.max_uses}
+                  </td>
+                  <td className="text-xs text-muted-foreground">
+                    {new Date(c.created_at).toLocaleDateString('ru-RU')}
+                  </td>
+                  <td className="text-right">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={c.uses >= c.max_uses}
+                      onClick={() =>
+                        api.adminPromoRetire(c.code).then(refresh).catch((e) => setError(humanError(e)))
+                      }
+                    >
+                      Отключить
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+              {codes.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                    Промокодов пока нет.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ================================================================ Support
+
+function SupportTab() {
+  const [tickets, setTickets] = useState<api.AdminTicket[]>([]);
+  const [filter, setFilter] = useState('open');
+  const [active, setActive] = useState<number | null>(null);
+  const [messages, setMessages] = useState<api.SupportMessage[]>([]);
+  const [ticket, setTicket] = useState<api.AdminTicket | null>(null);
+  const [reply, setReply] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(() => {
+    api
+      .adminSupportTickets(filter || undefined)
+      .then((r) => setTickets(r.tickets))
+      .catch((e) => setError(humanError(e)));
+  }, [filter]);
+  useEffect(refresh, [refresh]);
+
+  const open = (id: number) => {
+    setActive(id);
+    api
+      .adminSupportTicket(id)
+      .then((r) => {
+        setTicket(r.ticket);
+        setMessages(r.messages);
+      })
+      .catch((e) => setError(humanError(e)));
+  };
+
+  const send = () => {
+    if (!active || !reply.trim()) return;
+    api
+      .adminSupportReply(active, reply.trim())
+      .then(() => {
+        setReply('');
+        open(active);
+        refresh();
+      })
+      .catch((e) => setError(humanError(e)));
+  };
+
+  const setStatus = (id: number, status: string) =>
+    api
+      .adminSupportStatus(id, status)
+      .then(() => {
+        if (active === id) open(id);
+        refresh();
+      })
+      .catch((e) => setError(humanError(e)));
+
+  return (
+    <div className="flex gap-4">
+      <Card className="w-80 shrink-0">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Обращения</CardTitle>
+            <select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              className="rounded border border-input bg-background px-2 py-1 text-xs"
+            >
+              <option value="">Все</option>
+              <option value="open">Открытые</option>
+              <option value="answered">С ответом</option>
+              <option value="closed">Закрытые</option>
+            </select>
+          </div>
+        </CardHeader>
+        <CardContent className="max-h-[60vh] space-y-2 overflow-y-auto p-3">
+          {tickets.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => open(t.id)}
+              className={cn(
+                'w-full rounded-lg border p-2 text-left transition',
+                active === t.id ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted/50'
+              )}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate text-sm font-medium">
+                  #{t.id} {t.subject}
+                </span>
+                <Badge>{t.status}</Badge>
+              </div>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">{t.email}</p>
+            </button>
+          ))}
+          {tickets.length === 0 && (
+            <p className="py-4 text-center text-sm text-muted-foreground">Пусто.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="flex-1">
+        {error && <div className="m-3 rounded bg-destructive/15 p-2 text-sm text-destructive">{error}</div>}
+        {ticket ? (
+          <>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">                  #{ticket.id} {ticket.subject}{' '}
+                  <span className="text-xs text-muted-foreground">({ticket.email})</span>
+                </CardTitle>
+                <div className="flex gap-1">
+                  {(['open', 'answered', 'closed'] as const).map((s) => (
+                    <Button
+                      key={s}
+                      size="sm"
+                      variant={ticket.status === s ? 'default' : 'outline'}
+                      onClick={() => setStatus(ticket.id, s)}
+                    >
+                      {s}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <div className="max-h-[46vh] space-y-2 overflow-y-auto">
+                {messages.map((m) => (
+                  <div
+                    key={m.id}
+                    className={cn(
+                      'max-w-[75%] rounded-lg p-2.5 text-sm',
+                      m.is_admin ? 'ml-auto bg-primary/15' : 'bg-muted'
+                    )}
+                  >
+                    <div className="mb-0.5 text-xs text-muted-foreground">
+                      {m.is_admin ? 'Вы (поддержка)' : 'Пользователь'} ·{' '}
+                      {new Date(m.created_at).toLocaleString('ru-RU')}
+                    </div>
+                    {m.body}
+                  </div>
+                ))}
+              </div>
+              {ticket.status !== 'closed' && (
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Ответ пользователю…"
+                    value={reply}
+                    onChange={(e) => setReply(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && send()}
+                  />
+                  <Button size="sm" onClick={send} disabled={!reply.trim()}>
+                    Отправить
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </>
+        ) : (
+          <CardContent className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+            Выберите обращение слева.
+          </CardContent>
+        )}
+      </Card>
     </div>
   );
 }

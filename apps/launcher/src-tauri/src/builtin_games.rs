@@ -49,6 +49,21 @@ pub const GAMES: &[GameMeta] = &[
         title: "Survive the Horde",
         desc: "Стример выживает волнами (WASD), зрители спавнят врагов и эффекты подарками.",
     },
+    GameMeta {
+        id: "snake_gifts",
+        title: "Snake Gifts",
+        desc: "Автопилот-змейка: подарки кладут яблоки и растят хвост, подписки подрезают длину.",
+    },
+    GameMeta {
+        id: "flappy_gifts",
+        title: "Flappy Gifts",
+        desc: "Птица летит сама: подарки дают буст, щит от труб, очки и узкие штормовые трубы.",
+    },
+    GameMeta {
+        id: "prism_break",
+        title: "Prism Break",
+        desc: "Арканоид с призмами: зрители кидают мячи, расширяют платформу и сносят ряды.",
+    },
 ];
 
 pub fn find(id: &str) -> Option<&'static GameMeta> {
@@ -112,6 +127,46 @@ pub fn default_cfg(game_id: &str) -> BuiltinGameCfg {
             {"event":"comment","match":{"commands":["!weapon"]},"action":{"type":"weapon"},"perUserCdMs":30000},
             {"event":"follow","match":{},"action":{"type":"shield","sec":10}},
             {"event":"share","match":{},"action":{"type":"slow","sec":10}}
+        ]),
+        "snake_gifts" => json!([
+            {"event":"gift","match":{"names":["Rose"]},"action":{"type":"add_apple","value":1}},
+            {"event":"gift","match":{"names":["Finger Heart"]},"action":{"type":"add_apple","value":2}},
+            {"event":"gift","match":{"names":["TikTok"]},"action":{"type":"add_apple","value":5}},
+            {"event":"gift","match":{"names":["Rosa"]},"action":{"type":"gold_apple","value":1}},
+            {"event":"gift","match":{"names":["Galaxy"]},"action":{"type":"storm","count":10},"cooldownMs":5000},
+            {"event":"gift","match":{"names":["Lion"]},"action":{"type":"speed","sec":15},"cooldownMs":10000},
+            {"event":"gift","match":{},"action":{"type":"grow","value":1,"per_coin":1}},
+            {"event":"subscribe","match":{},"action":{"type":"shrink","value":10}},
+            {"event":"like","match":{},"action":{"type":"add_apple","value":1,"per":200}},
+            {"event":"follow","match":{},"action":{"type":"grow","value":2}},
+            {"event":"share","match":{},"action":{"type":"gold_apple","value":1}}
+        ]),
+        "flappy_gifts" => json!([
+            {"event":"gift","match":{"names":["Rose"]},"action":{"type":"boost","value":1}},
+            {"event":"gift","match":{"names":["Finger Heart"]},"action":{"type":"boost","value":3}},
+            {"event":"gift","match":{"names":["TikTok"]},"action":{"type":"score","value":5}},
+            {"event":"gift","match":{"names":["Rosa"]},"action":{"type":"shield","sec":10}},
+            {"event":"gift","match":{"names":["Galaxy"]},"action":{"type":"storm","sec":12},"cooldownMs":8000},
+            {"event":"gift","match":{"names":["Lion"]},"action":{"type":"score","value":25},"cooldownMs":5000},
+            {"event":"gift","match":{},"action":{"type":"boost","value":1,"per_coin":1}},
+            {"event":"subscribe","match":{},"action":{"type":"shield","sec":20}},
+            {"event":"like","match":{},"action":{"type":"boost","value":1,"per":100}},
+            {"event":"follow","match":{},"action":{"type":"wide"}},
+            {"event":"share","match":{},"action":{"type":"shield","sec":15}}
+        ]),
+        "prism_break" => json!([
+            {"event":"gift","match":{"names":["Rose"]},"action":{"type":"score","value":1}},
+            {"event":"gift","match":{"names":["Finger Heart"]},"action":{"type":"add_ball","value":1}},
+            {"event":"gift","match":{"names":["TikTok"]},"action":{"type":"widen","sec":15}},
+            {"event":"gift","match":{"names":["Rosa"]},"action":{"type":"clear_row"}},
+            {"event":"gift","match":{"names":["Galaxy"]},"action":{"type":"add_ball","value":3},"cooldownMs":5000},
+            {"event":"gift","match":{"names":["Lion"]},"action":{"type":"clear_row"},"cooldownMs":8000},
+            {"event":"gift","match":{},"action":{"type":"score","value":1,"per_coin":1}},
+            {"event":"subscribe","match":{},"action":{"type":"add_ball","value":2}},
+            {"event":"like","match":{},"action":{"type":"score","value":1,"per":50}},
+            {"event":"comment","match":{"commands":["!ball"]},"action":{"type":"add_ball","value":1},"perUserCdMs":30000},
+            {"event":"follow","match":{},"action":{"type":"widen","sec":10}},
+            {"event":"share","match":{},"action":{"type":"speed","sec":10}}
         ]),
         _ => json!([]),
     };
@@ -321,7 +376,7 @@ mod tests {
         ent.interactive_games = Some(vec!["gift_tower".into()]);
         assert_eq!(allowed_games(&ent), vec!["gift_tower"]);
         ent.interactive_games = None;
-        assert_eq!(allowed_games(&ent).len(), 3);
+        assert_eq!(allowed_games(&ent).len(), GAMES.len());
         ent.interactive_games = Some(vec![]);
         assert!(allowed_games(&ent).is_empty());
     }

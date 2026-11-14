@@ -377,6 +377,124 @@ impl ApiClient {
         .await
     }
 
+    /// `POST /api/promo/redeem` — redeems a promo code for sub days.
+    pub async fn promo_redeem(&self, token: &str, code: &str) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::POST,
+            "/api/promo/redeem",
+            Some(token),
+            Some(json!({"code": code})),
+        )
+        .await
+    }
+
+    /// `GET /api/referrals` — my referral code + usage stats.
+    pub async fn referrals(&self, token: &str) -> Result<Value, ApiError> {
+        self.req(reqwest::Method::GET, "/api/referrals", Some(token), None)
+            .await
+    }
+
+    /// `POST /api/referrals/apply` — attach a referrer's code (one-shot).
+    pub async fn referral_apply(&self, token: &str, code: &str) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::POST,
+            "/api/referrals/apply",
+            Some(token),
+            Some(json!({"code": code})),
+        )
+        .await
+    }
+
+    /// `POST /api/auth/telegram-start` — public: begins a Telegram login
+    /// session (deep-link code + bot URL the launcher opens).
+    pub async fn tg_login_start(&self) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::POST,
+            "/api/auth/telegram-start",
+            None,
+            Some(json!({})),
+        )
+        .await
+    }
+
+    /// `POST /api/auth/telegram-status` — polls a login code; when the
+    /// bind-bot has claimed it, returns the session JWT (creates a
+    /// tg_* account on first use). `hwid` enforces device binding.
+    pub async fn tg_login_status(&self, code: &str, hwid: &str) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::POST,
+            "/api/auth/telegram-status",
+            None,
+            Some(json!({"code": code, "hwid": hwid})),
+        )
+        .await
+    }
+
+    /// `GET /api/support/tickets` — the caller's support tickets.
+    pub async fn support_tickets(&self, token: &str) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::GET,
+            "/api/support/tickets",
+            Some(token),
+            None,
+        )
+        .await
+    }
+
+    /// `POST /api/support/tickets` — opens a ticket {subject, body}.
+    pub async fn support_ticket_create(
+        &self,
+        token: &str,
+        subject: &str,
+        body: &str,
+    ) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::POST,
+            "/api/support/tickets",
+            Some(token),
+            Some(json!({"subject": subject, "body": body})),
+        )
+        .await
+    }
+
+    /// `GET /api/support/tickets/:id` — full thread.
+    pub async fn support_ticket(&self, token: &str, id: i64) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::GET,
+            &format!("/api/support/tickets/{id}"),
+            Some(token),
+            None,
+        )
+        .await
+    }
+
+    /// `POST /api/support/tickets/:id/messages` — appends a user reply.
+    pub async fn support_reply(
+        &self,
+        token: &str,
+        id: i64,
+        body: &str,
+    ) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::POST,
+            &format!("/api/support/tickets/{id}/messages"),
+            Some(token),
+            Some(json!({"body": body})),
+        )
+        .await
+    }
+
+    /// `POST /api/support/tickets/:id/close` — closes the ticket.
+    pub async fn support_close(&self, token: &str, id: i64) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::POST,
+            &format!("/api/support/tickets/{id}/close"),
+            Some(token),
+            Some(json!({})),
+        )
+        .await
+    }
+
     /// `POST /api/tiktok/bind` — starts TikTok account binding, returns
     /// the one-shot bio code.
     pub async fn tiktok_bind(&self, token: &str, username: &str) -> Result<Value, ApiError> {
