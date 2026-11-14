@@ -4,7 +4,7 @@
  * Point-grants the admin role to an existing account without restarting the
  * server (SQLite WAL allows a concurrent writer):
  *
- *   node tools/grant-admin.mjs <email> [user|admin]
+ *   node tools/grant-admin.mjs <email> [user|admin|publisher]
  *
  * Opens the database through the server's own `openDatabase`, so pending
  * schema migrations run first (an unmigrated v1 DB has no `role` column).
@@ -17,8 +17,8 @@ import { openDatabase } from '../apps/server/src/db.js';
 import { config } from '../apps/server/src/config.js';
 
 const [email, role = 'admin'] = process.argv.slice(2);
-if (!email || !['user', 'admin'].includes(role)) {
-  console.error('usage: node tools/grant-admin.mjs <email> [user|admin]');
+if (!email || !['user', 'admin', 'publisher'].includes(role)) {
+  console.error('usage: node tools/grant-admin.mjs <email> [user|admin|publisher]');
   process.exit(1);
 }
 
