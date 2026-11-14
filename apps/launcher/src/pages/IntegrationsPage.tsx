@@ -139,6 +139,13 @@ export default function IntegrationsPage() {
       setTtBind(s);
       if (s.username) setBindName(s.username);
     }).catch(() => {});
+    let un: (() => void) | undefined;
+    api
+      .onTiktokBindVerified(() => {
+        api.tiktokBindStatus().then(setTtBind).catch(() => {});
+      })
+      .then((u) => (un = u));
+    return () => un?.();
   }, []);
   const bindAct = (fn: () => Promise<TikTokBindStatus>) => {
     setBindErr('');
@@ -240,14 +247,21 @@ export default function IntegrationsPage() {
             </div>
           ) : ttBind?.bound && ttBind.code ? (
             <>
-              <p className="text-xs text-muted-foreground">
-                Вставьте этот код в био TikTok (@{ttBind.username}): Профиль →
-                Изменить профиль → Био. Затем нажмите «Проверить». Код живёт до{' '}
-                {ttBind.code_expires_at
-                  ? new Date(ttBind.code_expires_at).toLocaleTimeString()
-                  : '—'}
-                , после привязки его можно убрать.
-              </p>
+              <div className="text-xs text-muted-foreground flex flex-col gap-1">
+                <p>
+                  <b>Способ 1 (быстрый):</b> подключитесь к любому эфиру ниже
+                  и напишите код <b>комментарием в чат</b> со своего аккаунта
+                  @{ttBind.username} — подтвердим автоматически.
+                </p>
+                <p>
+                  <b>Способ 2:</b> вставьте код в био TikTok (Профиль → Изменить
+                  профиль → Био) и нажмите «Проверить». Код живёт до{' '}
+                  {ttBind.code_expires_at
+                    ? new Date(ttBind.code_expires_at).toLocaleTimeString()
+                    : '—'}
+                  , после привязки его можно убрать.
+                </p>
+              </div>
               <div className="flex items-center gap-2">
                 <code className="rounded bg-muted px-3 py-1.5 text-lg font-mono tracking-widest">
                   {ttBind.code}

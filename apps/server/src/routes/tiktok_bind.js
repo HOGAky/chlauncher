@@ -142,20 +142,45 @@ export default async function tiktokBindRoutes(app, { db, authenticate, fetchBio
     );
   });
 
+  /** Marks the caller's pending binding verified; shared by both proofs. */
+  const markVerified = (request, reply) => {
+    const row = db
+      .prepare('SELECT * FROM tiktok_bindings WHERE user_id = ?')
+      .get(request.auth.userId);
+    if (!row) return { error: reply.code(404).send({ error: 'NOT_BOUND' }) };
+    if (row.verified) return { row };
+    if (!row.verify_code || row.code_expires_at <= nowIso()) {
+      return { error: reply.code(410).send({ error: 'CODE_EXPIRED' }) };
+    }
+    return { row };
+  };
+
+  const applyVerified = (userId, reply) => {
+    try {
+      db.prepare(
+        `UPDATE tiktok_bindings
+           SET verified = 1, verified_at = ?, verify_code = NULL,
+               code_expires_at = NULL, updated_at = ?
+         WHERE user_id = ?`
+      ).run(nowIso(), nowIso(), userId);
+    } catch {
+      reply.code(409).send({ error: 'USERNAME_TAKEN' });
+      return null;
+    }
+    return db
+      .prepare('SELECT * FROM tiktok_bindings WHERE user_id = ?')
+      .get(userId);
+  };
+
   /**
    * POST /verify — fetches the public profile and looks for the code in
    * the bio. Success flips verified=1; the code field is cleared so a
    * stale code can't be replayed against a changed bio.
    */
   app.post('/verify', async (request, reply) => {
-    const row = db
-      .prepare('SELECT * FROM tiktok_bindings WHERE user_id = ?')
-      .get(request.auth.userId);
-    if (!row) return reply.code(404).send({ error: 'NOT_BOUND' });
+    const { row, error } = markVerified(request, reply);
+    if (error) return error;
     if (row.verified) return view(row);
-    if (!row.verify_code || row.code_expires_at <= nowIso()) {
-      return reply.code(410).send({ error: 'CODE_EXPIRED' });
-    }
 
     const profile = await bioFetcher(row.username);
     if (!profile.ok) {
@@ -168,27 +193,34 @@ export default async function tiktokBindRoutes(app, { db, authenticate, fetchBio
       });
     }
 
-    // First verified claim wins — re-check under the unique index.
-    try {
-      db.prepare(
-        `UPDATE tiktok_bindings
-           SET verified = 1, verified_at = ?, verify_code = NULL,
-               code_expires_at = NULL, updated_at = ?
-         WHERE user_id = ?`
-      ).run(nowIso(), nowIso(), request.auth.userId);
-    } catch {
-      return reply.code(409).send({ error: 'USERNAME_TAKEN' });
-    }
+    const updated = applyVerified(request.auth.userId, reply);
+    if (!updated) return;
     return {
-      ...view(
-        db
-          .prepare('SELECT * FROM tiktok_bindings WHERE user_id = ?')
-          .get(request.auth.userId)
-      ),
+      ...view(updated),
       nickname: profile.nickname,
       avatar: profile.avatar,
       follower_count: profile.follower_count,
     };
+  });
+
+  /**
+   * POST /verify-comment {code} — second proof channel: the launcher's
+   * sidecar observed the caller posting the code in a TikTok LIVE chat.
+   * Posting requires being logged in as that account. Advisory-level
+   * proof (client-reported) — same trust model as the bio check.
+   */
+  app.post('/verify-comment', async (request, reply) => {
+    const { row, error } = markVerified(request, reply);
+    if (error) return error;
+    if (row.verified) return view(row);
+
+    const code = String(request.body?.code || '').trim();
+    if (!code || code !== row.verify_code) {
+      return reply.code(400).send({ error: 'CODE_MISMATCH' });
+    }
+    const updated = applyVerified(request.auth.userId, reply);
+    if (!updated) return;
+    return view(updated);
   });
 
   /** GET /bind — the caller's binding status (launcher UI). */

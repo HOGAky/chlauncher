@@ -148,6 +148,29 @@ test('rebind replaces the username; unbind clears the row', async () => {
   assert.equal(s.bound, false);
 });
 
+test('verify-comment verifies when the code matches, no bio needed', async () => {
+  const { token } = await register('bind7@test.dev');
+  const r = await bind(token, 'chat_prover');
+
+  const wrong = await app.inject({
+    method: 'POST',
+    url: '/api/tiktok/verify-comment',
+    headers: auth(token),
+    payload: { code: 'ZZZZZZZZ' },
+  }).then((x) => ({ code: x.statusCode, body: x.json() }));
+  assert.equal(wrong.code, 400);
+  assert.equal(wrong.body.error, 'CODE_MISMATCH');
+
+  const ok = await app.inject({
+    method: 'POST',
+    url: '/api/tiktok/verify-comment',
+    headers: auth(token),
+    payload: { code: r.body.code },
+  }).then((x) => ({ code: x.statusCode, body: x.json() }));
+  assert.equal(ok.code, 200, JSON.stringify(ok.body));
+  assert.equal(ok.body.verified, true);
+});
+
 test('all endpoints require auth', async () => {
   for (const url of ['/api/tiktok/bind', '/api/tiktok/verify', '/api/tiktok/unbind']) {
     const r = await app.inject({ method: 'POST', url, payload: {} });

@@ -332,44 +332,67 @@ pub async fn tg_unbind(state: State<'_, AppState>) -> Result<Value, String> {
         .map_err(|e| e.to_string())
 }
 
+/// Syncs the sidecar's pending-bind watcher with a bind-status payload:
+/// set while `{bound, !verified, code}` — cleared otherwise (verified or
+/// unbound). Lets the watcher spot the proof comment in LIVE chat.
+async fn sync_pending_bind(state: &AppState, v: &Value) {
+    let pending = if v["bound"].as_bool() == Some(true) && v["verified"].as_bool() != Some(true) {
+        match (v["username"].as_str(), v["code"].as_str()) {
+            (Some(u), Some(c)) => Some((u.to_string(), c.to_string())),
+            _ => None,
+        }
+    } else {
+        None
+    };
+    state.integrations.set_pending_bind(pending).await;
+}
+
 /// `POST /api/tiktok/bind` — starts binding, returns the bio code.
 #[tauri::command]
 pub async fn tiktok_bind(username: String, state: State<'_, AppState>) -> Result<Value, String> {
-    state
+    let v = state
         .api
         .tiktok_bind(&token(&state).await?, &username)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    sync_pending_bind(&state, &v).await;
+    Ok(v)
 }
 
 /// `POST /api/tiktok/verify` — server fetches the profile bio.
 #[tauri::command]
 pub async fn tiktok_verify(state: State<'_, AppState>) -> Result<Value, String> {
-    state
+    let v = state
         .api
         .tiktok_verify(&token(&state).await?)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    sync_pending_bind(&state, &v).await;
+    Ok(v)
 }
 
 /// `GET /api/tiktok/bind` — binding status for the UI.
 #[tauri::command]
 pub async fn tiktok_bind_status(state: State<'_, AppState>) -> Result<Value, String> {
-    state
+    let v = state
         .api
         .tiktok_bind_status(&token(&state).await?)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    sync_pending_bind(&state, &v).await;
+    Ok(v)
 }
 
 /// `POST /api/tiktok/unbind` — detaches TikTok from this account.
 #[tauri::command]
 pub async fn tiktok_unbind(state: State<'_, AppState>) -> Result<Value, String> {
-    state
+    let v = state
         .api
         .tiktok_unbind(&token(&state).await?)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    sync_pending_bind(&state, &v).await;
+    Ok(v)
 }
 
 /// Built-in game catalogue + live session + per-game cfg + plan

@@ -24,7 +24,7 @@ use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::AsyncBufReadExt;
 use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
@@ -46,6 +46,10 @@ pub struct IntegrationManager {
     da_task: Mutex<Option<JoinHandle<()>>>,
     /// Ingest channel toward the mapper (shared with the simulator).
     raw_tx: mpsc::Sender<RawStreamEvent>,
+    /// Pending TikTok account binding `(username, code)` — while set, a
+    /// matching `comment` event proves account ownership (the commenter
+    /// is logged in as that account) and auto-verifies via the server.
+    pub pending_bind: Arc<Mutex<Option<(String, String)>>>,
     app: AppHandle,
 }
 
@@ -59,8 +63,15 @@ impl IntegrationManager {
             da_status: Arc::new(Mutex::new(IntegrationStatus::Disconnected)),
             da_task: Mutex::new(None),
             raw_tx,
+            pending_bind: Arc::new(Mutex::new(None)),
             app,
         }
+    }
+
+    /// Mirrors the server's pending binding so the sidecar watcher can
+    /// spot the proof comment. `None` clears it (verified / unbound).
+    pub async fn set_pending_bind(&self, pending: Option<(String, String)>) {
+        *self.pending_bind.lock().await = pending;
     }
 
     /// Sets a status and notifies the frontend.
@@ -108,8 +119,18 @@ impl IntegrationManager {
         let app = self.app.clone();
         let raw_tx = self.raw_tx.clone();
         let last_activity = self.tiktok_last_activity.clone();
+        let pending_bind = self.pending_bind.clone();
         let handle = tokio::spawn(async move {
-            run_tiktok(username, raw_tx, status, app, sign_cfg, last_activity).await;
+            run_tiktok(
+                username,
+                raw_tx,
+                status,
+                app,
+                sign_cfg,
+                last_activity,
+                pending_bind,
+            )
+            .await;
         });
         *self.tiktok_task.lock().await = Some(handle);
         Ok(())
@@ -363,6 +384,7 @@ async fn run_tiktok(
     app: AppHandle,
     sign_cfg: Option<(String, String)>,
     last_activity: Arc<Mutex<Option<i64>>>,
+    pending_bind: Arc<Mutex<Option<(String, String)>>>,
 ) {
     let unix_now = || {
         std::time::SystemTime::now()
@@ -514,6 +536,29 @@ async fn run_tiktok(
                     vip: v["vip"].as_bool().unwrap_or(false),
                     ts_ms: now_ms(),
                 };
+                // Account-binding proof: the pending bind's owner posted the
+                // code in this chat — only possible from their own account.
+                if ev.event_kind == "comment" {
+                    let pending = pending_bind.lock().await.clone();
+                    if let Some((bind_user, code)) = pending {
+                        if ev.user.eq_ignore_ascii_case(&bind_user) && ev.raw_name.contains(&code) {
+                            let app2 = app.clone();
+                            let pending_bind = pending_bind.clone();
+                            tokio::spawn(async move {
+                                let state = app2.state::<crate::AppState>();
+                                let token = state.settings.lock().await.data.auth_token.clone();
+                                let Some(token) = token else { return };
+                                if state.api.tiktok_verify_comment(&token, &code).await.is_ok() {
+                                    *pending_bind.lock().await = None;
+                                    let _ = app2.emit(
+                                        "tiktok-bind-verified",
+                                        json!({"username": bind_user}),
+                                    );
+                                }
+                            });
+                        }
+                    }
+                }
                 let _ = raw_tx.send(ev).await;
             }
             "error" => {

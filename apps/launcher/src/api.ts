@@ -494,6 +494,12 @@ export const onStreamEvent = (cb: (ev: StreamEvent) => void): Promise<UnlistenFn
   listen<StreamEvent>('stream-event', (e) => cb(e.payload));
 
 /** Subscribes to integration status changes. */
+/** Fired when the sidecar saw the bio-code comment and the server verified the bind. */
+export const onTiktokBindVerified = (
+  cb: (p: { username: string }) => void
+): Promise<UnlistenFn> =>
+  listen<{ username: string }>('tiktok-bind-verified', (e) => cb(e.payload));
+
 export const onIntegrationStatus = (
   cb: (p: { integration: string; status: unknown }) => void
 ): Promise<UnlistenFn> =>

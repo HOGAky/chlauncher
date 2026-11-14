@@ -400,6 +400,18 @@ impl ApiClient {
         .await
     }
 
+    /// `POST /api/tiktok/verify-comment` — proves the sidecar saw the
+    /// caller post their code in a LIVE chat.
+    pub async fn tiktok_verify_comment(&self, token: &str, code: &str) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::POST,
+            "/api/tiktok/verify-comment",
+            Some(token),
+            Some(json!({"code": code})),
+        )
+        .await
+    }
+
     /// `GET /api/tiktok/bind` — the caller's TikTok binding status.
     pub async fn tiktok_bind_status(&self, token: &str) -> Result<Value, ApiError> {
         self.req(reqwest::Method::GET, "/api/tiktok/bind", Some(token), None)
