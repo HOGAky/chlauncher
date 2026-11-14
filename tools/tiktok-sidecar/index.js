@@ -188,9 +188,26 @@ const main = async () => {
   });
   conn.on(WebcastEvent.SUBSCRIBE, (d) => ev('subscribe', d, 'subscribed'));
 
+  // Connector retries failed sign/webcast requests internally without
+  // surfacing errors — connect() can then sit forever while we only
+  // heartbeat, and the launcher shows "связь…" indefinitely. Cap the
+  // wait: 75s without CONNECTED → explicit error so the UI can explain
+  // (room offline? sign tier flaky? retry).
+  const connectTimeout = setTimeout(() => {
+    out({
+      type: 'error',
+      message:
+        'CONNECT_TIMEOUT: не удалось подключиться за 75с — комната оффлайн или сигнинг перегружен. Проверьте ник и что эфир идёт, затем повторите.',
+    });
+    process.exit(4);
+  }, 75000);
+  connectTimeout.unref();
+  conn.on(WebcastEvent.CONNECTED, () => clearTimeout(connectTimeout));
+
   conn
     .connect()
     .catch((e) => {
+      clearTimeout(connectTimeout);
       out({ type: 'error', message: String(e?.message || e) });
       process.exit(1);
     });

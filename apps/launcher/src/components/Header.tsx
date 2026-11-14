@@ -113,7 +113,9 @@ export default function Header() {
                   ? 'success'
                   : ttStatus === 'connecting' || ttStatus === 'connected'
                     ? 'warning'
-                    : 'outline'
+                    : typeof ttStatus === 'object'
+                      ? 'destructive'
+                      : 'outline'
               }
               className="gap-1 cursor-pointer"
             >
@@ -122,7 +124,9 @@ export default function Header() {
                 ? 'LIVE'
                 : ttStatus === 'connecting' || ttStatus === 'connected'
                   ? 'связь…'
-                  : 'оффлайн'}
+                  : typeof ttStatus === 'object'
+                    ? 'ошибка'
+                    : 'оффлайн'}
             </Badge>
           </button>
           {ttOpen && (
@@ -154,7 +158,11 @@ export default function Header() {
                 {ttErr && <p className="text-xs text-red-400">{ttErr}</p>}
                 <div className="flex items-center justify-between pt-1">
                   <span className="text-xs text-muted-foreground">
-                    {ttStatus === 'live' ? 'Эфир читается' : 'Не подключено'}
+                    {ttStatus === 'live'
+                      ? 'Эфир читается'
+                      : typeof ttStatus === 'object'
+                        ? (ttStatus as { error: string }).error
+                        : 'Не подключено'}
                   </span>
                   {(ttStatus === 'live' || ttStatus === 'connecting' || ttStatus === 'connected') && (
                     <button
