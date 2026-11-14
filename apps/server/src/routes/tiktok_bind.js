@@ -140,6 +140,28 @@ async function oauthUserInfo(fetcher, accessToken) {
 }
 
 /**
+ * oEmbed fallback — proves the account exists and yields the nickname
+ * (no bio/avatar). Works where the profile page is anti-bot blocked.
+ */
+async function fetchTikTokOEmbed(username) {
+  try {
+    const res = await fetch(
+      `https://www.tiktok.com/oembed?url=https://www.tiktok.com/@${encodeURIComponent(username)}`,
+      { signal: AbortSignal.timeout(PROFILE_TIMEOUT_MS) }
+    );
+    if (res.status === 404 || res.status === 400) {
+      return { ok: false, error: 'USER_NOT_FOUND' };
+    }
+    if (!res.ok) return { ok: false, error: 'PROFILE_FETCH_FAILED' };
+    const j = await res.json();
+    if (!j?.author_name) return { ok: false, error: 'USER_NOT_FOUND' };
+    return { ok: true, bio: '', nickname: j.author_name, avatar: '', follower_count: null };
+  } catch {
+    return { ok: false, error: 'PROFILE_FETCH_FAILED' };
+  }
+}
+
+/**
  * @param {import('fastify').FastifyInstance} app
  * @param {{db: import('node:sqlite').DatabaseSync, authenticate: Function, fetchBio?: Function, oauthFetch?: Function}} opts
  */
@@ -147,6 +169,18 @@ export default async function tiktokBindRoutes(app, { db, authenticate, fetchBio
   const bioFetcher = fetchBio || fetchTikTokBio;
   const http = oauthFetch || fetch;
   await app.register(rateLimit, { max: 60, timeWindow: '1 minute' });
+
+  /** Best-effort profile read: hydration page → oEmbed → null. */
+  const profileLookup = async (username) => {
+    const p = await bioFetcher(username);
+    if (p.ok) return p;
+    if (p.error !== 'USER_NOT_FOUND') {
+      const o = await fetchTikTokOEmbed(username);
+      if (o.ok) return o;
+      if (o.error === 'USER_NOT_FOUND') return { ok: false, error: 'USER_NOT_FOUND' };
+    }
+    return p;
+  };
 
   /**
    * GET /oauth/callback — PUBLIC: the browser lands here straight from
@@ -281,9 +315,12 @@ export default async function tiktokBindRoutes(app, { db, authenticate, fetchBio
   });
 
   /**
-   * POST /bind {username} — starts (or restarts) the flow. Any previous
-   * binding on this account is replaced; a username verified by another
-   * account is refused.
+   * POST /bind {username} — links the launcher account to a TikTok
+   * handle: reads the public profile best-effort (avatar, display name,
+   * followers) and binds immediately. Ownership is NOT proven — that is
+   * what /verify, /verify-comment and OAuth are for. A fresh code is
+   * still issued so the user can upgrade to verified later.
+   * A username VERIFIED by another account is refused.
    */
   app.post('/bind', async (request, reply) => {
     const username = String(request.body?.username || '')
@@ -301,24 +338,53 @@ export default async function tiktokBindRoutes(app, { db, authenticate, fetchBio
       return reply.code(409).send({ error: 'USERNAME_TAKEN' });
     }
 
+    const profile = await profileLookup(username);
+    if (!profile.ok && profile.error === 'USER_NOT_FOUND') {
+      return reply.code(404).send({ error: 'USER_NOT_FOUND' });
+    }
+    const found = profile.ok ? profile : null;
+
     const code = generateCode();
     const now = nowIso();
     const expires = new Date(Date.now() + CODE_TTL_MIN * 60_000).toISOString();
     db.prepare(
       `INSERT INTO tiktok_bindings
-         (user_id, username, verified, verify_code, code_expires_at, bound_at, updated_at)
-       VALUES (?, ?, 0, ?, ?, ?, ?)
+         (user_id, username, verified, verify_code, code_expires_at, bound_at,
+          updated_at, display_name, avatar_url, auth_method)
+       VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?, 'simple')
        ON CONFLICT(user_id) DO UPDATE SET
          username = excluded.username,
          verified = 0,
          verify_code = excluded.verify_code,
          code_expires_at = excluded.code_expires_at,
          verified_at = NULL,
-         updated_at = excluded.updated_at`
-    ).run(request.auth.userId, username, code, expires, now, now);
-    return view(
-      db.prepare('SELECT * FROM tiktok_bindings WHERE user_id = ?').get(request.auth.userId)
+         updated_at = excluded.updated_at,
+         display_name = excluded.display_name,
+         avatar_url = excluded.avatar_url,
+         open_id = NULL, union_id = NULL, auth_method = 'simple'`
+    ).run(
+      request.auth.userId,
+      username,
+      code,
+      expires,
+      now,
+      now,
+      found?.nickname || '',
+      found?.avatar || ''
     );
+    return {
+      ...view(
+        db.prepare('SELECT * FROM tiktok_bindings WHERE user_id = ?').get(request.auth.userId)
+      ),
+      profile: found
+        ? {
+            nickname: found.nickname,
+            avatar: found.avatar,
+            follower_count: found.follower_count,
+            bio: (found.bio || '').slice(0, 120),
+          }
+        : null,
+    };
   });
 
   /** Marks the caller's pending binding verified; shared by both proofs. */

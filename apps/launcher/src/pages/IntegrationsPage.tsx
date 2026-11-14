@@ -230,119 +230,105 @@ export default function IntegrationsPage() {
               <BadgeCheck size={18} /> Аккаунт TikTok
             </CardTitle>
             {ttBind?.verified ? (
-              <Badge variant="success">Привязан</Badge>
+              <Badge variant="success">Подтверждён</Badge>
             ) : ttBind?.bound ? (
-              <Badge variant="warning">Ждёт проверки</Badge>
+              <Badge>Привязан</Badge>
             ) : (
               <Badge variant="outline">Не привязан</Badge>
             )}
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          {ttBind?.verified ? (
-            <div className="flex items-center gap-2">
-              {ttBind.avatar_url && (
-                <img
-                  src={ttBind.avatar_url}
-                  alt=""
-                  className="h-7 w-7 rounded-full"
-                  referrerPolicy="no-referrer"
-                />
-              )}
-              <span className="text-sm">
-                @{ttBind.username}
-                {ttBind.display_name ? ` (${ttBind.display_name})` : ''} — аккаунт
-                подтверждён{ttBind.auth_method === 'oauth' ? ' через TikTok' : ''}
-              </span>
-              <Button variant="outline" onClick={useBoundName}>
-                Подставить в ник комнаты
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={bindBusy}
-                onClick={() => bindAct(api.tiktokUnbind)}
-              >
-                Отвязать
-              </Button>
-            </div>
-          ) : ttBind?.bound && ttBind.code ? (
+          {ttBind?.bound ? (
             <>
-              <div className="text-xs text-muted-foreground flex flex-col gap-1">
-                <p>
-                  <b>Способ 1 (быстрый):</b> подключитесь к любому эфиру ниже
-                  и напишите код <b>комментарием в чат</b> со своего аккаунта
-                  @{ttBind.username} — подтвердим автоматически.
-                </p>
-                <p>
-                  <b>Способ 2:</b> вставьте код в био TikTok (Профиль → Изменить
-                  профиль → Био) и нажмите «Проверить». Код живёт до{' '}
-                  {ttBind.code_expires_at
-                    ? new Date(ttBind.code_expires_at).toLocaleTimeString()
-                    : '—'}
-                  , после привязки его можно убрать.
-                </p>
+              <div className="flex items-center gap-3">
+                {ttBind.avatar_url ? (
+                  <img
+                    src={ttBind.avatar_url}
+                    alt=""
+                    className="h-10 w-10 rounded-full"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-sm font-semibold">
+                    @
+                  </div>
+                )}
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium">@{ttBind.username}</span>
+                  {ttBind.display_name && (
+                    <span className="text-xs text-muted-foreground">
+                      {ttBind.display_name}
+                    </span>
+                  )}
+                </div>
+                <div className="ml-auto flex gap-2">
+                  <Button variant="outline" onClick={useBoundName}>
+                    Подставить в ник комнаты
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    disabled={bindBusy}
+                    onClick={() => bindAct(api.tiktokUnbind)}
+                  >
+                    Отвязать
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <code className="rounded bg-muted px-3 py-1.5 text-lg font-mono tracking-widest">
-                  {ttBind.code}
-                </code>
-                <Button
-                  variant="outline"
-                  onClick={() => navigator.clipboard.writeText(ttBind.code || '')}
-                >
-                  <Copy size={14} />
-                </Button>
-                <Button
-                  disabled={bindBusy}
-                  onClick={() => bindAct(api.tiktokVerify)}
-                >
-                  Проверить
-                </Button>
-                <Button
-                  variant="secondary"
-                  disabled={bindBusy}
-                  onClick={() => bindAct(api.tiktokUnbind)}
-                >
-                  Отмена
-                </Button>
-              </div>
+              {!ttBind.verified && (
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-muted-foreground">
+                    Подтвердить владение аккаунтом (необязательно)
+                  </summary>
+                  <div className="mt-2 flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <Button variant="secondary" onClick={startOAuth}>
+                        <LogIn size={14} /> Через TikTok
+                      </Button>
+                      <Button
+                        variant="outline"
+                        disabled={bindBusy}
+                        onClick={() => bindAct(api.tiktokVerify)}
+                      >
+                        Проверить био
+                      </Button>
+                    </div>
+                    {ttBind.code && (
+                      <p className="text-muted-foreground">
+                        Или вставьте код <code className="rounded bg-muted px-1 font-mono">{ttBind.code}</code>{' '}
+                        <button
+                          className="underline"
+                          onClick={() => navigator.clipboard.writeText(ttBind.code || '')}
+                        >
+                          копировать
+                        </button>{' '}
+                        в био профиля либо напишите его комментарием в чате любого
+                        эфира — подтвердим автоматически.
+                      </p>
+                    )}
+                  </div>
+                </details>
+              )}
             </>
           ) : (
             <>
               <p className="text-xs text-muted-foreground">
-                Войдите через TikTok — подтвердим владение аккаунтом официально
-                и подставим ник в подключение к эфиру.
+                Введите свой ник — лаунчер прочитает аккаунт и подставит его в
+                подключение к эфиру и персональные фичи.
               </p>
               <div className="flex gap-2">
-                <Button onClick={startOAuth}>
-                  <LogIn size={14} /> Войти через TikTok
+                <Input
+                  placeholder="Ваш TikTok username (без @)"
+                  value={bindName}
+                  onChange={(e) => setBindName(e.target.value.replace(/^@/, ''))}
+                />
+                <Button
+                  disabled={!bindName.trim() || bindBusy}
+                  onClick={() => bindAct(() => api.tiktokBind(bindName.trim()))}
+                >
+                  Привязать
                 </Button>
               </div>
-              <details className="text-xs">
-                <summary className="cursor-pointer text-muted-foreground">
-                  Или привязать кодом (без авторизации TikTok)
-                </summary>
-                <div className="mt-2 flex flex-col gap-2">
-                  <p className="text-muted-foreground">
-                    Введите ник → получите код → подтвердите через комментарий
-                    в чате или через био.
-                  </p>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Ваш TikTok username (без @)"
-                      value={bindName}
-                      onChange={(e) => setBindName(e.target.value.replace(/^@/, ''))}
-                    />
-                    <Button
-                      variant="secondary"
-                      disabled={!bindName.trim() || bindBusy}
-                      onClick={() => bindAct(() => api.tiktokBind(bindName.trim()))}
-                    >
-                      Получить код
-                    </Button>
-                  </div>
-                </div>
-              </details>
             </>
           )}
           {bindErr && <p className="text-xs text-destructive">{bindErr}</p>}

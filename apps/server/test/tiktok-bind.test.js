@@ -78,12 +78,12 @@ before(async () => {
       return new Response('{}', { status: 404 });
     },
     tiktokFetchBio: async (username) => {
-      if (!bios.has(username)) return { ok: false, error: 'USER_NOT_FOUND' };
+      if (username === 'ghost_404') return { ok: false, error: 'USER_NOT_FOUND' };
       return {
         ok: true,
-        bio: bios.get(username),
-        nickname: username,
-        avatar: '',
+        bio: bios.get(username) || '',
+        nickname: `Nick ${username}`,
+        avatar: 'https://x/av.png',
         follower_count: 42,
       };
     },
@@ -102,6 +102,21 @@ test('bind issues a code and status exposes it while unverified', async () => {
   assert.equal(s.code, r.body.code);
 });
 
+test('simple bind links instantly and returns the profile card', async () => {
+  const { token } = await register('simple1@test.dev');
+  const r = await bind(token, 'streamer_card');
+  assert.equal(r.code, 200, JSON.stringify(r.body));
+  assert.equal(r.body.bound, true);
+  assert.equal(r.body.verified, false);
+  assert.equal(r.body.display_name, 'Nick streamer_card');
+  assert.equal(r.body.avatar_url, 'https://x/av.png');
+  assert.equal(r.body.profile.nickname, 'Nick streamer_card');
+  assert.equal(r.body.profile.follower_count, 42);
+  // Unknown handle → 404, nothing bound.
+  const ghost = await bind(token, 'ghost_404');
+  assert.equal(ghost.code, 404);
+});
+
 test('verify flips verified once the code lands in the bio', async () => {
   const { token } = await register('bind2@test.dev');
   const r = await bind(token, 'streamer_two');
@@ -116,7 +131,7 @@ test('verify flips verified once the code lands in the bio', async () => {
   const ok = await verify(token);
   assert.equal(ok.code, 200, JSON.stringify(ok.body));
   assert.equal(ok.body.verified, true);
-  assert.equal(ok.body.nickname, 'streamer_two');
+  assert.equal(ok.body.nickname, 'Nick streamer_two');
   assert.equal(ok.body.follower_count, 42);
   // Code wiped — a status call no longer leaks it.
   const s = await status(token);
