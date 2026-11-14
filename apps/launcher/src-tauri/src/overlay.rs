@@ -354,7 +354,7 @@ pub async fn start_overlay_server(
             get(page_route(PRISM_BREAK_HTML)),
         )
         .route("/gamekit.js", get(serve_gamekit))
-        .route("/games/cfg/:id", get(serve_game_cfg))
+        .route("/games/cfg/{id}", get(serve_game_cfg))
         .route("/games/state.json", get(serve_game_state))
         .route("/games/report", post(serve_game_report))
         .route("/top.json", get(serve_top))
@@ -363,9 +363,9 @@ pub async fn start_overlay_server(
         .route("/subathon.json", get(serve_subathon))
         .route("/queue.json", get(serve_queue))
         .route("/hype.json", get(serve_hype))
-        .route("/gifts/:file", get(serve_gift))
-        .route("/media/:id", get(serve_media))
-        .route("/tts/:file", get(serve_tts))
+        .route("/gifts/{file}", get(serve_gift))
+        .route("/media/{id}", get(serve_media))
+        .route("/tts/{file}", get(serve_tts))
         .route("/health", get(|| async { "ok" }))
         .route("/ws", get(ws_upgrade))
         .with_state(state);
