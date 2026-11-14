@@ -5,11 +5,11 @@
  * URL for TikTok Live Studio.
  */
 import React, { useEffect, useState } from 'react';
-import { Radio, Copy, Wallet, Cloud, RefreshCw, Plug, Play, AppWindow } from 'lucide-react';
+import { Radio, Copy, Wallet, Cloud, RefreshCw, Plug, Play, AppWindow, BadgeCheck } from 'lucide-react';
 import * as api from '../api';
 import { useApp } from '../App';
 import { maskSecret } from '../lib/utils';
-import type { AdapterStatus, ForwardStatus, IntegrationStatus } from '../types';
+import type { AdapterStatus, ForwardStatus, IntegrationStatus, TikTokBindStatus } from '../types';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Switch } from '../components/ui/switch';
@@ -128,6 +128,29 @@ export default function IntegrationsPage() {
   const ttError = typeof statuses?.tiktok === 'object' && statuses.tiktok && 'error' in statuses.tiktok;
   const lastAct = statuses?.tiktok_last_activity;
   const actAgeSec = lastAct ? Math.max(0, Math.floor(Date.now() / 1000 - lastAct)) : null;
+
+  // TikTok account binding — bio-code proof, separate from room connect.
+  const [ttBind, setTtBind] = useState<TikTokBindStatus | null>(null);
+  const [bindName, setBindName] = useState('');
+  const [bindErr, setBindErr] = useState('');
+  const [bindBusy, setBindBusy] = useState(false);
+  useEffect(() => {
+    api.tiktokBindStatus().then((s) => {
+      setTtBind(s);
+      if (s.username) setBindName(s.username);
+    }).catch(() => {});
+  }, []);
+  const bindAct = (fn: () => Promise<TikTokBindStatus>) => {
+    setBindErr('');
+    setBindBusy(true);
+    fn()
+      .then(setTtBind)
+      .catch((e) => setBindErr(humanError(e)))
+      .finally(() => setBindBusy(false));
+  };
+  const useBoundName = () => {
+    if (ttBind?.username) setUsername(ttBind.username);
+  };
   // Свежесть связи: сайдкар шлёт ping примерно каждые 30 с — тишина дольше
   // минуты при открытой сессии обычно означает мёртвую комнату/зависание.
   const stale = ttConnected && actAgeSec !== null && actAgeSec > 60;
@@ -181,6 +204,99 @@ export default function IntegrationsPage() {
   return (
     <div className="max-w-2xl flex flex-col gap-4">
       <h1 className="text-lg font-semibold">Интеграции стрима</h1>
+
+      {/* TikTok account binding — proves ownership of the username */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <BadgeCheck size={18} /> Аккаунт TikTok
+            </CardTitle>
+            {ttBind?.verified ? (
+              <Badge variant="success">Привязан</Badge>
+            ) : ttBind?.bound ? (
+              <Badge variant="warning">Ждёт проверки</Badge>
+            ) : (
+              <Badge variant="outline">Не привязан</Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          {ttBind?.verified ? (
+            <div className="flex items-center gap-2">
+              <span className="text-sm">
+                @{ttBind.username} — аккаунт подтверждён
+              </span>
+              <Button variant="outline" onClick={useBoundName}>
+                Подставить в ник комнаты
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={bindBusy}
+                onClick={() => bindAct(api.tiktokUnbind)}
+              >
+                Отвязать
+              </Button>
+            </div>
+          ) : ttBind?.bound && ttBind.code ? (
+            <>
+              <p className="text-xs text-muted-foreground">
+                Вставьте этот код в био TikTok (@{ttBind.username}): Профиль →
+                Изменить профиль → Био. Затем нажмите «Проверить». Код живёт до{' '}
+                {ttBind.code_expires_at
+                  ? new Date(ttBind.code_expires_at).toLocaleTimeString()
+                  : '—'}
+                , после привязки его можно убрать.
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="rounded bg-muted px-3 py-1.5 text-lg font-mono tracking-widest">
+                  {ttBind.code}
+                </code>
+                <Button
+                  variant="outline"
+                  onClick={() => navigator.clipboard.writeText(ttBind.code || '')}
+                >
+                  <Copy size={14} />
+                </Button>
+                <Button
+                  disabled={bindBusy}
+                  onClick={() => bindAct(api.tiktokVerify)}
+                >
+                  Проверить
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={bindBusy}
+                  onClick={() => bindAct(api.tiktokUnbind)}
+                >
+                  Отмена
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground">
+                Привяжите свой TikTok — подтверждение через код в био. Дальше
+                ник подставится в подключение к эфиру и в персональные фичи.
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Ваш TikTok username (без @)"
+                  value={bindName}
+                  onChange={(e) => setBindName(e.target.value.replace(/^@/, ''))}
+                />
+                <Button
+                  disabled={!bindName.trim() || bindBusy}
+                  onClick={() => bindAct(() => api.tiktokBind(bindName.trim()))}
+                >
+                  Привязать
+                </Button>
+              </div>
+            </>
+          )}
+          {bindErr && <p className="text-xs text-destructive">{bindErr}</p>}
+        </CardContent>
+      </Card>
 
       {/* TikTok Live */}
       <Card>

@@ -332,6 +332,46 @@ pub async fn tg_unbind(state: State<'_, AppState>) -> Result<Value, String> {
         .map_err(|e| e.to_string())
 }
 
+/// `POST /api/tiktok/bind` — starts binding, returns the bio code.
+#[tauri::command]
+pub async fn tiktok_bind(username: String, state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .tiktok_bind(&token(&state).await?, &username)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `POST /api/tiktok/verify` — server fetches the profile bio.
+#[tauri::command]
+pub async fn tiktok_verify(state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .tiktok_verify(&token(&state).await?)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `GET /api/tiktok/bind` — binding status for the UI.
+#[tauri::command]
+pub async fn tiktok_bind_status(state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .tiktok_bind_status(&token(&state).await?)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `POST /api/tiktok/unbind` — detaches TikTok from this account.
+#[tauri::command]
+pub async fn tiktok_unbind(state: State<'_, AppState>) -> Result<Value, String> {
+    state
+        .api
+        .tiktok_unbind(&token(&state).await?)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// Built-in game catalogue + live session + per-game cfg + plan
 /// allow-list — the Games page renders straight from this.
 #[tauri::command]

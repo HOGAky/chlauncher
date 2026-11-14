@@ -377,6 +377,46 @@ impl ApiClient {
         .await
     }
 
+    /// `POST /api/tiktok/bind` — starts TikTok account binding, returns
+    /// the one-shot bio code.
+    pub async fn tiktok_bind(&self, token: &str, username: &str) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::POST,
+            "/api/tiktok/bind",
+            Some(token),
+            Some(json!({"username": username})),
+        )
+        .await
+    }
+
+    /// `POST /api/tiktok/verify` — checks the profile bio for the code.
+    pub async fn tiktok_verify(&self, token: &str) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::POST,
+            "/api/tiktok/verify",
+            Some(token),
+            Some(json!({})),
+        )
+        .await
+    }
+
+    /// `GET /api/tiktok/bind` — the caller's TikTok binding status.
+    pub async fn tiktok_bind_status(&self, token: &str) -> Result<Value, ApiError> {
+        self.req(reqwest::Method::GET, "/api/tiktok/bind", Some(token), None)
+            .await
+    }
+
+    /// `POST /api/tiktok/unbind` — detaches the caller's TikTok account.
+    pub async fn tiktok_unbind(&self, token: &str) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::POST,
+            "/api/tiktok/unbind",
+            Some(token),
+            Some(json!({})),
+        )
+        .await
+    }
+
     /// `POST /api/billing/mock-pay` — TEST endpoint, grants a plan period.
     pub async fn mock_pay(&self, token: &str, plan_code: &str) -> Result<Subscription, ApiError> {
         let v: Value = self

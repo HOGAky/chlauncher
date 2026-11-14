@@ -365,6 +365,27 @@ const MIGRATIONS = [
       CREATE INDEX idx_billing_events_tg ON billing_events(telegram_user_id, applied);
     `);
   },
+  // v9 → v10: TikTok account binding. Ownership is proven out-of-band:
+  // the user pastes a one-shot code into their TikTok bio, we fetch the
+  // public profile and check the signature field. One account → one
+  // TikTok; a verified username can't be claimed twice (partial unique
+  // index — pending rows may collide, only the first verify wins).
+  (db) => {
+    db.exec(`
+      CREATE TABLE tiktok_bindings (
+        user_id         INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        username        TEXT NOT NULL,
+        verified        INTEGER NOT NULL DEFAULT 0,
+        verify_code     TEXT,
+        code_expires_at TEXT,
+        bound_at        TEXT NOT NULL,
+        verified_at     TEXT,
+        updated_at      TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX idx_tiktok_bindings_verified
+        ON tiktok_bindings(username) WHERE verified = 1;
+    `);
+  },
 ];
 
 /** Runs all pending migrations in order. Idempotent via user_version. */

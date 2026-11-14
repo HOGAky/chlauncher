@@ -422,6 +422,18 @@ export interface AuditEntry {
 }
 
 /** Boot snapshot returned by `get_bootstrap`. */
+/** TikTok account binding state as returned by /api/tiktok/bind. */
+export interface TikTokBindStatus {
+  bound: boolean;
+  username: string | null;
+  verified: boolean;
+  /** One-shot bio code, present while the binding is unverified. */
+  code: string | null;
+  code_expires_at: string | null;
+  bound_at: string | null;
+  verified_at: string | null;
+}
+
 export interface Bootstrap {
   authed: boolean;
   email: string | null;

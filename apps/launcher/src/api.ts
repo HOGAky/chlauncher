@@ -31,6 +31,7 @@ import type {
   SpinnerPool,
   StreamEvent,
   Subscription,
+  TikTokBindStatus,
   TriggerPreset,
   TriggerProfile,
   TtsSettings,
@@ -163,6 +164,19 @@ export const tiktokDisconnect = () => cmd<void>('tiktok_disconnect');
 
 /** Reconnect TikTok to the saved username («Обновить связь»). */
 export const tiktokReconnect = () => cmd<void>('tiktok_reconnect');
+
+/** Start TikTok account binding — returns the one-shot bio code. */
+export const tiktokBind = (username: string) =>
+  cmd<TikTokBindStatus>('tiktok_bind', { username });
+
+/** Ask the server to verify the code in the TikTok bio. */
+export const tiktokVerify = () => cmd<TikTokBindStatus>('tiktok_verify');
+
+/** Own TikTok binding status. */
+export const tiktokBindStatus = () => cmd<TikTokBindStatus>('tiktok_bind_status');
+
+/** Detach the bound TikTok account. */
+export const tiktokUnbind = () => cmd<TikTokBindStatus>('tiktok_unbind');
 
 /** Lightweight status snapshot (statuses + last activity) for UI polling. */
 export const getIntegrationStatus = () =>

@@ -23,6 +23,7 @@ import gamesRoutes from './routes/games.js';
 import licenseRoutes from './routes/license.js';
 import publisherRoutes from './routes/publisher.js';
 import tiktokRoutes from './routes/tiktok.js';
+import tiktokBindRoutes from './routes/tiktok_bind.js';
 import plansRoutes, { entitlementsRoutes } from './routes/plans.js';
 import tributeRoutes, { tgRoutes } from './routes/tribute.js';
 import usageRoutes from './routes/usage.js';
@@ -108,7 +109,14 @@ export async function buildApp(opts = {}) {
   const authenticate = makeAuthenticate(db);
   const requireAdmin = makeRequireAdmin(db);
   const requirePublisher = makeRequirePublisher(db);
-  const deps = { db, authenticate, requireAdmin, requirePublisher };
+  const deps = {
+    db,
+    authenticate,
+    requireAdmin,
+    requirePublisher,
+    // Test hook: stub the TikTok profile fetch so bind tests stay offline.
+    fetchBio: opts.tiktokFetchBio,
+  };
 
   app.get('/api/health', async () => ({ ok: true, ts: Date.now() }));
   await app.register(adminRoutes, { prefix: '/api/admin', ...deps });
@@ -125,6 +133,7 @@ export async function buildApp(opts = {}) {
   await app.register(licenseRoutes, { prefix: '/api/license', ...deps });
   await app.register(publisherRoutes, { prefix: '/api/publisher', ...deps });
   await app.register(tiktokRoutes, { prefix: '/api/tiktok-sign', ...deps });
+  await app.register(tiktokBindRoutes, { prefix: '/api/tiktok', ...deps });
 
   app.addHook('onClose', async () => db.close());
   return { app, db };
