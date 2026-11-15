@@ -24,7 +24,14 @@
 // Env:   EULERSTREAM_API_KEY — optional personal key for direct mode.
 //         SIGN_API_URL / SIGN_API_KEY — connector-native overrides.
 
-const { TikTokLiveConnection, WebcastEvent, SignConfig } = require('tiktok-live-connector');
+const {
+  TikTokLiveConnection,
+  WebcastEvent,
+  ControlEvent,
+  SignConfig,
+  RoomIdRouteConfig,
+  IsLiveRouteConfig,
+} = require('tiktok-live-connector');
 
 const username = (process.argv[2] || '').replace(/^@/, '').trim();
 if (!username) {
@@ -41,6 +48,15 @@ const out = (obj) => {
 if (process.env.EULERSTREAM_API_KEY) {
   SignConfig.apiKey = process.env.EULERSTREAM_API_KEY;
 }
+
+// EFIR-style routing: room-id and is-live resolve through the unsigned
+// HTML/API routes. The signed Euler fallbacks are exactly the calls that
+// return DEVICE_BLOCKED on the free tier — skipping them removes the
+// biggest flakiness source before the WebSocket is even signed.
+RoomIdRouteConfig.skipFetchRoomIdFromEulerRoute = true;
+IsLiveRouteConfig.skipFetchRoomIdFromEulerRoute = true;
+SignConfig.baseOptions = SignConfig.baseOptions || {};
+SignConfig.baseOptions.timeout = 20000;
 
 /** Reads one JSON config line from stdin; {} on EOF/timeout/garbage. */
 function readLauncherConfig() {
@@ -176,7 +192,10 @@ const createConnection = () => {
   const conn = new TikTokLiveConnection(username, {
     processInitialData: false,
     enableExtendedGiftInfo: false, // gift/list endpoint needs a paid sign plan
-    fetchRoomInfoOnConnect: true,
+    // fetchIsLive is checked explicitly before connect — a stale socket
+    // on an ended room must never surface as "live" (EFIR pattern).
+    fetchRoomInfoOnConnect: false,
+    webClientOptions: { timeout: { request: 20000 }, retry: { limit: 0 } },
     ...(sessionBundle
       ? {
           authenticateWs: true,
@@ -185,16 +204,15 @@ const createConnection = () => {
       : {}),
   });
 
-  conn.on(WebcastEvent.CONNECTED, (state) =>
-    out({ type: 'status', status: 'live', roomId: String(state?.roomId || '') })
-  );
-  conn.on(WebcastEvent.DISCONNECTED, () => out({ type: 'status', status: 'disconnected' }));
-  conn.on(WebcastEvent.STREAM_END, () => {
-    out({ type: 'status', status: 'disconnected' });
-    process.exit(0);
-  });
-  conn.on(WebcastEvent.ERROR, (e) =>
-    out({ type: 'warn', message: String(e?.message || e) })
+  // Control events live in ControlEvent, not WebcastEvent — a
+  // WebcastEvent.CONNECTED lookup is undefined and the handler never fires.
+  // 'live' is emitted by the supervisor after connect() resolves and
+  // confirms state.isConnected.
+  conn.on(ControlEvent.ERROR, (e) =>
+    out({
+      type: 'warn',
+      message: String(e?.exception?.message || e?.message || e?.info || e),
+    })
   );
 
   conn.on(WebcastEvent.CHAT, (d) => ev('comment', d, d.content ?? d.comment));
@@ -223,14 +241,28 @@ const createConnection = () => {
     if (t.includes('share')) ev('share', d, 'shared');
     else if (t.includes('follow')) ev('follow', d, 'followed');
   });
-  conn.on(WebcastEvent.SUBSCRIBE, (d) => ev('subscribe', d, 'subscribed'));
+  // Subscriptions arrive as subNotify (there is no WebcastEvent.SUBSCRIBE).
+  conn.on(WebcastEvent.SUB_NOTIFY, (d) => ev('subscribe', d, 'subscribed'));
   return conn;
 };
 
 const friendly = (msg) =>
   /DEVICE_BLOCKED/i.test(msg)
-    ? 'TikTok заблокировал устройство подписи — бесплатный тир EulerStream часто под баном. Повторите через минуту или задайте EULERSTREAM_API_KEY на сервере (платный тир — чистые ноды).'
-    : msg;
+    ? 'Нода подписи под баном TikTok (DEVICE_BLOCKED) — переподключение идёт автоматически, смена ноды при каждой попытке.'
+    : /offline|not online|isn't online/i.test(msg)
+      ? 'Стример сейчас не в эфире — лаунчер перепроверит автоматически.'
+      : /Failed to retrieve live status|LIVE_STATUS|user.*not.*found/i.test(msg)
+        ? 'Стример не в эфире или ник не найден — лаунчер проверит снова автоматически.'
+        : /SIGN_NOT_200|sign/i.test(msg)
+          ? 'Ошибка подписи запроса — переподключение автоматически.'
+          : msg;
+
+// EFIR-style supervisor: the sidecar NEVER dies on a transient failure.
+// Room offline, a dead socket, a signed-call ban wave — every retry is a
+// fresh roll on a possibly-clean sign node at a steady 15s cadence, and
+// the stream going live is picked up automatically (wait-for-live).
+const RETRY_MS = 15000;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const main = async () => {
   const cfg = await readLauncherConfig();
@@ -239,48 +271,55 @@ const main = async () => {
   if (sessionBundle) out({ type: 'status', status: 'session_auth' });
   await configureSignProxy(cfg);
 
-  // DEVICE_BLOCKED means TikTok flagged the sign node's device —
-  // EulerStream rotates nodes, so each spaced retry is a fresh roll on
-  // a possibly-clean node. Free-tier ban waves last minutes — 5 rolls
-  // with short gaps catches the gaps between them. Other errors (room
-  // offline, bad username) fail fast.
-  for (let attempt = 1; attempt <= 5; attempt++) {
-    const conn = createConnection();
+  let conn = null;
+  let retryTimer = null;
 
-    // Connector retries failed sign/webcast requests internally without
-    // surfacing errors — connect() can then sit forever while we only
-    // heartbeat, and the launcher shows "связь…" indefinitely. Cap the
-    // wait: 75s without CONNECTED → explicit error so the UI can explain
-    // (room offline? sign tier flaky? retry).
-    const connectTimeout = setTimeout(() => {
-      out({
-        type: 'error',
-        message:
-          'CONNECT_TIMEOUT: не удалось подключиться за 75с — комната оффлайн или сигнинг перегружен. Проверьте ник и что эфир идёт, затем повторите.',
-      });
-      process.exit(4);
-    }, 75000);
-    connectTimeout.unref();
-    conn.on(WebcastEvent.CONNECTED, () => clearTimeout(connectTimeout));
+  const scheduleRetry = (msg) => {
+    if (retryTimer) return;
+    // "offline" maps to Connecting on the launcher — the badge keeps
+    // showing «Подключение…» while we wait for the stream or a clean node.
+    out({ type: 'status', status: 'offline', message: msg });
+    out({ type: 'warn', message: msg });
+    retryTimer = setTimeout(() => {
+      retryTimer = null;
+      void run();
+    }, RETRY_MS);
+    retryTimer.unref?.();
+  };
 
-    try {
-      await conn.connect();
-      return; // connected — handlers keep the process alive
-    } catch (e) {
-      clearTimeout(connectTimeout);
-      const raw = String(e?.message || e);
-      if (/DEVICE_BLOCKED/i.test(raw) && attempt < 5) {
-        out({
-          type: 'warn',
-          message: `DEVICE_BLOCKED — нода подписи под баном, повтор ${attempt}/4 через 15с`,
-        });
-        await new Promise((r) => setTimeout(r, 15000));
-        continue;
-      }
-      out({ type: 'error', message: friendly(raw) });
-      process.exit(1);
+  const run = async () => {
+    if (conn) {
+      try { await conn.disconnect(); } catch { /* half-open */ }
+      conn = null;
     }
-  }
+    const c = createConnection();
+    conn = c;
+    c.on(ControlEvent.DISCONNECTED, () => {
+      if (conn === c) scheduleRetry('Соединение потеряно — переподключение…');
+    });
+    c.on('streamEnd', () => {
+      if (conn === c) scheduleRetry('Эфир завершён — ждём следующий.');
+    });
+    try {
+      // Verify the public live status BEFORE opening the signed WS —
+      // offline rooms would otherwise bind a stale socket. This uses
+      // the unsigned composite route (Euler fallback skipped above).
+      const live = await c.fetchIsLive();
+      if (live !== true) throw new Error('OFFLINE');
+      const state = await c.connect();
+      if (conn !== c) return;
+      if (!state?.isConnected) throw new Error('TikTok не подтвердил подключение');
+      out({
+        type: 'status',
+        status: 'live',
+        roomId: String(state.roomId || c.roomId || ''),
+      });
+    } catch (e) {
+      scheduleRetry(friendly(String(e?.message || e)));
+    }
+  };
+
+  await run();
 };
 
 main();

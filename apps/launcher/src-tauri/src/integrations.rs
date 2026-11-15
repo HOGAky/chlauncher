@@ -529,6 +529,12 @@ async fn run_tiktok(
                 let st = match v["status"].as_str() {
                     Some("live") => Some(IntegrationStatus::Live),
                     Some("disconnected") => Some(IntegrationStatus::Disconnected),
+                    // Sidecar supervisor waiting on an offline room or
+                    // retrying a failed connect — the badge keeps
+                    // «Подключение…» until the stream goes live.
+                    Some("offline" | "connecting" | "waiting") => {
+                        Some(IntegrationStatus::Connecting)
+                    }
                     _ => None,
                 };
                 if let Some(st) = st {
@@ -538,6 +544,11 @@ async fn run_tiktok(
                         json!({"integration":"tiktok","status":st,"username":username}),
                     );
                 }
+            }
+            "warn" => {
+                // Informational (retry notices, connector warnings) —
+                // counts as a sign of life for the activity watchdog.
+                touch(&last_activity).await;
             }
             "event" => {
                 touch(&last_activity).await;
