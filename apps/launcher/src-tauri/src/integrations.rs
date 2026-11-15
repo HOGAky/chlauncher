@@ -539,9 +539,10 @@ async fn run_tiktok(
                 };
                 if let Some(st) = st {
                     *status.lock().await = st.clone();
+                    let msg = v["message"].as_str().unwrap_or_default();
                     let _ = app.emit(
                         STATUS_EVENT,
-                        json!({"integration":"tiktok","status":st,"username":username}),
+                        json!({"integration":"tiktok","status":st,"username":username,"message":msg}),
                     );
                 }
             }

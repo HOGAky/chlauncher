@@ -547,9 +547,12 @@ export const onTiktokBindVerified = (
   listen<{ username: string }>('tiktok-bind-verified', (e) => cb(e.payload));
 
 export const onIntegrationStatus = (
-  cb: (p: { integration: string; status: unknown }) => void
+  cb: (p: { integration: string; status: unknown; message?: string }) => void
 ): Promise<UnlistenFn> =>
-  listen<{ integration: string; status: unknown }>('integration-status', (e) => cb(e.payload));
+  listen<{ integration: string; status: unknown; message?: string }>(
+    'integration-status',
+    (e) => cb(e.payload)
+  );
 
 /** Subscribes to game process exits. */
 export const onGameExited = (cb: (slug: string) => void): Promise<UnlistenFn> =>

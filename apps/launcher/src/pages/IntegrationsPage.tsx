@@ -113,10 +113,14 @@ export default function IntegrationsPage() {
       .catch((e) => setLaunchMsg(humanError(e)));
   };
 
+  const [ttMsg, setTtMsg] = useState('');
   useEffect(() => {
     let un: (() => void) | undefined;
     api
       .onIntegrationStatus((p) => {
+        if (p.integration === 'tiktok' && typeof p.message === 'string') {
+          setTtMsg(p.message);
+        }
         setStatuses((s) =>
           s
             ? {
@@ -391,7 +395,9 @@ export default function IntegrationsPage() {
           </div>
           {ttConnected && (
             <p className={`text-[11px] ${stale ? 'text-amber-400' : 'text-muted-foreground'}`}>
-              {statuses?.tiktok === 'live' ? 'Эфир идёт' : 'Эфир не обнаружен — ждём старт комнаты'}
+              {statuses?.tiktok === 'live'
+                ? 'Эфир идёт'
+                : ttMsg || 'Эфир не обнаружен — ждём старт комнаты'}
               {' · '}
               {actAgeSec !== null ? (
                 <>активность {actAgeSec < 5 ? 'только что' : `${actAgeSec} с назад`}</>
