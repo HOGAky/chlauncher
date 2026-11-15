@@ -22,6 +22,7 @@ export default function AuthScreen() {
   const [showServer, setShowServer] = useState(false);
   const [serverSaved, setServerSaved] = useState(false);
   const [tgWaiting, setTgWaiting] = useState(false);
+  const [ttWaiting, setTtWaiting] = useState(false);
 
   /**
    * "Sign in with Telegram" (EFIR parity): opens the bind-bot deep link
@@ -58,6 +59,34 @@ export default function AuthScreen() {
   /** Prefills the backend URL field on mount. */
   useEffect(() => {
     api.getServerUrl().then(setServerUrl).catch(() => {});
+  }, []);
+
+  /**
+   * "Sign in with TikTok": opens the embedded TikTok window. After the
+   * streamer signs in, Rust captures sessionid, the server verifies it
+   * and issues a JWT — `auth-changed` flips the UI to the main screen.
+   */
+  const loginViaTiktok = async () => {
+    setError(null);
+    setTtWaiting(true);
+    try {
+      await api.openTiktokLogin();
+    } catch (e) {
+      setError(humanError(e));
+      setTtWaiting(false);
+    }
+  };
+
+  // Reset the waiting state when the login window finishes either way.
+  useEffect(() => {
+    let a: (() => void) | undefined;
+    let b: (() => void) | undefined;
+    api.onTiktokLoginClosed(() => setTtWaiting(false)).then((u) => (a = u));
+    api.onTiktokSessionCaptured(() => setTtWaiting(false)).then((u) => (b = u));
+    return () => {
+      a?.();
+      b?.();
+    };
   }, []);
 
   /** Persists a new backend URL so remote testers can connect. */
@@ -143,6 +172,20 @@ export default function AuthScreen() {
             {tgWaiting && (
               <p className="text-center text-[11px] text-muted-foreground">
                 Открылся Telegram — нажмите Start у бота, вход продолжится автоматически.
+              </p>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={loginViaTiktok}
+            >
+              {ttWaiting ? 'Открылось окно TikTok…' : 'Войти через TikTok'}
+            </Button>
+            {ttWaiting && (
+              <p className="text-center text-[11px] text-muted-foreground">
+                Войдите в TikTok в открывшемся окне — вход в лаунчер и связь с эфиром
+                настроятся автоматически.
               </p>
             )}
             <button

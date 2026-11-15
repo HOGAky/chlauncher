@@ -430,6 +430,29 @@ impl ApiClient {
         .await
     }
 
+    /// `POST /api/auth/tiktok-login` — sessionid-verified sign in. The
+    /// server asks TikTok who the cookie belongs to; with a bearer token
+    /// it binds that TikTok identity to the caller instead of logging in.
+    pub async fn tiktok_session_login(
+        &self,
+        sessionid: &str,
+        tt_target_idc: Option<&str>,
+        hwid: &str,
+        token: Option<&str>,
+    ) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::POST,
+            "/api/auth/tiktok-login",
+            token,
+            Some(json!({
+                "sessionid": sessionid,
+                "tt_target_idc": tt_target_idc,
+                "hwid": hwid,
+            })),
+        )
+        .await
+    }
+
     /// `GET /api/support/tickets` — the caller's support tickets.
     pub async fn support_tickets(&self, token: &str) -> Result<Value, ApiError> {
         self.req(

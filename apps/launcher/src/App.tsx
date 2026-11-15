@@ -93,7 +93,14 @@ export default function App() {
         setFeed((f) => [...f.slice(-(FEED_CAP - 1)), { ...ev, fid: `e${seq++}` }])
       )
       .then((u) => (unlisten = u));
-    return () => unlisten?.();
+    // TikTok login window installs a session in Rust — refresh the boot
+    // snapshot so the UI switches straight to the main screen.
+    let unAuth: (() => void) | undefined;
+    api.onAuthChanged(() => void loadBoot()).then((u) => (unAuth = u));
+    return () => {
+      unlisten?.();
+      unAuth?.();
+    };
   }, [loadBoot]);
 
   // Periodic connectivity probe — drives the "Нет соединения" banner.

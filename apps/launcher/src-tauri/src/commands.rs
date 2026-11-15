@@ -942,6 +942,10 @@ pub async fn set_tiktok_session(
 /// poller harvests `sessionid`+`tt-target-idc` via `cookies_for_url`
 /// once the user is signed in — no DevTools digging. Saves the cookie
 /// to settings, emits `tiktok-session-captured`, then auto-closes.
+/// The captured session also doubles as an identity proof: with no
+/// auth token it signs the streamer in (server verifies the cookie
+/// against TikTok and issues a JWT); signed-in callers get a verified
+/// TikTok binding instead.
 #[tauri::command]
 pub async fn open_tiktok_login(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     if let Some(w) = app.get_webview_window("tiktok-login") {
@@ -959,10 +963,13 @@ pub async fn open_tiktok_login(app: AppHandle, state: State<'_, AppState>) -> Re
 
     let app2 = app.clone();
     let settings = state.settings.clone();
+    let api = state.api.clone();
+    let hwid = state.hwid.clone();
     tauri::async_runtime::spawn(async move {
         for _ in 0..300 {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             if app2.get_webview_window("tiktok-login").is_none() {
+                let _ = app2.emit("tiktok-login-closed", true);
                 return; // user closed the window — cancel
             }
             // cookies_for_url must run on the main thread.
@@ -982,14 +989,17 @@ pub async fn open_tiktok_login(app: AppHandle, state: State<'_, AppState>) -> Re
             let Some(sid) = cookies.iter().find(|c| c.name() == "sessionid") else {
                 continue;
             };
+            let sid_val = sid.value().to_string();
             let idc = cookies
                 .iter()
                 .find(|c| c.name() == "tt-target-idc")
-                .map(|c| c.value().to_string());
-            let value = match idc {
-                Some(i) if !i.is_empty() => format!("{};{}", sid.value(), i),
-                _ => sid.value().to_string(),
+                .map(|c| c.value().to_string())
+                .filter(|v| !v.is_empty());
+            let value = match &idc {
+                Some(i) => format!("{};{}", sid_val, i),
+                _ => sid_val.clone(),
             };
+            let existing_token = settings.lock().await.data.auth_token.clone();
             {
                 let mut s = settings.lock().await;
                 s.data.tiktok_session = Some(value);
@@ -998,6 +1008,50 @@ pub async fn open_tiktok_login(app: AppHandle, state: State<'_, AppState>) -> Re
             let _ = app2.emit("tiktok-session-captured", true);
             if let Some(w) = app2.get_webview_window("tiktok-login") {
                 let _ = w.close();
+            }
+            // Best-effort identity step: the verified cookie doubles as a
+            // login (no session → JWT issued) or a verified TikTok bind.
+            if let Ok(res) = api
+                .tiktok_session_login(
+                    &sid_val,
+                    idc.as_deref(),
+                    hwid.as_deref().unwrap_or(""),
+                    existing_token.as_deref(),
+                )
+                .await
+            {
+                match res.get("status").and_then(|s| s.as_str()) {
+                    Some("ready") => {
+                        {
+                            let mut s = settings.lock().await;
+                            if let Some(t) = res.get("token").and_then(|t| t.as_str()) {
+                                s.data.auth_token = Some(t.to_string());
+                            }
+                            if let Some(e) =
+                                res.pointer("/user/email").and_then(|e| e.as_str())
+                            {
+                                s.data.email = Some(e.to_string());
+                            }
+                            if let Some(r) =
+                                res.pointer("/user/role").and_then(|r| r.as_str())
+                            {
+                                s.data.role = Some(r.to_string());
+                            }
+                            let _ = s.save();
+                        }
+                        let _ = app2.emit("auth-changed", true);
+                    }
+                    Some("bound") => {
+                        let username = res
+                            .pointer("/tiktok/username")
+                            .and_then(|u| u.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let _ =
+                            app2.emit("tiktok-bind-verified", json!({ "username": username }));
+                    }
+                    _ => {}
+                }
             }
             return;
         }

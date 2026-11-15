@@ -62,6 +62,10 @@ export const login = (email: string, password: string) =>
 /** Clears the stored session. */
 export const logout = () => cmd<void>('logout');
 
+/** Fires when Rust installed a session outside React (TikTok login window). */
+export const onAuthChanged = (cb: () => void): Promise<UnlistenFn> =>
+  listen('auth-changed', () => cb());
+
 // ---- billing ---------------------------------------------------------------
 
 /** Fresh subscription status. */
@@ -172,6 +176,10 @@ export const openTiktokLogin = () => cmd<void>('open_tiktok_login');
 /** Fires once when the login window harvested the session cookie. */
 export const onTiktokSessionCaptured = (cb: () => void) =>
   listen('tiktok-session-captured', () => cb());
+
+/** Fires when the TikTok login window was closed without a capture. */
+export const onTiktokLoginClosed = (cb: () => void) =>
+  listen('tiktok-login-closed', () => cb());
 
 /** Reconnect TikTok to the saved username («Обновить связь»). */
 export const tiktokReconnect = () => cmd<void>('tiktok_reconnect');

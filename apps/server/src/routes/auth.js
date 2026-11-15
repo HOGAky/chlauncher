@@ -44,6 +44,45 @@ import {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_FAILS = 5;
+const SESSION_ID_RE = /^[A-Za-z0-9._%\-]{10,200}$/;
+const TIKTOK_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+  '(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+const TIKTOK_VERIFY_TIMEOUT_MS = 12 * 1000;
+
+/**
+ * Proves a captured `sessionid` cookie by asking TikTok who it belongs
+ * to — the same endpoint the web app itself uses. Returns the numeric
+ * uid + handle on success; `ok:false` when the session is rejected.
+ */
+async function fetchTikTokAccountInfo(sessionid, targetIdc) {
+  try {
+    const cookie =
+      `sessionid=${sessionid}` + (targetIdc ? `; tt-target-idc=${targetIdc}` : '');
+    const res = await fetch('https://www.tiktok.com/passport/web/account/info/', {
+      signal: AbortSignal.timeout(TIKTOK_VERIFY_TIMEOUT_MS),
+      headers: {
+        'user-agent': TIKTOK_UA,
+        cookie,
+        accept: 'application/json',
+        referer: 'https://www.tiktok.com/',
+      },
+    });
+    if (!res.ok) return { ok: false };
+    const j = await res.json().catch(() => null);
+    const d = j?.data;
+    if (!d?.user_id_str) return { ok: false };
+    return {
+      ok: true,
+      uid: String(d.user_id_str),
+      username: String(d.username || ''),
+      display_name: String(d.screen_name || d.show_name || ''),
+      avatar: String(d.avatar_url || d.avatar_larger_url || ''),
+    };
+  } catch {
+    return { ok: false };
+  }
+}
 
 /**
  * Registers the auth routes on a Fastify instance.
@@ -261,6 +300,135 @@ export default async function authRoutes(app, { db, authenticate }) {
         token: signToken(user),
         user: publicUser(user),
         subscription: subscriptionView(subscription),
+      };
+    }
+  );
+
+  /**
+   * POST /api/auth/tiktok-login — cookie-session sign in, the primary
+   * login for streamers: the launcher's embedded TikTok window captured
+   * `sessionid`; we ask TikTok who the session belongs to, then:
+   *   - Bearer token present → the verified TikTok identity is bound to
+   *     the caller's account (auth_method='cookie' — the cookie is the
+   *     account credential, same proof strength as OAuth);
+   *   - no token → find-or-create a tt_<uid> account and issue a JWT.
+   * HWID rules mirror /login for non-admin accounts.
+   */
+  app.post(
+    '/tiktok-login',
+    { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const { sessionid, tt_target_idc, hwid } = request.body || {};
+      const sid = String(sessionid || '').trim();
+      const idc = String(tt_target_idc || '').trim();
+      if (!SESSION_ID_RE.test(sid) || (idc && !SESSION_ID_RE.test(idc))) {
+        return reply.code(400).send({ error: 'INVALID_PAYLOAD' });
+      }
+      const info = await fetchTikTokAccountInfo(sid, idc);
+      if (!info.ok) {
+        return reply.code(401).send({ error: 'TIKTOK_SESSION_INVALID' });
+      }
+      const username = info.username || `tt_${info.uid}`;
+      const now = nowIso();
+
+      // Authenticated caller → verified bind instead of a login.
+      if (request.headers.authorization) {
+        await authenticate(request, reply);
+        if (reply.sent) return;
+        const userId = request.auth.userId;
+        const clash = db
+          .prepare(
+            `SELECT user_id FROM tiktok_bindings
+             WHERE (tiktok_uid = ? OR (username = ? AND verified = 1)) AND user_id != ?`
+          )
+          .get(info.uid, username, userId);
+        if (clash) return reply.code(409).send({ error: 'USERNAME_TAKEN' });
+        db.prepare(
+          `INSERT INTO tiktok_bindings
+             (user_id, username, verified, bound_at, verified_at, updated_at,
+              display_name, avatar_url, auth_method, tiktok_uid)
+           VALUES (?, ?, 1, ?, ?, ?, ?, ?, 'cookie', ?)
+           ON CONFLICT(user_id) DO UPDATE SET
+             username = excluded.username, verified = 1, verify_code = NULL,
+             code_expires_at = NULL, verified_at = excluded.verified_at,
+             updated_at = excluded.updated_at,
+             display_name = excluded.display_name,
+             avatar_url = excluded.avatar_url, auth_method = 'cookie',
+             tiktok_uid = excluded.tiktok_uid`
+        ).run(userId, username, now, now, now, info.display_name, info.avatar, info.uid);
+        return {
+          status: 'bound',
+          tiktok: {
+            uid: info.uid,
+            username,
+            display_name: info.display_name,
+            avatar: info.avatar,
+          },
+        };
+      }
+
+      // Login path — resolve the account by the verified TikTok uid.
+      let user = db
+        .prepare(
+          `SELECT u.* FROM users u
+           JOIN tiktok_bindings b ON b.user_id = u.id
+           WHERE b.tiktok_uid = ?`
+        )
+        .get(info.uid);
+      if (!user) {
+        user = createUser(db, {
+          email: `tt_${info.uid}@tiktok.local`,
+          passwordHash: hashPassword(crypto.randomBytes(24).toString('hex')),
+          hwid: hwid && isUsableHwid(hwid) ? hwidHash(hwid) : null,
+        });
+        try {
+          db.prepare(
+            `INSERT INTO tiktok_bindings
+               (user_id, username, verified, bound_at, verified_at, updated_at,
+                display_name, avatar_url, auth_method, tiktok_uid)
+             VALUES (?, ?, 1, ?, ?, ?, ?, ?, 'cookie', ?)`
+          ).run(user.id, username, now, now, now, info.display_name, info.avatar, info.uid);
+        } catch {
+          // Verified-username collision with another account — keep the
+          // uid link (unverified) so future logins still resolve here.
+          try {
+            db.prepare(
+              `INSERT INTO tiktok_bindings
+                 (user_id, username, verified, bound_at, updated_at,
+                  display_name, avatar_url, auth_method, tiktok_uid)
+               VALUES (?, ?, 0, ?, ?, ?, ?, 'cookie', ?)`
+            ).run(user.id, username, now, now, info.display_name, info.avatar, info.uid);
+          } catch {
+            /* a parallel login raced the uid insert — next login resolves it */
+          }
+        }
+      }
+      syncAdminRole(db, user);
+
+      if (user.role !== 'admin') {
+        if (!hwid) {
+          return reply.code(400).send({ error: 'HWID_REQUIRED' });
+        }
+        if (!isUsableHwid(hwid)) {
+          return reply.code(400).send({ error: 'HWID_UNAVAILABLE' });
+        }
+        const hash = hwidHash(hwid);
+        if (user.hwid && user.hwid !== hash) {
+          recordDeviceEvent(db, user.id, 'login_denied', hash, ipHash(request.ip));
+          return reply.code(403).send({ error: 'HWID_MISMATCH' });
+        }
+        if (!user.hwid) {
+          setUserHwid(db, user.id, hash);
+          recordDeviceEvent(db, user.id, 'bound', hash, ipHash(request.ip));
+        }
+      }
+      const subscription = refreshSubscription(db, user.id);
+      return {
+        status: 'ready',
+        token: signToken(user),
+        user: publicUser(user),
+        subscription: subscriptionView(subscription),
+        tiktok: { uid: info.uid, username },
       };
     }
   );

@@ -493,6 +493,17 @@ const MIGRATIONS = [
         ON support_messages(ticket_id, id);
     `);
   },
+  // v12 → v13: TikTok cookie-session login. `tiktok_uid` stores the
+  // numeric account id the server verified via the captured sessionid
+  // (passport/web/account/info) — auth_method='cookie' rows prove
+  // ownership as strongly as OAuth: the cookie IS the credential.
+  (db) => {
+    db.exec(`
+      ALTER TABLE tiktok_bindings ADD COLUMN tiktok_uid TEXT;
+      CREATE UNIQUE INDEX idx_tiktok_bindings_uid
+        ON tiktok_bindings(tiktok_uid) WHERE tiktok_uid IS NOT NULL;
+    `);
+  },
 ];
 
 /** Runs all pending migrations in order. Idempotent via user_version. */
