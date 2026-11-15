@@ -114,7 +114,14 @@ async function configureSignProxy(cfg) {
 }
 
 const userOf = (d) => d?.user?.nickname || d?.user?.uniqueId || d?.uniqueId || 'viewer';
+// Connector 2.5 payload: avatars live at user.avatarThumb.urlList[] —
+// profilePicture is the old schema and arrives undefined.
 const avatarOf = (d) => {
+  const list =
+    d?.user?.avatarThumb?.urlList ||
+    d?.user?.avatarMedium?.urlList ||
+    d?.user?.avatarLarge?.urlList;
+  if (Array.isArray(list) && list.length) return list[0];
   const p = d?.user?.profilePicture;
   return (Array.isArray(p?.url) ? p.url[0] : p?.url) || p?.uri || '';
 };
@@ -167,19 +174,22 @@ const createConnection = () => {
     out({ type: 'warn', message: String(e?.message || e) })
   );
 
-  conn.on(WebcastEvent.CHAT, (d) => ev('comment', d, d.comment));
+  conn.on(WebcastEvent.CHAT, (d) => ev('comment', d, d.content ?? d.comment));
   conn.on(WebcastEvent.LIKE, (d) => {
-    const likes = Number(d.likeCount) || 0;
-    ev('like', d, `${d.likeCount} likes`, likes, { count: likes });
+    const likes = Number(d.likeCount ?? d.count ?? d.totalLikeCount) || 0;
+    ev('like', d, `${likes} likes`, likes, { count: likes });
   });
   conn.on(WebcastEvent.GIFT, (d) => {
-    if (d.giftType === 1 && !d.repeatEnd) return; // streak in progress — wait for final
-    const repeats = Number(d.repeatCount) || 1;
-    const diamonds = (Number(d.diamondCount) || 0) * repeats;
-    ev('gift', d, d.giftName || `gift#${d.giftId}`, diamonds, {
+    const giftType = d.giftType ?? d.gift?.type;
+    const repeatEnd = d.repeatEnd ?? d.gift?.repeatEnd;
+    if (giftType === 1 && !repeatEnd) return; // streak in progress — wait for final
+    const repeats = Number(d.repeatCount ?? d.gift?.repeatCount) || 1;
+    const diamonds = (Number(d.diamondCount ?? d.gift?.diamondCount) || 0) * repeats;
+    const giftId = d.giftId ?? d.gift?.id ?? null;
+    ev('gift', d, d.giftName || d.gift?.name || `gift#${giftId}`, diamonds, {
       count: repeats,
       coins: diamonds,
-      gift_id: d.giftId ?? null,
+      gift_id: giftId,
     });
   });
   conn.on(WebcastEvent.MEMBER, (d) => ev('join', d, 'joined'));
