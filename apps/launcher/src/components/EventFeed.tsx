@@ -41,7 +41,7 @@ export default function EventFeed() {
         .then((r) => alive && setItems(r))
         .catch(() => {});
     poll();
-    const t = setInterval(poll, 1500);
+    const t = setInterval(poll, 3000);
     return () => {
       alive = false;
       clearInterval(t);

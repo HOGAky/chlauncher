@@ -65,3 +65,9 @@ base64 = "0.23.1"
 tauri-plugin-global-shortcut = "2.4.1"
 regex = "1.13.1"
 qrcode = { version = "0.14", default-features = false }
+tauri-plugin-single-instance = "2"
+
+# Smaller, faster shipped binary — fat LTO across the dep graph.
+[profile.release]
+lto = "fat"
+codegen-units = 1

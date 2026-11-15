@@ -62,6 +62,15 @@ use types::{OverlayFrame, RawStreamEvent, SpinnerPool, TriggerProfile};
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
+        // One instance only — a second launch just focuses the existing
+        // window. Two launchers meant two WebView2 trees (~1.6 GB RAM).
+        // MUST be registered first (plugin docs requirement).
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.unminimize();
+                let _ = w.set_focus();
+            }
+        }))
         // `chlauncher://` deep links (billing return_url after checkout)
         // and opening external URLs (the hosted checkout page) in the
         // system browser.

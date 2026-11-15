@@ -21,7 +21,7 @@ export default function QueueCard() {
   useEffect(() => {
     const poll = () => api.queueStatus().then(setSt).catch(() => {});
     poll();
-    const t = setInterval(poll, 1500);
+    const t = setInterval(poll, 3000);
     return () => clearInterval(t);
   }, []);
 

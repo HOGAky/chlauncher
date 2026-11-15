@@ -72,7 +72,7 @@ export default function IntegrationsPage() {
   const refreshAdapter = () => api.adapterStatus().then(setAdapter).catch(() => {});
   useEffect(() => {
     refreshAdapter();
-    const t = setInterval(refreshAdapter, 5000);
+    const t = setInterval(refreshAdapter, 10000);
     return () => clearInterval(t);
   }, []);
 
@@ -80,7 +80,7 @@ export default function IntegrationsPage() {
     const t = setInterval(() => {
       api.getForwardStatus().then(setFwdStatus).catch(() => {});
       api.getIntegrationStatus().then(setStatuses).catch(() => {});
-    }, 5000);
+    }, 10000);
     return () => clearInterval(t);
   }, []);
 
