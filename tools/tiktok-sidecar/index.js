@@ -218,9 +218,11 @@ const main = async () => {
   await configureSignProxy(await readLauncherConfig());
 
   // DEVICE_BLOCKED means TikTok flagged the sign node's device —
-  // EulerStream rotates nodes, so a spaced retry often lands on a
-  // clean one. Other errors (room offline, bad username) fail fast.
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  // EulerStream rotates nodes, so each spaced retry is a fresh roll on
+  // a possibly-clean node. Free-tier ban waves last minutes — 5 rolls
+  // with short gaps catches the gaps between them. Other errors (room
+  // offline, bad username) fail fast.
+  for (let attempt = 1; attempt <= 5; attempt++) {
     const conn = createConnection();
 
     // Connector retries failed sign/webcast requests internally without
@@ -245,12 +247,12 @@ const main = async () => {
     } catch (e) {
       clearTimeout(connectTimeout);
       const raw = String(e?.message || e);
-      if (/DEVICE_BLOCKED/i.test(raw) && attempt < 3) {
+      if (/DEVICE_BLOCKED/i.test(raw) && attempt < 5) {
         out({
           type: 'warn',
-          message: `DEVICE_BLOCKED — нода подписи под баном, повтор ${attempt}/2 через 25с`,
+          message: `DEVICE_BLOCKED — нода подписи под баном, повтор ${attempt}/4 через 15с`,
         });
-        await new Promise((r) => setTimeout(r, 25000));
+        await new Promise((r) => setTimeout(r, 15000));
         continue;
       }
       out({ type: 'error', message: friendly(raw) });
