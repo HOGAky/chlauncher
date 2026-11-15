@@ -81,8 +81,9 @@ function readLauncherConfig() {
 /**
  * Points the connector at our sign proxy when the backend says it's
  * enabled; otherwise leaves the default direct-EulerStream path.
- * SUBSCRIPTION_REQUIRED from ping is surfaced as a sidecar error so the
- * launcher UI can explain it instead of silently degrading.
+ * SUBSCRIPTION_REQUIRED degrades to the free tier with a warning —
+ * TikTok connect is the core feature, so a missing sub sells
+ * reliability (paid sign nodes), never blocks access entirely.
  */
 async function configureSignProxy(cfg) {
   if (!cfg || typeof cfg.sign_url !== 'string' || !cfg.token) return;
@@ -100,8 +101,12 @@ async function configureSignProxy(cfg) {
     body = await res.json();
   } catch { /* non-JSON → treat as unavailable */ }
   if (res.status === 403 && body.error === 'SUBSCRIPTION_REQUIRED') {
-    out({ type: 'error', message: 'SUBSCRIPTION_REQUIRED' });
-    process.exit(3);
+    out({
+      type: 'warn',
+      message:
+        'Нет активной подписки — бесплатный сигнинг (медленнее, возможны обрывы).',
+    });
+    return;
   }
   if (!res.ok || !body.enabled) return; // proxy off → direct free tier
   SignConfig.basePath = cfg.sign_url.replace(/\/+$/, '');
