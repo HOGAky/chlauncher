@@ -162,6 +162,10 @@ export const tiktokConnect = (username: string) =>
 /** Disconnect TikTok. */
 export const tiktokDisconnect = () => cmd<void>('tiktok_disconnect');
 
+/** Saves the optional TikTok sessionid cookie (null clears it). */
+export const setTiktokSession = (session: string | null) =>
+  cmd<void>('set_tiktok_session', { session });
+
 /** Reconnect TikTok to the saved username («Обновить связь»). */
 export const tiktokReconnect = () => cmd<void>('tiktok_reconnect');
 

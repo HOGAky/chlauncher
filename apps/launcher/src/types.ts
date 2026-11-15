@@ -450,6 +450,8 @@ export interface Bootstrap {
   streamer_mode: boolean;
   window_options: WindowOptions;
   tiktok_username: string | null;
+  /** True when a sessionid cookie is stored for authenticated WS connect. */
+  has_tiktok_session?: boolean;
   integrations: {
     tiktok: IntegrationStatus;
     tiktok_username: string | null;

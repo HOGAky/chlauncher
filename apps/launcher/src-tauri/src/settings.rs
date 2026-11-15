@@ -26,6 +26,11 @@ pub struct Settings {
     pub role: Option<String>,
     /// TikTok username the streamer connects to.
     pub tiktok_username: Option<String>,
+    /// Optional `sessionid` cookie — when set, the sidecar opens an
+    /// authenticated WebSocket (TikFinity-style) which bypasses the
+    /// anonymous-device DEVICE_BLOCKED waves on the free sign tier.
+    #[serde(default)]
+    pub tiktok_session: Option<String>,
     /// DonationAlerts access token pasted by the streamer.
     pub donationalerts_token: Option<String>,
     /// Hide personal data on screen (for streamers on one monitor).

@@ -98,13 +98,15 @@ impl IntegrationManager {
 
     /// Connects to a public TikTok Live room by username via the
     /// `tiktoklive` webcast client (gifts/likes/chat/joins/follows).
-    /// `sign_cfg` — optional `(sign_url, jwt)` routed to the sidecar over
-    /// stdin: when our backend runs the sign proxy, the paid EulerStream
-    /// key stays server-side and the sidecar signs through it.
+    /// `bootstrap` — optional launcher → sidecar config routed over stdin
+    /// (sign-proxy URL+JWT, TikTok session cookie): when our backend runs
+    /// the sign proxy, the paid EulerStream key stays server-side; the
+    /// session cookie enables an authenticated WebSocket that bypasses
+    /// anonymous-device DEVICE_BLOCKED waves.
     pub async fn tiktok_connect(
         &self,
         username: String,
-        sign_cfg: Option<(String, String)>,
+        bootstrap: Option<SidecarBootstrap>,
     ) -> Result<(), String> {
         self.tiktok_disconnect().await;
         let username = username.trim().trim_start_matches('@').to_string();
@@ -126,7 +128,7 @@ impl IntegrationManager {
                 raw_tx,
                 status,
                 app,
-                sign_cfg,
+                bootstrap,
                 last_activity,
                 pending_bind,
             )
@@ -326,6 +328,16 @@ async fn run_da(
 /// Locates the sidecar directory. Order: env override → alongside the exe
 /// (`resources/tiktok-sidecar`, then `tiktok-sidecar`) → the dev path
 /// (`<manifest>/../../tools/tiktok-sidecar`).
+/// Launcher → sidecar bootstrap written as one JSON line on stdin.
+/// `sign_url`+`token` enable the server-side sign proxy; `session`
+/// (`sessionid[;tt-target-idc]`) switches to an authenticated WebSocket.
+#[derive(Clone)]
+pub struct SidecarBootstrap {
+    pub sign_url: Option<String>,
+    pub token: Option<String>,
+    pub session: Option<String>,
+}
+
 fn sidecar_dir(app: &AppHandle) -> Option<std::path::PathBuf> {
     let candidates: Vec<std::path::PathBuf> = {
         let mut v = Vec::new();
@@ -382,7 +394,7 @@ async fn run_tiktok(
     raw_tx: mpsc::Sender<RawStreamEvent>,
     status: Arc<Mutex<IntegrationStatus>>,
     app: AppHandle,
-    sign_cfg: Option<(String, String)>,
+    bootstrap: Option<SidecarBootstrap>,
     last_activity: Arc<Mutex<Option<i64>>>,
     pending_bind: Arc<Mutex<Option<(String, String)>>>,
 ) {
@@ -436,7 +448,7 @@ async fn run_tiktok(
         .current_dir(&dir)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
-        .stdin(if sign_cfg.is_some() {
+        .stdin(if bootstrap.is_some() {
             std::process::Stdio::piped()
         } else {
             std::process::Stdio::null()
@@ -462,9 +474,15 @@ async fn run_tiktok(
     // and the user's JWT, then close stdin. The JWT travels over a pipe —
     // never in argv, never in env — so it doesn't show up in process
     // listings. Without a line the sidecar hits EOF and goes direct.
-    if let (Some((sign_url, token)), Some(mut stdin)) = (sign_cfg, child.stdin.take()) {
+    if let (Some(b), Some(mut stdin)) = (bootstrap, child.stdin.take()) {
         use tokio::io::AsyncWriteExt;
-        let line = serde_json::json!({"sign_url": sign_url, "token": token}).to_string() + "\n";
+        let line = serde_json::json!({
+            "sign_url": b.sign_url,
+            "token": b.token,
+            "session": b.session,
+        })
+        .to_string()
+            + "\n";
         let _ = stdin.write_all(line.as_bytes()).await;
         drop(stdin); // close → sidecar proceeds
     }

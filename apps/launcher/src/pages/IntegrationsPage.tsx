@@ -38,6 +38,9 @@ function statusBadge(st: IntegrationStatus | undefined) {
 export default function IntegrationsPage() {
   const { boot, streamerMode } = useApp();
   const [username, setUsername] = useState(boot?.tiktok_username ?? '');
+  // sessionid cookie — authenticated-WS bypass for DEVICE_BLOCKED waves.
+  const [ttSession, setTtSession] = useState('');
+  const [ttSessionSaved, setTtSessionSaved] = useState(boot?.has_tiktok_session ?? false);
   const [daToken, setDaToken] = useState('');
   const [statuses, setStatuses] = useState(boot?.integrations);
   const [copied, setCopied] = useState<string | null>(null);
@@ -390,6 +393,47 @@ export default function IntegrationsPage() {
               {stale && ' — связь устарела, нажмите «Обновить связь»'}
             </p>
           )}
+          <details className="text-xs">
+            <summary className="cursor-pointer select-none text-muted-foreground">
+              Обход блокировок (sessionid){ttSessionSaved ? ' — установлен' : ''}
+            </summary>
+            <div className="mt-2 flex flex-col gap-2 rounded-md border border-border p-2">
+              <p className="text-muted-foreground">
+                Если TikTok отвечает DEVICE_BLOCKED — вставьте куку <code>sessionid</code> из браузера
+                (tiktok.com → F12 → Application → Cookies). Подключение станет авторизованным —
+                без анонимных лимитов. Хранится только локально.
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  type="password"
+                  placeholder="sessionid (опционально ;tt-target-idc)"
+                  value={ttSession}
+                  onChange={(e) => setTtSession(e.target.value)}
+                />
+                <Button
+                  size="sm"
+                  disabled={!ttSession.trim()}
+                  onClick={() =>
+                    api.setTiktokSession(ttSession.trim()).then(() => {
+                      setTtSessionSaved(true);
+                      setTtSession('');
+                    })
+                  }
+                >
+                  Сохранить
+                </Button>
+                {ttSessionSaved && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => api.setTiktokSession(null).then(() => setTtSessionSaved(false))}
+                  >
+                    Сбросить
+                  </Button>
+                )}
+              </div>
+            </div>
+          </details>
         </CardContent>
       </Card>
 

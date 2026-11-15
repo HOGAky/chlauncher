@@ -138,6 +138,18 @@ const vipOf = (d) => {
   return !!(a.isSubscriber || a.isModerator || a.isSuperFan || a.isTopGifter);
 };
 
+// Optional `sessionid[;tt-target-idc]` — when present, the WebSocket
+// signs as a real logged-in session (TikFinity-style) instead of an
+// anonymous device. Authenticated sessions don't ride the shared
+// anonymous device pool → DEVICE_BLOCKED waves don't apply.
+let sessionBundle = null;
+function parseSession(raw) {
+  if (typeof raw !== 'string') return null;
+  const [sid, idc] = raw.split(';').map((s) => s.trim());
+  if (!sid) return null;
+  return { sessionId: sid, ttTargetIdc: idc || 'useast2a' };
+}
+
 // Event counter rides the heartbeat — lets the launcher tell
 // "connected but stream is quiet" apart from "events aren't flowing".
 let evCount = 0;
@@ -165,6 +177,12 @@ const createConnection = () => {
     processInitialData: false,
     enableExtendedGiftInfo: false, // gift/list endpoint needs a paid sign plan
     fetchRoomInfoOnConnect: true,
+    ...(sessionBundle
+      ? {
+          authenticateWs: true,
+          session: { cookie: { type: 'cookie', value: sessionBundle } },
+        }
+      : {}),
   });
 
   conn.on(WebcastEvent.CONNECTED, (state) =>
@@ -215,7 +233,11 @@ const friendly = (msg) =>
     : msg;
 
 const main = async () => {
-  await configureSignProxy(await readLauncherConfig());
+  const cfg = await readLauncherConfig();
+  sessionBundle =
+    parseSession(cfg?.session) || parseSession(process.env.TIKTOK_SESSION);
+  if (sessionBundle) out({ type: 'status', status: 'session_auth' });
+  await configureSignProxy(cfg);
 
   // DEVICE_BLOCKED means TikTok flagged the sign node's device —
   // EulerStream rotates nodes, so each spaced retry is a fresh roll on

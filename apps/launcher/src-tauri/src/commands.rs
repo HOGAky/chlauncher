@@ -166,6 +166,7 @@ pub async fn get_bootstrap(state: State<'_, AppState>) -> Result<Value, String> 
         "streamer_mode": settings.streamer_mode,
         "window_options": settings.window_options,
         "tiktok_username": settings.tiktok_username,
+        "has_tiktok_session": settings.tiktok_session.is_some(),
         "integrations": state.integrations.snapshot().await,
         "running": state.processes.running_slugs(),
         "overlay_url": state.overlay_port.lock().await.map(|p| {
@@ -899,22 +900,42 @@ pub async fn tiktok_connect(username: String, state: State<'_, AppState>) -> Res
     // When signed in, hand the sidecar our sign-proxy URL + JWT over
     // stdin: the backend injects the paid EulerStream key there, so it
     // never ships inside the client. Signed-out users get the free tier.
-    let sign_cfg = state
-        .settings
-        .lock()
-        .await
-        .data
-        .auth_token
-        .clone()
-        .map(|t| (format!("{}/api/tiktok-sign", state.api.base()), t));
+    let (auth_token, session) = {
+        let s = state.settings.lock().await;
+        (s.data.auth_token.clone(), s.data.tiktok_session.clone())
+    };
+    let bootstrap = (auth_token.is_some() || session.is_some()).then(|| {
+        crate::integrations::SidecarBootstrap {
+            sign_url: auth_token
+                .as_ref()
+                .map(|_| format!("{}/api/tiktok-sign", state.api.base())),
+            token: auth_token,
+            session,
+        }
+    });
     state
         .integrations
-        .tiktok_connect(username.clone(), sign_cfg)
+        .tiktok_connect(username.clone(), bootstrap)
         .await?;
     let mut s = state.settings.lock().await;
     s.data.tiktok_username = Some(username);
     let _ = s.save();
     Ok(())
+}
+
+/// Stores/clears the optional `sessionid` cookie used for an
+/// authenticated WebSocket — the bypass for DEVICE_BLOCKED waves on the
+/// anonymous free sign tier. Applied on the next connect.
+#[tauri::command]
+pub async fn set_tiktok_session(
+    session: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut s = state.settings.lock().await;
+    s.data.tiktok_session = session
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty());
+    s.save().map_err(|e| e.to_string())
 }
 
 /// Disconnect TikTok polling.
