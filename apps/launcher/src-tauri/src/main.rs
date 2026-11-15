@@ -2,7 +2,10 @@
 //!
 //! Thin shell around `chlauncher_lib::run()` so the same code can be
 //! exercised by tests via the library target.
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// Always a windowed app — a debug console window confused users
+// ("why does cmd open with the launcher"). Logs live in
+// %APPDATA%/com.chlauncher.app/logs regardless.
+#![windows_subsystem = "windows"]
 
 fn main() {
     chlauncher_lib::run()
