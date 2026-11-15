@@ -247,12 +247,12 @@ const createConnection = () => {
 };
 
 const friendly = (msg) =>
-  /DEVICE_BLOCKED/i.test(msg)
-    ? 'Нода подписи под баном TikTok (DEVICE_BLOCKED) — переподключение идёт автоматически, смена ноды при каждой попытке.'
-    : /offline|not online|isn't online/i.test(msg)
-      ? 'Стример сейчас не в эфире — лаунчер перепроверит автоматически.'
-      : /Failed to retrieve live status|LIVE_STATUS|user.*not.*found/i.test(msg)
-        ? 'Стример не в эфире или ник не найден — лаунчер проверит снова автоматически.'
+  /Failed to retrieve (Room ID|live status)|CompositeError/i.test(msg)
+    ? 'Ник не найден, либо TikTok режет анонимные запросы (WAF-блок) — проверьте ник; если он верный, нажмите «Войти через TikTok автоматически».'
+    : /DEVICE_BLOCKED/i.test(msg)
+      ? 'Нода подписи под баном TikTok (DEVICE_BLOCKED) — переподключение идёт автоматически, смена ноды при каждой попытке.'
+      : /offline|not online|isn't online/i.test(msg)
+        ? 'Стример сейчас не в эфире — лаунчер перепроверит автоматически.'
         : /SIGN_NOT_200|sign/i.test(msg)
           ? 'Ошибка подписи запроса — переподключение автоматически.'
           : msg;
