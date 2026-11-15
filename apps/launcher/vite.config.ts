@@ -24,4 +24,11 @@ export default defineConfig({
     minify: 'esbuild',
     sourcemap: false,
   },
+  esbuild: {
+    // Tauri serves embedded assets without a charset header and WebView2
+    // sniffs windows-1251 on a Russian locale → all Cyrillic UI strings
+    // arrive as mojibake. ASCII-only output escapes every non-ASCII char
+    // to \uXXXX, making the bundle identical under ANY encoding.
+    charset: 'ascii',
+  },
 });
