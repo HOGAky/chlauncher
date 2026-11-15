@@ -530,6 +530,7 @@ pub fn run() {
             commands::kill_game,
             commands::tiktok_connect,
             commands::set_tiktok_session,
+            commands::open_tiktok_login,
             commands::tiktok_disconnect,
             commands::tiktok_reconnect,
             commands::get_integration_status,

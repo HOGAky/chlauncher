@@ -166,6 +166,13 @@ export const tiktokDisconnect = () => cmd<void>('tiktok_disconnect');
 export const setTiktokSession = (session: string | null) =>
   cmd<void>('set_tiktok_session', { session });
 
+/** Opens the in-app TikTok login window; sessionid auto-captured. */
+export const openTiktokLogin = () => cmd<void>('open_tiktok_login');
+
+/** Fires once when the login window harvested the session cookie. */
+export const onTiktokSessionCaptured = (cb: () => void) =>
+  listen('tiktok-session-captured', () => cb());
+
 /** Reconnect TikTok to the saved username («Обновить связь»). */
 export const tiktokReconnect = () => cmd<void>('tiktok_reconnect');
 

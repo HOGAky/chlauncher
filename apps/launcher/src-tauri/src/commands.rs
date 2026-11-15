@@ -938,6 +938,73 @@ pub async fn set_tiktok_session(
     s.save().map_err(|e| e.to_string())
 }
 
+/// Opens an in-app TikTok login window (a real WebView2 browser). A
+/// poller harvests `sessionid`+`tt-target-idc` via `cookies_for_url`
+/// once the user is signed in — no DevTools digging. Saves the cookie
+/// to settings, emits `tiktok-session-captured`, then auto-closes.
+#[tauri::command]
+pub async fn open_tiktok_login(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window("tiktok-login") {
+        let _ = w.set_focus();
+        return Ok(());
+    }
+    let url: tauri::Url = "https://www.tiktok.com/login"
+        .parse()
+        .expect("literal URL");
+    tauri::WebviewWindowBuilder::new(&app, "tiktok-login", tauri::WebviewUrl::External(url))
+        .title("chlauncher — вход в TikTok")
+        .inner_size(1100.0, 760.0)
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let app2 = app.clone();
+    let settings = state.settings.clone();
+    tauri::async_runtime::spawn(async move {
+        for _ in 0..300 {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            if app2.get_webview_window("tiktok-login").is_none() {
+                return; // user closed the window — cancel
+            }
+            // cookies_for_url must run on the main thread.
+            let app3 = app2.clone();
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            let _ = app2.run_on_main_thread(move || {
+                let res = app3
+                    .get_webview_window("tiktok-login")
+                    .map(|w| {
+                        w.cookies_for_url(
+                            "https://www.tiktok.com/".parse().expect("literal URL"),
+                        )
+                    });
+                let _ = tx.send(res);
+            });
+            let Ok(Some(Ok(cookies))) = rx.await else { continue };
+            let Some(sid) = cookies.iter().find(|c| c.name() == "sessionid") else {
+                continue;
+            };
+            let idc = cookies
+                .iter()
+                .find(|c| c.name() == "tt-target-idc")
+                .map(|c| c.value().to_string());
+            let value = match idc {
+                Some(i) if !i.is_empty() => format!("{};{}", sid.value(), i),
+                _ => sid.value().to_string(),
+            };
+            {
+                let mut s = settings.lock().await;
+                s.data.tiktok_session = Some(value);
+                let _ = s.save();
+            }
+            let _ = app2.emit("tiktok-session-captured", true);
+            if let Some(w) = app2.get_webview_window("tiktok-login") {
+                let _ = w.close();
+            }
+            return;
+        }
+    });
+    Ok(())
+}
+
 /// Disconnect TikTok polling.
 #[tauri::command]
 pub async fn tiktok_disconnect(state: State<'_, AppState>) -> Result<(), String> {

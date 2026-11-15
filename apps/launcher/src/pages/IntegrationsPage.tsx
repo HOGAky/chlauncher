@@ -82,6 +82,12 @@ export default function IntegrationsPage() {
     return () => clearInterval(t);
   }, []);
 
+  useEffect(() => {
+    let un: (() => void) | undefined;
+    api.onTiktokSessionCaptured(() => setTtSessionSaved(true)).then((u) => (un = u));
+    return () => un?.();
+  }, []);
+
   const saveForward = (enabled: boolean) => {
     setFwdErr('');
     api
@@ -399,10 +405,13 @@ export default function IntegrationsPage() {
             </summary>
             <div className="mt-2 flex flex-col gap-2 rounded-md border border-border p-2">
               <p className="text-muted-foreground">
-                Если TikTok отвечает DEVICE_BLOCKED — вставьте куку <code>sessionid</code> из браузера
-                (tiktok.com → F12 → Application → Cookies). Подключение станет авторизованным —
+                Если TikTok отвечает DEVICE_BLOCKED — войдите в TikTok во встроенном окне, кука
+                <code> sessionid</code> подхватится сама. Подключение станет авторизованным —
                 без анонимных лимитов. Хранится только локально.
               </p>
+              <Button size="sm" variant="secondary" onClick={() => api.openTiktokLogin()}>
+                <LogIn size={14} className="mr-1" /> Войти в TikTok — sessionid подхватится сам
+              </Button>
               <div className="flex gap-2">
                 <Input
                   type="password"
