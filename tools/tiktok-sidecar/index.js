@@ -126,7 +126,12 @@ const vipOf = (d) => {
   return !!(a.isSubscriber || a.isModerator || a.isSuperFan || a.isTopGifter);
 };
 
-const ev = (event_kind, d, raw_name, amount = 0, extra = {}) =>
+// Event counter rides the heartbeat — lets the launcher tell
+// "connected but stream is quiet" apart from "events aren't flowing".
+let evCount = 0;
+
+const ev = (event_kind, d, raw_name, amount = 0, extra = {}) => {
+  evCount++;
   out({
     type: 'event',
     event_kind,
@@ -141,10 +146,9 @@ const ev = (event_kind, d, raw_name, amount = 0, extra = {}) =>
     gift_id: extra.gift_id ?? null,
     vip: vipOf(d),
   });
+};
 
-const main = async () => {
-  await configureSignProxy(await readLauncherConfig());
-
+const createConnection = () => {
   const conn = new TikTokLiveConnection(username, {
     processInitialData: false,
     enableExtendedGiftInfo: false, // gift/list endpoint needs a paid sign plan
@@ -187,34 +191,61 @@ const main = async () => {
     else if (t.includes('follow')) ev('follow', d, 'followed');
   });
   conn.on(WebcastEvent.SUBSCRIBE, (d) => ev('subscribe', d, 'subscribed'));
+  return conn;
+};
 
-  // Connector retries failed sign/webcast requests internally without
-  // surfacing errors — connect() can then sit forever while we only
-  // heartbeat, and the launcher shows "связь…" indefinitely. Cap the
-  // wait: 75s without CONNECTED → explicit error so the UI can explain
-  // (room offline? sign tier flaky? retry).
-  const connectTimeout = setTimeout(() => {
-    out({
-      type: 'error',
-      message:
-        'CONNECT_TIMEOUT: не удалось подключиться за 75с — комната оффлайн или сигнинг перегружен. Проверьте ник и что эфир идёт, затем повторите.',
-    });
-    process.exit(4);
-  }, 75000);
-  connectTimeout.unref();
-  conn.on(WebcastEvent.CONNECTED, () => clearTimeout(connectTimeout));
+const friendly = (msg) =>
+  /DEVICE_BLOCKED/i.test(msg)
+    ? 'TikTok заблокировал устройство подписи — бесплатный тир EulerStream часто под баном. Повторите через минуту или задайте EULERSTREAM_API_KEY на сервере (платный тир — чистые ноды).'
+    : msg;
 
-  conn
-    .connect()
-    .catch((e) => {
+const main = async () => {
+  await configureSignProxy(await readLauncherConfig());
+
+  // DEVICE_BLOCKED means TikTok flagged the sign node's device —
+  // EulerStream rotates nodes, so a spaced retry often lands on a
+  // clean one. Other errors (room offline, bad username) fail fast.
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const conn = createConnection();
+
+    // Connector retries failed sign/webcast requests internally without
+    // surfacing errors — connect() can then sit forever while we only
+    // heartbeat, and the launcher shows "связь…" indefinitely. Cap the
+    // wait: 75s without CONNECTED → explicit error so the UI can explain
+    // (room offline? sign tier flaky? retry).
+    const connectTimeout = setTimeout(() => {
+      out({
+        type: 'error',
+        message:
+          'CONNECT_TIMEOUT: не удалось подключиться за 75с — комната оффлайн или сигнинг перегружен. Проверьте ник и что эфир идёт, затем повторите.',
+      });
+      process.exit(4);
+    }, 75000);
+    connectTimeout.unref();
+    conn.on(WebcastEvent.CONNECTED, () => clearTimeout(connectTimeout));
+
+    try {
+      await conn.connect();
+      return; // connected — handlers keep the process alive
+    } catch (e) {
       clearTimeout(connectTimeout);
-      out({ type: 'error', message: String(e?.message || e) });
+      const raw = String(e?.message || e);
+      if (/DEVICE_BLOCKED/i.test(raw) && attempt < 3) {
+        out({
+          type: 'warn',
+          message: `DEVICE_BLOCKED — нода подписи под баном, повтор ${attempt}/2 через 25с`,
+        });
+        await new Promise((r) => setTimeout(r, 25000));
+        continue;
+      }
+      out({ type: 'error', message: friendly(raw) });
       process.exit(1);
-    });
+    }
+  }
 };
 
 main();
 
 // Heartbeat so the launcher can tell a dead pipe from a quiet room.
-setInterval(() => out({ type: 'ping', ts: Date.now() }), 15000).unref();
+setInterval(() => out({ type: 'ping', ts: Date.now(), events: evCount }), 15000).unref();
 process.stdin.resume(); // keep alive; launcher kills us on disconnect

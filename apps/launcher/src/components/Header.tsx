@@ -15,7 +15,7 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 
 export default function Header() {
-  const { email, streamerMode, setStreamerMode, clearSession, subscription } = useApp();
+  const { email, streamerMode, setStreamerMode, clearSession, subscription, boot } = useApp();
   const [ttStatus, setTtStatus] = useState<IntegrationStatus | undefined>();
   const subActive = subscription?.status === 'active';
 
@@ -45,7 +45,9 @@ export default function Header() {
   // Quick TikTok connect popover (EFIR parity): click the LIVE badge →
   // @username field + connect/disconnect without leaving the page.
   const [ttOpen, setTtOpen] = useState(false);
-  const [ttUser, setTtUser] = useState('');
+  // Last connected nick — restored from settings so the field survives
+  // app restarts (it used to blank out every launch).
+  const [ttUser, setTtUser] = useState(() => boot?.tiktok_username ?? '');
   const [ttErr, setTtErr] = useState('');
   const [ttBusy, setTtBusy] = useState(false);
   const ttRef = useRef<HTMLDivElement>(null);
