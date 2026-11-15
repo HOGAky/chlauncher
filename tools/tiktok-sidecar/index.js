@@ -184,6 +184,7 @@ const ev = (event_kind, d, raw_name, amount = 0, extra = {}) => {
     count: extra.count ?? 1,
     coins: extra.coins ?? 0,
     gift_id: extra.gift_id ?? null,
+    like_total: extra.like_total ?? 0,
     vip: vipOf(d),
   });
 };
@@ -217,8 +218,20 @@ const createConnection = () => {
 
   conn.on(WebcastEvent.CHAT, (d) => ev('comment', d, d.content ?? d.comment));
   conn.on(WebcastEvent.LIKE, (d) => {
-    const likes = Number(d.likeCount ?? d.count ?? d.totalLikeCount) || 0;
-    ev('like', d, `${likes} likes`, likes, { count: likes });
+    // 2.5 payload: `count` = this tap-batch, `total` = authoritative
+    // room counter. Emitting both lets downstream counters resync to
+    // the real total — summed batches drift whenever an event drops.
+    const likes = Number(d.count ?? d.likeCount) || 0;
+    const plural = (n) =>
+      n % 10 === 1 && n % 100 !== 11
+        ? 'лайк'
+        : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)
+          ? 'лайка'
+          : 'лайков';
+    ev('like', d, `${likes} ${plural(likes)}`, likes, {
+      count: likes,
+      like_total: Number(d.total ?? d.totalLikeCount) || 0,
+    });
   });
   conn.on(WebcastEvent.GIFT, (d) => {
     const giftType = d.giftType ?? d.gift?.type;

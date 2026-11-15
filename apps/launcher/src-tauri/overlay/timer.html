@@ -74,7 +74,11 @@ const wrap = document.getElementById('wrap'), card = document.getElementById('ca
       bar = document.querySelector('#bar i'), label = document.getElementById('label'),
       clock = document.getElementById('clock');
 
-let endsAtMs = 0, paused = false, running = false, cfg = null, seenAdds = 0, ended = false;
+let endsAtMs = 0, paused = false, running = false, cfg = null, ended = false;
+// Fingerprint of the newest seen addition. The server keeps a capped
+// ≤8 window — counting by length breaks once it's full (length stays
+// 8 forever and fresh entries never render).
+let lastAddFp = '';
 let AC = null;
 
 function beep(freq = 660) {
@@ -117,9 +121,15 @@ setInterval(() => {
 }, 120);
 
 function renderAdds(adds) {
-  // Only animate NEW entries since the last poll.
-  const fresh = adds.slice(seenAdds);
-  seenAdds = adds.length;
+  if (!adds.length) { lastAddFp = ''; return; }
+  // Newest add changed → render everything after the previously seen
+  // tail; if our marker fell out of the capped window, render the
+  // whole fresh list once.
+  const fp = JSON.stringify(adds[adds.length - 1]);
+  if (fp === lastAddFp) return;
+  let from = adds.findIndex(a => JSON.stringify(a) === lastAddFp);
+  const fresh = adds.slice(from + 1);
+  lastAddFp = fp;
   for (const a of fresh) {
     const d = document.createElement('div');
     d.className = 'add' + (a.sec < 0 ? ' neg' : '');
@@ -144,7 +154,7 @@ async function poll() {
     applyStyle();
     if (st.ends_at_ms) endsAtMs = st.ends_at_ms;
     if (paused) digits.textContent = fmt(st.remaining_s * 1000);
-    if (st.last_adds && st.last_adds.length !== seenAdds) renderAdds(st.last_adds);
+    if (st.last_adds) renderAdds(st.last_adds);
     card.classList.toggle('paused', paused);
     if (running) ended = false;
     if (wasRunning && !running && !ended) {

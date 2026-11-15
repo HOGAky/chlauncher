@@ -870,6 +870,7 @@ mod tests {
             coins,
             gift_id: None,
             vip: false,
+            like_total: 0,
             ts_ms: 0,
         }
     }

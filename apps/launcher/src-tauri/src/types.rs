@@ -59,6 +59,11 @@ pub struct RawStreamEvent {
     /// multipliers (points) and can gate VIP-only rules later.
     #[serde(default)]
     pub vip: bool,
+    /// Authoritative room total carried on like batches (`d.total` from
+    /// the webcast payload). Lets like-goals resync to the real counter
+    /// instead of summing batches — sums drift when events drop.
+    #[serde(default)]
+    pub like_total: i64,
     /// Unix ms when the event reached the launcher (queueing latency).
     #[serde(default)]
     pub ts_ms: u64,

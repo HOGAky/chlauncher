@@ -308,6 +308,7 @@ async fn run_da(
                 coins: (amount * coins_per_rub.max(0.0) as f64) as i64,
                 gift_id: None,
                 vip: false,
+                like_total: 0,
                 ts_ms: now_ms(),
             })
             .await;
@@ -564,6 +565,7 @@ async fn run_tiktok(
                     coins: v["coins"].as_i64().unwrap_or(0),
                     gift_id: v["gift_id"].as_i64(),
                     vip: v["vip"].as_bool().unwrap_or(false),
+                    like_total: v["like_total"].as_i64().unwrap_or(0),
                     ts_ms: now_ms(),
                 };
                 // Account-binding proof: the pending bind's owner posted the

@@ -247,6 +247,7 @@ impl PollTracker {
                 coins: 0,
                 gift_id: None,
                 vip: false,
+                like_total: 0,
                 ts_ms: crate::types::now_ms(),
             };
             let _ = self.raw_tx.try_send(ev);
@@ -288,6 +289,7 @@ mod tests {
             coins: 0,
             gift_id: None,
             vip: false,
+            like_total: 0,
             ts_ms: 0,
         }
     }

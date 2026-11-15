@@ -437,6 +437,7 @@ mod tests {
             coins: 0,
             gift_id: None,
             vip: false,
+            like_total: 0,
             ts_ms: 0,
         };
         let ev = TriggerMapper::map(&whale, &profile).unwrap();
@@ -459,6 +460,7 @@ mod tests {
             coins: 0,
             gift_id: None,
             vip: false,
+            like_total: 0,
             ts_ms: 0,
         };
         let a = TriggerMapper::map(&raw, &profile).unwrap();

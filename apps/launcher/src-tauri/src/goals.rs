@@ -41,6 +41,12 @@ pub struct GoalTracker {
     hub: Arc<EventHub>,
     overlay_tx: broadcast::Sender<OverlayFrame>,
     state: Mutex<HashMap<String, Runtime>>,
+    /// Last seen authoritative room like-total (`RawStreamEvent.like_total`).
+    /// Batch sums drift whenever a like event drops; the room total is
+    /// monotonic, so the per-event delta self-heals: `total_k - total_{k-1}`
+    /// recovers likes lost in dropped batches without counting the
+    /// pre-connect backlog.
+    like_baseline: Mutex<i64>,
 }
 
 impl GoalTracker {
@@ -54,6 +60,7 @@ impl GoalTracker {
             hub,
             overlay_tx,
             state: Mutex::new(HashMap::new()),
+            like_baseline: Mutex::new(0),
         })
     }
 
@@ -84,6 +91,26 @@ impl GoalTracker {
         self.state.lock().await.clear();
     }
 
+    /// Authoritative like-count delta for this event. When the room's
+    /// like total is present the delta between consecutive totals is
+    /// used — self-healing against dropped batches and never counting
+    /// the backlog that accumulated before we connected. Falls back to
+    /// the batch count when no total is carried.
+    async fn like_delta(&self, raw: &RawStreamEvent) -> i64 {
+        if raw.event_kind != "like" || raw.like_total <= 0 {
+            return raw.count.max(0) as i64;
+        }
+        let mut base = self.like_baseline.lock().await;
+        let prev = *base;
+        *base = (*base).max(raw.like_total);
+        if prev <= 0 {
+            // First total seen since (re)connect — count only this batch.
+            raw.count.max(0) as i64
+        } else {
+            (raw.like_total - prev).max(0)
+        }
+    }
+
     /// Feeds one raw event into all matching enabled goals. Called by the
     /// mapper loop for every ingest — goals track the event flow itself,
     /// not rule outcomes.
@@ -105,6 +132,7 @@ impl GoalTracker {
         if goals.is_empty() {
             return;
         }
+        let like_delta = self.like_delta(raw).await;
         let mut completed: Vec<StreamGoal> = Vec::new();
         {
             let mut state = self.state.lock().await;
@@ -113,7 +141,12 @@ impl GoalTracker {
                     value: 0,
                     fired: false,
                 });
-                rt.value = rt.value.saturating_add(delta(g, raw));
+                let d = if raw.event_kind == "like" && !g.count_coins {
+                    like_delta
+                } else {
+                    delta(g, raw)
+                };
+                rt.value = rt.value.saturating_add(d);
                 if !rt.fired && rt.value >= g.target {
                     rt.fired = true;
                     completed.push(g.clone());
@@ -216,6 +249,7 @@ mod tests {
             coins,
             gift_id: None,
             vip: false,
+            like_total: 0,
             ts_ms: 0,
         }
     }

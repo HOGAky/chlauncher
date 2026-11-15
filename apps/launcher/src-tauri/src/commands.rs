@@ -1694,6 +1694,7 @@ pub async fn test_rule(
         coins: 0,
         gift_id: None,
         vip: false,
+        like_total: 0,
         ts_ms: now_ms(),
     };
     // Single-rule profile so match_all can't pull in neighbors.
