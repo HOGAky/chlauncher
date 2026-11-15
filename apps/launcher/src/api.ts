@@ -66,6 +66,23 @@ export const logout = () => cmd<void>('logout');
 export const onAuthChanged = (cb: () => void): Promise<UnlistenFn> =>
   listen('auth-changed', () => cb());
 
+/** QR phone-pairing: creates a code → {code, url, qr_svg}. */
+export const pairLoginStart = () =>
+  cmd<{ code: string; url: string; qr_svg: string }>('pair_login_start');
+
+/**
+ * Polls the pairing code. 'pending' → nothing yet; 'session' → a verified
+ * TikTok sessionid was handed over; 'ready' → Telegram login issued a JWT
+ * (installed in Rust; may also carry the session).
+ */
+export const pairLoginStatus = (code: string) =>
+  cmd<{
+    status: string;
+    user?: { email?: string };
+    subscription?: Subscription;
+    tiktok_session?: { username?: string } | null;
+  }>('pair_login_status', { code });
+
 // ---- billing ---------------------------------------------------------------
 
 /** Fresh subscription status. */

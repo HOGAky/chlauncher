@@ -499,6 +499,8 @@ pub fn run() {
             commands::tg_unbind,
             commands::tg_login_start,
             commands::tg_login_status,
+            commands::pair_login_start,
+            commands::pair_login_status,
             commands::promo_redeem,
             commands::get_referrals,
             commands::referral_apply,

@@ -122,6 +122,30 @@ async function loginClaim(chatId, from, code) {
   await send(chatId, 'Вход подтверждён — возвращайтесь в лаунчер, он продолжит автоматически.');
 }
 
+async function pairClaim(chatId, from, code) {
+  const res = await fetch(`${SERVER}/api/auth/pair-claim`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-bot-secret': SECRET,
+    },
+    body: JSON.stringify({
+      code,
+      telegram_user_id: from.id,
+      telegram_username: from.username || '',
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg =
+      data.error === 'CODE_INVALID'
+        ? 'QR-код устарел. Сгенерируйте новый в лаунчере — «Вход по QR».'
+        : `Ошибка входа (${data.error || res.status}). Попробуйте позже.`;
+    return send(chatId, msg);
+  }
+  await send(chatId, 'Вход подтверждён — возвращайтесь к лаунчеру, он продолжит автоматически.');
+}
+
 async function status(chatId, from) {
   const res = await fetch(
     `${SERVER}/api/tg/bind-status?telegram_user_id=${from.id}`,
@@ -154,6 +178,10 @@ async function handleMessage(msg) {
     if (rawCode.toLowerCase().startsWith('login_')) {
       // "Sign in with Telegram" — the code is base64url, don't uppercase.
       return loginClaim(chatId, msg.from, rawCode.slice(6));
+    }
+    if (rawCode.toLowerCase().startsWith('pair_')) {
+      // QR phone-pairing — base64url code, don't uppercase.
+      return pairClaim(chatId, msg.from, rawCode.slice(5));
     }
     const code = rawCode.toUpperCase();
     if (!code) {

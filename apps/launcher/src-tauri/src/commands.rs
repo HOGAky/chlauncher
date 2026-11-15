@@ -406,6 +406,96 @@ pub async fn tg_login_status(code: String, state: State<'_, AppState>) -> Result
     Ok(res)
 }
 
+/// Renders `text` as a QR in SVG — a single dark-module path over a
+/// light background, viewBox-scaled so any CSS size works.
+fn qr_svg(text: &str) -> Result<String, String> {
+    let code = qrcode::QrCode::new(text.as_bytes()).map_err(|e| e.to_string())?;
+    let w = code.width();
+    let mut path = String::with_capacity(w * w * 4);
+    for (i, c) in code.to_colors().iter().enumerate() {
+        if *c == qrcode::Color::Dark {
+            path.push_str(&format!("M{} {}h1v1h-1z", i % w, i / w));
+        }
+    }
+    Ok(format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"-1 -1 {v} {v}\">\
+         <rect x=\"-1\" y=\"-1\" width=\"{v}\" height=\"{v}\" fill=\"#fff\"/>\
+         <path d=\"{path}\" fill=\"#000\"/></svg>",
+        v = w + 2,
+        path = path
+    ))
+}
+
+/// `POST /api/auth/pair-start` → `{code, url}` plus the rendered QR
+/// (SVG string the UI drops into an <img>/div). The phone page offers
+/// Telegram login (same bot) and a sessionid handoff.
+#[tauri::command]
+pub async fn pair_login_start(state: State<'_, AppState>) -> Result<Value, String> {
+    let res = state.api.pair_start().await.map_err(|e| e.to_string())?;
+    let url = res
+        .get("url")
+        .and_then(|u| u.as_str())
+        .ok_or("pair: server returned no url")?;
+    Ok(json!({
+        "code": res.get("code"),
+        "url": url,
+        "qr_svg": qr_svg(url)?,
+    }))
+}
+
+/// `POST /api/auth/pair-status` — polls a pairing code. On
+/// `{status:'ready'}` installs the issued JWT (never clobbering an
+/// existing session — a paired TikTok session still applies), on
+/// `{status:'session'}` (or a ready response carrying one) stores the
+/// verified cookie pair for the next LIVE connect.
+#[tauri::command]
+pub async fn pair_login_status(
+    code: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let res = state
+        .api
+        .pair_status(&code, state.hwid.as_deref().unwrap_or(""))
+        .await
+        .map_err(|e| e.to_string())?;
+    let status = res.get("status").and_then(|s| s.as_str());
+    if status == Some("ready") || status == Some("session") {
+        let mut s = state.settings.lock().await;
+        if status == Some("ready") && s.data.auth_token.is_none() {
+            if let Some(t) = res.get("token").and_then(|t| t.as_str()) {
+                s.data.auth_token = Some(t.to_string());
+                s.data.email = res
+                    .pointer("/user/email")
+                    .and_then(|e| e.as_str())
+                    .map(String::from);
+                s.data.role = res
+                    .pointer("/user/role")
+                    .and_then(|r| r.as_str())
+                    .map(String::from);
+            }
+        }
+        let sess = res.pointer("/tiktok_session/sessionid").and_then(|v| v.as_str());
+        if let Some(sid) = sess {
+            let idc = res
+                .pointer("/tiktok_session/idc")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            s.data.tiktok_session = Some(if idc.is_empty() {
+                sid.to_string()
+            } else {
+                format!("{};{}", sid, idc)
+            });
+            let _ = s.save();
+            drop(s);
+            let _ = app.emit("tiktok-session-captured", true);
+            return Ok(res);
+        }
+        let _ = s.save();
+    }
+    Ok(res)
+}
+
 /// `GET /api/support/tickets` — my tickets.
 #[tauri::command]
 pub async fn support_tickets(state: State<'_, AppState>) -> Result<Value, String> {

@@ -5,7 +5,7 @@
  * URL for TikTok Live Studio.
  */
 import React, { useEffect, useState } from 'react';
-import { Radio, Copy, Wallet, Cloud, RefreshCw, Plug, Play, AppWindow, BadgeCheck, LogIn } from 'lucide-react';
+import { Radio, Copy, Wallet, Cloud, RefreshCw, Plug, Play, AppWindow, BadgeCheck, LogIn, QrCode } from 'lucide-react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import * as api from '../api';
 import { useApp } from '../App';
@@ -24,6 +24,7 @@ import QueueCard from '../components/QueueCard';
 import SubathonCard from '../components/SubathonCard';
 import TimedCard from '../components/TimedCard';
 import PointsCard from '../components/PointsCard';
+import QrPair from '../components/QrPair';
 /** Maps serde's IntegrationStatus union to badge + label. */
 function statusBadge(st: IntegrationStatus | undefined) {
   if (!st || st === 'disconnected') return <Badge variant="outline">Отключено</Badge>;
@@ -41,6 +42,7 @@ export default function IntegrationsPage() {
   // sessionid cookie — authenticated-WS bypass for DEVICE_BLOCKED waves.
   const [ttSession, setTtSession] = useState('');
   const [ttSessionSaved, setTtSessionSaved] = useState(boot?.has_tiktok_session ?? false);
+  const [showQr, setShowQr] = useState(false);
   const [daToken, setDaToken] = useState('');
   const [statuses, setStatuses] = useState(boot?.integrations);
   const [copied, setCopied] = useState<string | null>(null);
@@ -412,6 +414,20 @@ export default function IntegrationsPage() {
               <Button size="sm" variant="secondary" onClick={() => api.openTiktokLogin()}>
                 <LogIn size={14} className="mr-1" /> Войти в TikTok — sessionid подхватится сам
               </Button>
+              <Button size="sm" variant="secondary" onClick={() => setShowQr((v) => !v)}>
+                <QrCode size={14} className="mr-1" /> {showQr ? 'Скрыть QR' : 'Передать с телефона (QR)'}
+              </Button>
+              {showQr && (
+                <div className="rounded-md border border-border/60 p-3">
+                  <QrPair
+                    hint="вставьте sessionid на странице"
+                    onSession={() => {
+                      setTtSessionSaved(true);
+                      setShowQr(false);
+                    }}
+                  />
+                </div>
+              )}
               <div className="flex gap-2">
                 <Input
                   type="password"

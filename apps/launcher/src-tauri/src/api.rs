@@ -430,6 +430,31 @@ impl ApiClient {
         .await
     }
 
+    /// `POST /api/auth/pair-start` — creates a QR phone-pairing code;
+    /// the returned `url` is what the QR encodes (LAN-reachable page).
+    pub async fn pair_start(&self) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::POST,
+            "/api/auth/pair-start",
+            None,
+            Some(json!({})),
+        )
+        .await
+    }
+
+    /// `POST /api/auth/pair-status` — polls the code; when the phone has
+    /// claimed something returns `{status:'ready'|'session'}` with the
+    /// JWT (tg login) and/or the verified TikTok session pair.
+    pub async fn pair_status(&self, code: &str, hwid: &str) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::POST,
+            "/api/auth/pair-status",
+            None,
+            Some(json!({"code": code, "hwid": hwid})),
+        )
+        .await
+    }
+
     /// `POST /api/auth/tiktok-login` — sessionid-verified sign in. The
     /// server asks TikTok who the cookie belongs to; with a bearer token
     /// it binds that TikTok identity to the caller instead of logging in.

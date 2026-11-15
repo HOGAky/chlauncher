@@ -504,6 +504,25 @@ const MIGRATIONS = [
         ON tiktok_bindings(tiktok_uid) WHERE tiktok_uid IS NOT NULL;
     `);
   },
+  // v13 → v14: QR phone-pairing — `pair_codes` holds one-shot codes the
+  // phone page claims with a telegram identity (launcher login) and/or
+  // a verified TikTok sessionid (LIVE session handoff).
+  (db) => {
+    db.exec(`
+      CREATE TABLE pair_codes (
+        code              TEXT PRIMARY KEY,
+        telegram_user_id  INTEGER,
+        telegram_username TEXT,
+        tiktok_sessionid  TEXT,
+        tiktok_idc        TEXT,
+        tiktok_uid        TEXT,
+        tiktok_username   TEXT,
+        expires_at        TEXT NOT NULL,
+        consumed          INTEGER NOT NULL DEFAULT 0,
+        created_at        TEXT NOT NULL
+      );
+    `);
+  },
 ];
 
 /** Runs all pending migrations in order. Idempotent via user_version. */

@@ -64,3 +64,4 @@ tauri-plugin-updater = "2"
 base64 = "0.23.1"
 tauri-plugin-global-shortcut = "2.4.1"
 regex = "1.13.1"
+qrcode = { version = "0.14", default-features = false }

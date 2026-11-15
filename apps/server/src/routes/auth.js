@@ -55,7 +55,7 @@ const TIKTOK_VERIFY_TIMEOUT_MS = 12 * 1000;
  * to — the same endpoint the web app itself uses. Returns the numeric
  * uid + handle on success; `ok:false` when the session is rejected.
  */
-async function fetchTikTokAccountInfo(sessionid, targetIdc) {
+export async function fetchTikTokAccountInfo(sessionid, targetIdc) {
   try {
     const cookie =
       `sessionid=${sessionid}` + (targetIdc ? `; tt-target-idc=${targetIdc}` : '');

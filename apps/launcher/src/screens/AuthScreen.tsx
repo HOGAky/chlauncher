@@ -10,6 +10,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { humanError } from '../errorMessages';
+import QrPair from '../components/QrPair';
 
 export default function AuthScreen() {
   const { setSession } = useApp();
@@ -23,6 +24,7 @@ export default function AuthScreen() {
   const [serverSaved, setServerSaved] = useState(false);
   const [tgWaiting, setTgWaiting] = useState(false);
   const [ttWaiting, setTtWaiting] = useState(false);
+  const [showQr, setShowQr] = useState(false);
 
   /**
    * "Sign in with Telegram" (EFIR parity): opens the bind-bot deep link
@@ -187,6 +189,22 @@ export default function AuthScreen() {
                 Войдите в TikTok в открывшемся окне — вход в лаунчер и связь с эфиром
                 настроятся автоматически.
               </p>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={() => setShowQr((v) => !v)}
+            >
+              {showQr ? 'Скрыть QR' : 'Вход по QR'}
+            </Button>
+            {showQr && (
+              <div className="rounded-lg border border-border/60 p-3">
+                <QrPair
+                  hint="вход через Telegram и/или сессия TikTok"
+                  onLogin={(email, sub) => setSession(email, sub)}
+                />
+              </div>
             )}
             <button
               type="button"
