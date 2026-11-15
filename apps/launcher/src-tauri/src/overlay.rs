@@ -32,6 +32,7 @@ use axum::{
 };
 use futures_util::{SinkExt, StreamExt};
 use serde::Serialize;
+use tauri::Manager;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -102,6 +103,9 @@ struct OverlayState {
     game_events: broadcast::Sender<crate::types::RawStreamEvent>,
     /// Built-in game sessions/results — `/games/state.json` + `/games/report`.
     games: Arc<crate::builtin_games::BuiltinGames>,
+    /// Lets `/overlay-close` shut frameless capture windows — the Escape
+    /// handler injected into them can only reach the app through HTTP.
+    app_handle: tauri::AppHandle,
 }
 
 /// Query-param extractor shared by all guarded routes.
@@ -278,6 +282,7 @@ pub async fn start_overlay_server(
     hype: Arc<crate::hype::HypeTracker>,
     game_events: broadcast::Sender<crate::types::RawStreamEvent>,
     games: Arc<crate::builtin_games::BuiltinGames>,
+    app_handle: tauri::AppHandle,
 ) -> std::io::Result<(u16, bool)> {
     let state = OverlayState {
         hub,
@@ -295,6 +300,7 @@ pub async fn start_overlay_server(
         hype,
         game_events,
         games,
+        app_handle,
     };
 
     // Recorder: remember the last frame per channel for late joiners.
@@ -366,6 +372,7 @@ pub async fn start_overlay_server(
         .route("/gifts/{file}", get(serve_gift))
         .route("/media/{id}", get(serve_media))
         .route("/tts/{file}", get(serve_tts))
+        .route("/overlay-close", get(overlay_close))
         .route("/health", get(|| async { "ok" }))
         .route("/ws", get(ws_upgrade))
         .with_state(state);
@@ -573,6 +580,26 @@ async fn serve_game_report(
 
 /// `/games/state.json` — session snapshot for late-joining pages and
 /// the Games page status badge.
+/// Closes the `overlay-<page>` capture window. Frameless windows have no
+/// chrome to click, so the Escape handler injected into each capture
+/// page pings this endpoint — token-guarded like the pages themselves.
+async fn overlay_close(
+    Query(q): Query<HashMap<String, String>>,
+    State(st): State<OverlayState>,
+) -> Response {
+    if !token_ok(q.get("t").map(String::as_str), &st.token) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let Some(page) = q.get("page") else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+    let label = format!("overlay-{}", page.replace('/', "-"));
+    if let Some(w) = st.app_handle.get_webview_window(&label) {
+        let _ = w.close();
+    }
+    "ok".into_response()
+}
+
 async fn serve_game_state(
     Query(q): Query<HashMap<String, String>>,
     State(st): State<OverlayState>,

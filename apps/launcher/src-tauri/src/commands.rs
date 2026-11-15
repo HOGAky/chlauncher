@@ -1763,7 +1763,19 @@ pub async fn open_overlay_window(
         return Ok(());
     }
     let url = url.parse::<tauri::Url>().map_err(|e| e.to_string())?;
+    // Capture windows are frameless/always-on-top — Escape is the only
+    // in-window way out. The page is served by our own overlay server,
+    // so a same-origin fetch to /overlay-close (token taken from the
+    // page URL) closes the window without needing Tauri IPC.
+    const ESC_CLOSE: &str = concat!(
+        "window.addEventListener('keydown',function(e){",
+        "if(e.key==='Escape'){",
+        "var t=new URLSearchParams(location.search).get('t')||'';",
+        "fetch('/overlay-close?page='+encodeURIComponent(location.pathname.slice(1))+'&t='+t);",
+        "}});"
+    );
     tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::External(url))
+        .initialization_script(ESC_CLOSE)
         .title(format!("chlauncher — {page}"))
         .inner_size(420.0, 640.0)
         .resizable(true)

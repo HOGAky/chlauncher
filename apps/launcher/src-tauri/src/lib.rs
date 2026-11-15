@@ -217,6 +217,7 @@ pub fn run() {
                 hype.clone(),
                 game_events.clone(),
                 builtin.clone(),
+                app.handle().clone(),
             )) {
                 Ok((port, fell_back)) => {
                     if fell_back {
@@ -427,8 +428,12 @@ pub fn run() {
                 use tauri::menu::{MenuBuilder, MenuItemBuilder};
                 use tauri::tray::TrayIconBuilder;
                 let show = MenuItemBuilder::with_id("show", "Открыть chlauncher").build(app)?;
+                let close_ov =
+                    MenuItemBuilder::with_id("close-overlays", "Закрыть оверлеи").build(app)?;
                 let quit = MenuItemBuilder::with_id("quit", "Выход").build(app)?;
-                let menu = MenuBuilder::new(app).items(&[&show, &quit]).build()?;
+                let menu = MenuBuilder::new(app)
+                    .items(&[&show, &close_ov, &quit])
+                    .build()?;
                 let mut tray = TrayIconBuilder::with_id("main").menu(&menu);
                 if let Some(icon) = app.default_window_icon() {
                     tray = tray.icon(icon.clone());
@@ -439,6 +444,13 @@ pub fn run() {
                             let _ = w.show();
                             let _ = w.unminimize();
                             let _ = w.set_focus();
+                        }
+                    }
+                    "close-overlays" => {
+                        for (label, w) in app.webview_windows() {
+                            if label.starts_with("overlay-") {
+                                let _ = w.close();
+                            }
                         }
                     }
                     "quit" => app.exit(0),
