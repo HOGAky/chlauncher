@@ -15,9 +15,11 @@
  * Commands:
  *   /start <code> — bind the account that generated <code>
  *   /status       — show bound account + subscription state
+ *   /channel      — invite link to the chlauncher Telegram channel
  *   /start        — usage hint
  *
- * Env: TG_BOT_TOKEN, TG_BIND_SECRET, SERVER_URL (default 127.0.0.1:8787)
+ * Env: TG_BOT_TOKEN, TG_BIND_SECRET, SERVER_URL (default 127.0.0.1:8787),
+ *      TG_CHANNEL_INVITE_URL
  */
 
 import path from 'node:path';
@@ -34,6 +36,8 @@ try {
 const TOKEN = process.env.TG_BOT_TOKEN;
 const SECRET = process.env.TG_BIND_SECRET;
 const SERVER = (process.env.SERVER_URL || 'http://127.0.0.1:8787').replace(/\/+$/, '');
+const CHANNEL_URL =
+  process.env.TG_CHANNEL_INVITE_URL || 'https://t.me/+nXUpPl7nOeQ1OWYy';
 
 if (!TOKEN || !SECRET) {
   console.error('[tg-bot] TG_BOT_TOKEN and TG_BIND_SECRET are required');
@@ -81,21 +85,21 @@ async function bind(chatId, from, code) {
         : `Ошибка привязки (${data.error || res.status}). Попробуйте позже.`;
     return send(chatId, msg);
   }
-  const lines = ['Аккаунт привязан к Telegram.'];
-  if (data.applied_events > 0) {
-    lines.push(`Найдено оплаченных периодов: ${data.applied_events} — подписка активирована.`);
-  }
-  const sub = data.subscription;
-  if (sub?.status === 'active' && sub.current_period_end) {
-    lines.push(`Подписка активна до ${new Date(sub.current_period_end).toLocaleDateString('ru-RU')}.`);
-  }
-  if (data.product_url) {
-    lines.push(`Оплатить тариф ${data.plan_code}: ${data.product_url}`);
-    lines.push('После оплаты подписка включится автоматически (до минуты).');
-  } else {
-    lines.push('Оплатите подписку по ссылке на тариф из лаунчера — она включится автоматически.');
-  }
-  await send(chatId, lines.join('\n'));
+
+  const tail = data.payment_url
+    ? `\n\nОплатить тариф: <a href="${data.payment_url}">${data.plan_code}</a>`
+    : '\n\nАккаунт привязан — возвращайтесь в лаунчер.';
+
+  await send(
+    chatId,
+    `Готово! Привязан аккаунт <code>${data.email_masked || 'ваш аккаунт'}</code>.` +
+      tail
+  );
+
+  await send(
+    chatId,
+    `📢 Подпишитесь на наш официальный канал со скидками, обновлениями и промокодами:\n${CHANNEL_URL}`
+  );
 }
 
 async function loginClaim(chatId, from, code) {
@@ -120,6 +124,10 @@ async function loginClaim(chatId, from, code) {
     return send(chatId, msg);
   }
   await send(chatId, 'Вход подтверждён — возвращайтесь в лаунчер, он продолжит автоматически.');
+  await send(
+    chatId,
+    `📢 Присоединяйтесь к каналу chlauncher — бета-новости, промокоды и giveaways:\n${CHANNEL_URL}`
+  );
 }
 
 async function pairClaim(chatId, from, code) {
@@ -144,6 +152,10 @@ async function pairClaim(chatId, from, code) {
     return send(chatId, msg);
   }
   await send(chatId, 'Вход подтверждён — возвращайтесь к лаунчеру, он продолжит автоматически.');
+  await send(
+    chatId,
+    `📢 Заходите в наш Telegram-канал за свежими апдейтами и промо:\n${CHANNEL_URL}`
+  );
 }
 
 async function status(chatId, from) {
@@ -155,7 +167,7 @@ async function status(chatId, from) {
   if (!res.ok || !data.bound) {
     return send(
       chatId,
-      'Telegram не привязан к аккаунту chlauncher. Сгенерируйте ссылку в лаунчере: Подписка → «Привязать Telegram».'
+      `Telegram не привязан к аккаунту chlauncher.\nСгенерируйте ссылку в лаунчере: Подписка → «Привязать Telegram».\n\n📢 Наш канал: ${CHANNEL_URL}`
     );
   }
   const sub = data.subscription;
@@ -163,7 +175,10 @@ async function status(chatId, from) {
     sub?.status === 'active' && sub.current_period_end
       ? `Подписка ${sub.plan_code} активна до ${new Date(sub.current_period_end).toLocaleDateString('ru-RU')} (${sub.days_left} дн).`
       : 'Подписка не активна — оплатите тариф, чтобы снять ограничения.';
-  await send(chatId, `Привязан аккаунт ${data.email_masked}.\n${tail}`);
+  await send(
+    chatId,
+    `Привязан аккаунт ${data.email_masked}.\n${tail}\n\n📢 Канал: ${CHANNEL_URL}`
+  );
 }
 
 const CODE_RE = /^[A-Z0-9]{6,10}$/;
@@ -172,6 +187,13 @@ async function handleMessage(msg) {
   const chatId = msg.chat?.id;
   const text = (msg.text || '').trim();
   if (!chatId || !msg.from) return;
+
+  if (text === '/channel' || text.startsWith('/channel@')) {
+    return send(
+      chatId,
+      `📢 Официальный Telegram-канал chlauncher:\n${CHANNEL_URL}\n\nТам выкладываем новые фичи, промокоды и розыгрыши.`
+    );
+  }
 
   if (text.startsWith('/start')) {
     const rawCode = text.slice('/start'.length).trim();
@@ -187,18 +209,35 @@ async function handleMessage(msg) {
     if (!code) {
       return send(
         chatId,
-        'Привет! Я привязываю ваш Telegram к аккаунту chlauncher.\n' +
-          'Откройте лаунчер → Подписка → «Привязать Telegram» — ссылка вернётся сюда автоматически.'
+        'Привет! Я <b>chlauncher бот</b> — помогаю привязать аккаунт, входить по QR и получать свежие обновления.\n\n' +
+          `📢 <b>Наш официальный канал:</b> ${CHANNEL_URL}\n\n` +
+          'Команды:\n' +
+          '• /start <код> — привязка аккаунта из лаунчера\n' +
+          '• /channel — ссылка на канал обновлений\n' +
+          '• /status — статус подписки'
       );
     }
-    return bind(chatId, msg.from, code);
+    if (CODE_RE.test(code)) return bind(chatId, msg.from, code);
+    // Unrecognized /start parameter — treat as greeting.
+    return send(
+      chatId,
+      `Привет! Я <b>chlauncher бот</b>.\n\n` +
+        `📢 <b>Канал со скидками и новостями:</b> ${CHANNEL_URL}\n\n` +
+        'Чтобы привязать аккаунт, сгенерируйте код в лаунчере: Подписка → «Привязать Telegram».'
+    );
   }
   if (text === '/status') return status(chatId, msg.from);
   if (CODE_RE.test(text.toUpperCase())) return bind(chatId, msg.from, text.toUpperCase());
   if (text === '/help' || text === '/status@') {
-    return send(chatId, 'Команды: /start <код> — привязка, /status — статус подписки.');
+    return send(
+      chatId,
+      `Команды: /start <код> — привязка аккаунта, /channel — канал обновлений, /status — статус подписки.\n\n📢 Канал: ${CHANNEL_URL}`
+    );
   }
-  await send(chatId, 'Команды: /start <код> — привязка аккаунта, /status — статус подписки.');
+  await send(
+    chatId,
+    `Команды: /start <код> — привязка аккаунта, /channel — канал обновлений, /status — статус подписки.\n\n📢 Канал: ${CHANNEL_URL}`
+  );
 }
 
 async function main() {
