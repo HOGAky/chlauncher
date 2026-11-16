@@ -2,10 +2,10 @@ import os
 import math
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
-OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "branding", "tiktok_preorder")
+OUTPUT_DIR = os.path.abspath(os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "branding", "tiktok_preorder")))
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-ICON_PATH = os.path.join(os.path.dirname(__file__), "..", "branding", "chlauncher-app-icon.png")
+ICON_PATH = os.path.abspath(os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "branding", "chlauncher-app-icon.png")))
 app_icon = None
 if os.path.exists(ICON_PATH):
     try:
@@ -82,12 +82,12 @@ def draw_badge(draw, text, x, y, accent_color, bg_alpha=40):
 def draw_card(draw, x, y, w, h, radius=24, border_color=CARD_BORDER, fill_color=CARD_BG):
     draw.rounded_rectangle([x, y, x + w, y + h], radius=radius, fill=fill_color, outline=border_color, width=2)
 
-# ==================== SLIDE 1: HOOK (КАЖДЫЙ ПРЕДЗАКАЗ УСКОРЯЕТ РЕЛИЗ) ====================
+# ==================== SLIDE 1: HOOK (ОТКРЫТ ТОЛЬКО ПРЕДЗАКАЗ) ====================
 def make_slide1():
     img = draw_gradient_background(glow_color=PINK, glow_y=460)
     draw = ImageDraw.Draw(img)
     
-    draw_badge(draw, "СОБЫТИЕ СЕЗОНА ДЛЯ СТРИМЕРОВ", 80, 140, PINK)
+    draw_badge(draw, "ТОЛЬКО ПРЕДЗАКАЗ · РЕЛИЗ СКОРО", 80, 140, PINK)
     
     if app_icon:
         icon_resized = app_icon.resize((170, 170), Image.Resampling.LANCZOS)
@@ -99,19 +99,19 @@ def make_slide1():
     
     # Progress Tracker Card
     draw_card(draw, 80, 700, 920, 640, radius=32, fill_color=(20, 26, 44, 240), border_color=PINK)
-    draw.text((120, 740), "Шкала ускорения релиза:", font=font_card_title, fill=WHITE)
+    draw.text((120, 740), "Как работает ускорение релиза:", font=font_card_title, fill=WHITE)
     
     # Countdown clock & progress bar
-    draw.text((120, 805), "РЕЛИЗ ЧЕРЕЗ: 4 ДНЯ 18 ЧАСОВ", font=font_body_bold, fill=AMBER)
+    draw.text((120, 805), "ПРИМЕРНАЯ ДАТА: ЧЕРЕЗ 2 НЕДЕЛИ", font=font_body_bold, fill=AMBER)
     draw.rounded_rectangle([120, 855, 960, 880], radius=10, fill=(255, 255, 255, 25))
     draw.rounded_rectangle([120, 855, 740, 880], radius=10, fill=PINK)
-    draw.text((120, 895), "72% шкалы заполнено (+260 предзаказов)", font=font_small, fill=GRAY)
+    draw.text((120, 895), "Каждый предзаказ приближает дату релиза", font=font_small, fill=GRAY)
     
     rules = [
-        ("Каждый предзаказ", "-2 ЧАСА до всеобщего релиза лаунчера", PINK),
-        ("Первые участники", "Доступ к закрытой бете УЖЕ СЕГОДНЯ", CYAN),
-        ("OG-статус навсегда", "Скидка 50% на все будущие обновления", EMERALD),
-        ("Кто первый зашел", "Тот снимает сливки с TikTok Live ниши", AMBER),
+        ("Каждый предзаказ", "-2 ЧАСА от общего времени ожидания", PINK),
+        ("Главный бонус", "Доступ к софту ЗА 1 НЕДЕЛЮ ДО РЕЛИЗА", EMERALD),
+        ("Старт без толпы", "Настроишь стримы раньше, чем набегут все", CYAN),
+        ("Пожизненный OG", "Скидка 50% на все тарифы навсегда", AMBER),
     ]
     
     ry = 950
@@ -122,31 +122,31 @@ def make_slide1():
         ry += 90
         
     draw_card(draw, 80, 1375, 920, 170, radius=24, fill_color=(255, 77, 157, 30), border_color=PINK)
-    draw.text((120, 1410), "КАК ЗАРАБАТЫВАЮТ НА ИГРАХ В TIKTOK?", font=font_card_title, fill=PINK)
-    draw.text((120, 1465), "Свайпай дальше — показываем цифры доходов ->", font=font_body, fill=WHITE)
+    draw.text((120, 1410), "ЗАЧЕМ ОФОРМЛЯТЬ ПРЕДЗАКАЗ СЕЙЧАС?", font=font_card_title, fill=PINK)
+    draw.text((120, 1465), "Свайпай дальше — показываем заработок ->", font=font_body, fill=WHITE)
     
     return img
 
-# ==================== SLIDE 2: MONEY & MARKET (СКОЛЬКО ТУТ ЗАРАБАТЫВАЮТ) ====================
+# ==================== SLIDE 2: MONEY & MARKET (ПОЧЕМУ НУЖНО ЗАЙТИ ПЕРВЫМ) ====================
 def make_slide2():
     img = draw_gradient_background(glow_color=EMERALD, glow_y=500)
     draw = ImageDraw.Draw(img)
     
-    draw_badge(draw, "ЗАРАБОТОК НА TIKTOK СТРИМАХ", 80, 140, EMERALD)
+    draw_badge(draw, "РЫНОК СТРИМОВ TIKTOK LIVE", 80, 140, EMERALD)
     
-    draw.text((80, 230), "ОТ 50 000 ДО", font=font_hero, fill=WHITE)
-    draw.text((80, 310), "300 000 РУБЛЕЙ", font=font_hero, fill=EMERALD)
-    draw.text((80, 400), "Интерактивные стримы приносят в 10 раз больше обычных", font=font_body, fill=GRAY)
+    draw.text((80, 230), "КТО ПЕРВЫЙ —", font=font_hero, fill=WHITE)
+    draw.text((80, 310), "ТОТ ЗАБИРАЕТ ВСЁ", font=font_hero, fill=EMERALD)
+    draw.text((80, 400), "Интерактивные стримы в TikTok сейчас приносят максимум", font=font_body, fill=GRAY)
     
     # Income breakdown card
     draw_card(draw, 80, 480, 920, 560, radius=32)
-    draw.text((120, 520), "Откуда берутся деньги в эфирах:", font=font_card_title, fill=WHITE)
+    draw.text((120, 520), "Что дает ранний старт на 1 неделю раньше:", font=font_card_title, fill=WHITE)
     
     incomes = [
-        ("Подарки за триггеры в играх", "Зрители спавнят TNT в Minecraft или мобов в Roblox за монеты", EMERALD),
-        ("Субатон-таймер эфира", "Хотят продолжения стрима? Донатят на продление времени", AMBER),
-        ("Платная озвучка комментариев", "Сообщения с донатом озвучиваются в приоритете", CYAN),
-        ("Донат-колесо и рулетки", "Зрители крутят рулетку наказаний и заданий для стримера", PINK),
+        ("Свободная ниша без конкурентов", "Пока другие ждут публичного релиза, ты уже в рекомендациях", EMERALD),
+        ("Первые донаты зрителей", "Зрители еще не привыкли к играм и активно донатят", AMBER),
+        ("Быстрый набор подписчиков", "Стримы с интерактивом алгоритмы TikTok бустят в ТОП", CYAN),
+        ("Доход от 50 000 до 300 000 руб", "Интерактивные игры приносят в 10 раз больше обычных стримов", PINK),
     ]
     
     iy = 585
@@ -157,11 +157,11 @@ def make_slide2():
         iy += 125
         
     draw_card(draw, 80, 1080, 920, 330, radius=24)
-    draw.text((120, 1120), "Почему обычные стримы проигрывают:", font=font_card_title, fill=WHITE)
+    draw.text((120, 1120), "Сравнение доходов на стримах:", font=font_card_title, fill=WHITE)
     facts = [
         "- Обычный разговорный стрим: 100 - 300 руб в час",
         "- Интерактивные игры: 1 500 - 5 000 руб в час",
-        "- Алгоритмы TikTok продвигают стримы с интерактивом!",
+        "- Доступ за неделю до всех = собрать всю аудиторию!",
     ]
     fy = 1185
     for f in facts:
@@ -169,7 +169,7 @@ def make_slide2():
         fy += 58
         
     draw_card(draw, 80, 1450, 920, 140, radius=20, fill_color=(52, 211, 153, 25), border_color=EMERALD)
-    draw.text((120, 1500), "Что входит в chlauncher? Смотри дальше ->", font=font_card_title, fill=EMERALD)
+    draw.text((120, 1500), "Что будет внутри лаунчера? Смотри дальше ->", font=font_card_title, fill=EMERALD)
     
     return img
 
@@ -178,11 +178,11 @@ def make_slide3():
     img = draw_gradient_background(glow_color=CYAN, glow_y=500)
     draw = ImageDraw.Draw(img)
     
-    draw_badge(draw, "ПОЛНЫЙ АРСЕНАЛ СТРИМЕРА", 80, 140, CYAN)
+    draw_badge(draw, "АРСЕНАЛ ДЛЯ ЗАРАБОТКА В ЭФИРАХ", 80, 140, CYAN)
     
     draw.text((80, 230), "ВСЕ ИНСТРУМЕНТЫ", font=font_hero, fill=WHITE)
-    draw.text((80, 310), "В ОДНОМ МЕСТЕ", font=font_hero, fill=CYAN)
-    draw.text((80, 400), "Больше не нужно запускать 10 разных сайтов и расширений", font=font_body, fill=GRAY)
+    draw.text((80, 310), "К РЕЛИЗУ ГОТОВЫ", font=font_hero, fill=CYAN)
+    draw.text((80, 400), "Софт уже готов — сейчас финальное тестирование и предзаказ", font=font_body, fill=GRAY)
     
     features = [
         ("Таймер Субатона", "Подарки и лайки двигают шкалу времени в прямом эфире", AMBER),
@@ -200,33 +200,33 @@ def make_slide3():
         fy += 140
         
     draw_card(draw, 80, 1220, 920, 190, radius=24, fill_color=(34, 211, 238, 25), border_color=CYAN)
-    draw.text((120, 1260), "РАБОТАЕТ В 1 КЛИК", font=font_card_title, fill=CYAN)
-    draw.text((120, 1320), "Вход через QR-код прямо с телефона без мучений с токенами!", font=font_body, fill=WHITE)
+    draw.text((120, 1260), "БЕЗ ПОДПИСОК ЗА 15$/МЕС", font=font_card_title, fill=CYAN)
+    draw.text((120, 1320), "Отечественный софт для СНГ-стримеров без зарубежных оплат", font=font_body, fill=WHITE)
     
     draw_card(draw, 80, 1450, 920, 140, radius=20, fill_color=(251, 191, 36, 25), border_color=AMBER)
     draw.text((120, 1500), "Что дает предзаказ прямо сейчас? ->", font=font_card_title, fill=AMBER)
     
     return img
 
-# ==================== SLIDE 4: PRE-ORDER PERKS (БОНУСЫ РАННИХ ПРЕДЗАКАЗОВ) ====================
+# ==================== SLIDE 4: PRE-ORDER PERKS (ДОСТУП ЗА НЕДЕЛЮ ДО РЕЛИЗА) ====================
 def make_slide4():
     img = draw_gradient_background(glow_color=PURPLE, glow_y=500)
     draw = ImageDraw.Draw(img)
     
-    draw_badge(draw, "ПРИВИЛЕГИИ ПЕРВЫХ УЧАСТНИКОВ", 80, 140, PURPLE)
+    draw_badge(draw, "УСЛОВИЯ ПРЕДЗАКАЗА", 80, 140, PURPLE)
     
-    draw.text((80, 230), "ПОЧЕМУ НУЖНО", font=font_hero, fill=WHITE)
-    draw.text((80, 310), "УСПЕТЬ СЕЙЧАС", font=font_hero, fill=PURPLE)
-    draw.text((80, 400), "После официального релиза халявных мест больше не будет", font=font_body, fill=GRAY)
+    draw.text((80, 230), "ДОСТУП ЗА 1 НЕДЕЛЮ", font=font_hero, fill=WHITE)
+    draw.text((80, 310), "ДО ОБЩЕГО РЕЛИЗА", font=font_hero, fill=PURPLE)
+    draw.text((80, 400), "Те, кто предзаказал, первыми получат лаунчер на руки", font=font_body, fill=GRAY)
     
     draw_card(draw, 80, 480, 920, 580, radius=32)
-    draw.text((120, 520), "Что дает предзаказ прямо сейчас:", font=font_card_title, fill=WHITE)
+    draw.text((120, 520), "Привилегии предзаказа:", font=font_card_title, fill=WHITE)
     
     perks = [
-        ("Мгновенный доступ в Closed Beta", "Начинай стримить и зарабатывать уже сегодня, пока другие ждут", PINK),
-        ("Пожизненная скидка 50% (OG Pass)", "Твой тариф заморозится навсегда на льготных условиях", AMBER),
-        ("Прямая связь с разработчиками", "Добавим нужные тебе фичи и игры под твои стримы", CYAN),
-        ("Готовые пресеты под ключ", "Настроенные оверлеи под OBS и TikTok Live Studio", EMERALD),
+        ("Доступ за 7 дней до релиза", "Скачиваешь лаунчер за неделю до публичного старта", PINK),
+        ("Ускорение общего релиза", "Твой предзаказ срезает 2 часа от ожидания для всех", CYAN),
+        ("Пожизненный OG Pass со скидкой 50%", "Твой тариф заморозится навсегда на льготных условиях", AMBER),
+        ("Поддержка и закрытый чат", "Прямой чат с разработчиками для настройки стримов", EMERALD),
     ]
     
     py = 590
@@ -237,13 +237,13 @@ def make_slide4():
         py += 125
         
     draw_card(draw, 80, 1100, 920, 310, radius=24)
-    draw.text((120, 1140), "Лимит участников:", font=font_card_title, fill=WHITE)
-    draw.text((120, 1200), "Всего выделено 500 мест для ранних стримеров.", font=font_body_bold, fill=AMBER)
-    draw.text((120, 1260), "Больше половины мест уже забронировано!", font=font_body, fill=WHITE)
-    draw.text((120, 1315), "С каждым предзаказом таймер релиза тает на глазах.", font=font_small, fill=GRAY)
+    draw.text((120, 1140), "Лимит предзаказов:", font=font_card_title, fill=WHITE)
+    draw.text((120, 1200), "Всего выделено 500 мест по скидке предзаказа.", font=font_body_bold, fill=AMBER)
+    draw.text((120, 1260), "После выхода скидки сгорят, а доступ станет общим.", font=font_body, fill=WHITE)
+    draw.text((120, 1315), "Успей забрать ранний доступ, пока слоты открыты.", font=font_small, fill=GRAY)
     
     draw_card(draw, 80, 1450, 920, 140, radius=20, fill_color=(168, 85, 247, 25), border_color=PURPLE)
-    draw.text((120, 1500), "Как занять свое место? Финал ->", font=font_card_title, fill=PURPLE)
+    draw.text((120, 1500), "Как оформить предзаказ? Финал ->", font=font_card_title, fill=PURPLE)
     
     return img
 
@@ -252,7 +252,7 @@ def make_slide5():
     img = draw_gradient_background(glow_color=PINK, glow_y=500)
     draw = ImageDraw.Draw(img)
     
-    draw_badge(draw, "БРОНИРУЙ МЕСТО В ПЕРВОЙ ВОЛНЕ", 80, 140, PINK)
+    draw_badge(draw, "БРОНИРУЙ МЕСТО В ПРЕДЗАКАЗЕ", 80, 140, PINK)
     
     if app_icon:
         icon_resized = app_icon.resize((240, 240), Image.Resampling.LANCZOS)
@@ -260,21 +260,22 @@ def make_slide5():
         
     draw.text((W // 2 - 240, 500), "CHLAUNCHER", font=font_hero, fill=WHITE)
     draw.text((W // 2 - 310, 590), "ПРЕДЗАКАЗ ОТКРЫТ", font=font_title, fill=PINK)
-    draw.text((W // 2 - 330, 670), "Ускорь релиз и заходи в бета-тест прямо сейчас", font=font_body, fill=GRAY)
+    draw.text((W // 2 - 340, 670), "Получи софт за неделю до релиза и ускори дату", font=font_body, fill=GRAY)
     
     draw_card(draw, 80, 750, 920, 480, radius=28)
-    draw.text((120, 790), "Как оформить предзаказ за 1 минуту:", font=font_card_title, fill=WHITE)
+    draw.text((120, 790), "Как оформить предзаказ прямо сейчас:", font=font_card_title, fill=WHITE)
     
     steps = [
         "1. Переходи по ссылке в шапке профиля TikTok",
         "2. Заходи в наш Telegram-канал или бота @chlnchbot",
-        "3. Нажимай «Предзаказ» — получи OG-роль и доступ к бете",
-        "4. Каждый предзаказ срезает 2 ЧАСА до всеобщего релиза!",
+        "3. Бронируй предзаказ — получай OG-скидку 50%",
+        "4. Твой предзаказ ускорит дату релиза на 2 ЧАСА!",
+        "5. За 1 неделю до всех получишь готовый лаунчер!",
     ]
-    sy = 860
+    sy = 855
     for s in steps:
-        draw.text((120, sy), s, font=font_body_bold if "2 ЧАСА" in s else font_body, fill=AMBER if "2 ЧАСА" in s else WHITE)
-        sy += 65
+        draw.text((120, sy), s, font=font_body_bold if "1 неделю" in s or "2 ЧАСА" in s else font_body, fill=AMBER if "1 неделю" in s else (PINK if "2 ЧАСА" in s else WHITE))
+        sy += 58
         
     draw_card(draw, 80, 1270, 920, 260, radius=32, fill_color=(255, 77, 157, 45), border_color=PINK)
     draw.text((140, 1310), "ССЫЛКА НА КАНАЛ И ПРЕДЗАКАЗ:", font=font_badge, fill=PINK)
