@@ -13,6 +13,7 @@
 # ---- Node ----
 node_modules/
 tools/tiktok-sidecar/node.exe
+tools/tiktok-sidecar/_*
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -48,11 +49,11 @@ desktop.ini
 *.swo
 dist-test/
 
-# ---- RVC voice server (локальное окружение и модели пользователя) ----
+# ---- RVC voice server (пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ) ----
 tools/rvc-server/venv/
 tools/rvc-server/models/
 tools/rvc-server/*.log
 tools/rvc-server/*-test*.wav
-# Бандл сайдкара нужен в репо — build.rs копирует его в ресурсы.
+# пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅ пїЅ build.rs пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ.
 !tools/tiktok-sidecar/dist/
 !tools/tiktok-sidecar/dist/**

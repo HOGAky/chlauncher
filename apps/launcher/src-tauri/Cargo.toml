@@ -70,8 +70,9 @@ qrcode = { version = "0.14", default-features = false }
 msedge-tts = { version = "0.4", default-features = false, features = ["tokio-runtime"] }
 # rustls is pulled transitively by msedge-tts AND reqwest — with both
 # aws-lc-rs and ring in the tree, `ClientConfig::builder()` panics on an
-# ambiguous CryptoProvider. We pin one explicitly at startup (Tts::new).
-rustls = "0.23"
+# ambiguous CryptoProvider. We pin ring explicitly at startup (Tts::new).
+# aws-lc-rs is excluded on purpose: aws-lc-sys needs cmake+NASM to build.
+rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
 # Decodes WAV (SAPI) / MP3 (Edge) and plays to the default device —
 # the sink is stoppable, so mute cuts speech instantly (§6.3).
 rodio = { version = "0.21", default-features = false, features = ["playback", "mp3", "wav"] }

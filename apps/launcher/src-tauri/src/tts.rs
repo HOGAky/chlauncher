@@ -2290,8 +2290,8 @@ impl Tts {
         // rustls ambiguity guard: msedge-tts and reqwest pull in BOTH
         // aws-lc-rs and ring providers, so `ClientConfig::builder()`
         // panics ("cannot determine CryptoProvider") on the first Edge
-        // connect. Pin aws-lc-rs once per process — Err on repeat is fine.
-        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+        // connect. Pin ring once per process — Err on repeat is fine.
+        let _ = rustls::crypto::ring::default_provider().install_default();
         let _ = std::fs::create_dir_all(&dir);
         let media_dir = dir
             .parent()
@@ -3251,7 +3251,7 @@ mod tests {
     async fn edge_live_synth() {
         // Same as Tts::new — pin a CryptoProvider so rustls doesn't panic
         // on the ambiguous aws-lc-rs/ring feature set.
-        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+        let _ = rustls::crypto::ring::default_provider().install_default();
         let _ = tracing_subscriber::fmt()
             .with_max_level(tracing::Level::WARN)
             .try_init();
