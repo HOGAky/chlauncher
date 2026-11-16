@@ -1,0 +1,719 @@
+{
+  "common": {
+    "method": "WebcastChatMessage",
+    "msgId": "7708865098773416724",
+    "roomId": "7708842685192866578",
+    "createTime": "1794860031103",
+    "monitor": 0,
+    "isShowMsg": true,
+    "describe": "",
+    "foldType": "2",
+    "anchorFoldType": "2",
+    "priorityScore": "0",
+    "logId": "20261117041350C9FDCFC68902805EF712",
+    "msgProcessFilterK": "",
+    "msgProcessFilterV": "",
+    "fromIdc": "my2",
+    "toIdc": "",
+    "filterMsgTags": [],
+    "anchorPriorityScore": "0",
+    "roomMessageHeatLevel": "2",
+    "foldTypeForWeb": "2",
+    "anchorFoldTypeForWeb": "2",
+    "clientSendTime": "1794860030621",
+    "dispatchStrategy": 0
+  },
+  "user": {
+    "id": "7532352034268693511",
+    "deprecated1": "0",
+    "nickname": "Егор",
+    "deprecated2": 0,
+    "bioDescription": "",
+    "deprecated3": 0,
+    "deprecated4": "0",
+    "deprecated5": "",
+    "avatarThumb": {
+      "urlList": [
+        "https://p19-common-sign.tiktokcdn.com/tos-alisg-avt-0068/d1f5fdf2a49b4282f50607d94c39d6c7~tplv-tiktok-shrink:72:72.webp?dr=14561&refresh_token=c157638d&x-expires=1795032000&x-signature=qM3XCFOL2mdrRWafLkZ6cQQDRms%3D&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=fdd36af4&idc=my2",
+        "https://p16-common-sign.tiktokcdn.com/tos-alisg-avt-0068/d1f5fdf2a49b4282f50607d94c39d6c7~tplv-tiktok-shrink:72:72.webp?dr=14561&refresh_token=eee4e79c&x-expires=1795032000&x-signature=odKiJiop8o4TEI124M92wNOZXh8%3D&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=fdd36af4&idc=my2",
+        "https://p19-common-sign.tiktokcdn.com/tos-alisg-avt-0068/d1f5fdf2a49b4282f50607d94c39d6c7~tplv-tiktok-shrink:72:72.jpeg?dr=14561&refresh_token=34d189b4&x-expires=1795032000&x-signature=y1uVHJSc9LCGDtayPwuc78l4dxk%3D&t=4d5b0474&ps=13740610&shp=a5d48078&shcp=fdd36af4&idc=my2",
+        "https://p16-common-sign.tiktokcdn-us.com/tos-alisg-avt-0068/d1f5fdf2a49b4282f50607d94c39d6c7~tplv-tiktok-shrink:72:72.webp?dr=18049&refresh_token=a8a9311e&x-expires=1795032000&x-signature=OIL70If0%2B2eYrFp3jss5YD%2FByQ0%3D&t=4d5b0474&ps=ae600521&shp=a5d48078&shcp=fdd36af4&idc=my2",
+        "https://p19-common-sign.tiktokcdn-us.com/tos-alisg-avt-0068/d1f5fdf2a49b4282f50607d94c39d6c7~tplv-tiktok-shrink:72:72.webp?dr=18049&refresh_token=6fcdeba9&x-expires=1795032000&x-signature=5S3W%2BNtD22LimMcp%2BZdopfCIyGI%3D&t=4d5b0474&ps=ae600521&shp=a5d48078&shcp=fdd36af4&idc=my2",
+        "https://p16-common-sign.tiktokcdn-us.com/tos-alisg-avt-0068/d1f5fdf2a49b4282f50607d94c39d6c7~tplv-tiktok-shrink:72:72.jpeg?dr=18049&refresh_token=e593b698&x-expires=1795032000&x-signature=SEzSBDDoVLZPf3A0T8psQRl%2Fmbc%3D&t=4d5b0474&ps=ae600521&shp=a5d48078&shcp=fdd36af4&idc=my2"
+      ],
+      "uri": "100x100/tos-alisg-avt-0068/d1f5fdf2a49b4282f50607d94c39d6c7",
+      "height": 0,
+      "width": 0,
+      "avgColor": "",
+      "imageType": 0,
+      "openWebUrl": "",
+      "isAnimated": false
+    },
+    "verified": false,
+    "deprecated6": 0,
+    "deprecated7": "",
+    "status": 0,
+    "createTime": "0",
+    "modifyTime": "0",
+    "secret": 0,
+    "shareQrcodeUri": "",
+    "deprecated8": 0,
+    "badgeImageList": [],
+    "followInfo": {
+      "followingCount": "154",
+      "followerCount": "68",
+      "followStatus": "1",
+      "pushStatus": "0"
+    },
+    "payGrade": {
+      "deprecated20": "0",
+      "name": "",
+      "nextName": "",
+      "level": 0,
+      "deprecated23": "0",
+      "deprecated24": "0",
+      "deprecated25": "0",
+      "gradeDescribe": "",
+      "gradeIconList": [],
+      "screenChatType": "0",
+      "upgradeNeedConsume": "0",
+      "nextPrivileges": "",
+      "score": "0",
+      "gradeBanner": ""
+    },
+    "specialId": "",
+    "realTimeIcons": [],
+    "newRealTimeIcons": [],
+    "topVipNo": 0,
+    "userAttr": {
+      "isMuted": false,
+      "isAdmin": false,
+      "isSuperAdmin": false,
+      "muteDuration": "0",
+      "adminPermissions": {},
+      "hasVotingFunction": false,
+      "isChannelAdmin": false
+    },
+    "payScore": "0",
+    "ticketCount": "0",
+    "linkMicStats": 0,
+    "displayId": "user81743793921376",
+    "withCommercePermission": false,
+    "withFusionShopEntry": false,
+    "deprecated21": "0",
+    "verifiedContent": "",
+    "topFans": [],
+    "secUid": "MS4wLjABAAAAobaBab_2iNHeiFlPrmb08vPNbgFuwKj03rCNDpqWSakzSI2FodkBiCzadGejeI_m",
+    "userRole": 0,
+    "deprecated9": {
+      "type": "Buffer",
+      "data": []
+    },
+    "deprecated10": {
+      "type": "Buffer",
+      "data": []
+    },
+    "deprecated11": {
+      "type": "Buffer",
+      "data": []
+    },
+    "deprecated12": 0,
+    "deprecated13": 0,
+    "deprecated14": {
+      "type": "Buffer",
+      "data": []
+    },
+    "mediaBadgeImageList": [],
+    "deprecated15": 0,
+    "userVipInfo": {
+      "type": "Buffer",
+      "data": []
+    },
+    "commerceWebcastConfigIds": [],
+    "borderList": [],
+    "badgeList": [
+      {
+        "displayType": 4,
+        "priorityType": 20,
+        "sceneType": 8,
+        "position": 1,
+        "displayStatus": 0,
+        "greyedByClient": "0",
+        "exhibitionType": 0,
+        "openweburl": "aweme://roma_redirect/?spark_page=user_level_main_page_privilege_panel",
+        "display": true,
+        "privilegeLogExtra": {
+          "dataVersion": "2",
+          "privilegeId": "7138381176787490596",
+          "privilegeVersion": "0",
+          "privilegeOrderId": "mock_fix_width_transparent_7138381176787490596",
+          "level": "4",
+          "startTime": "0",
+          "endTime": "0"
+        },
+        "combine": {
+          "displayType": 4,
+          "icon": {
+            "urlList": [
+              "https://p16-webcast.tiktokcdn.com/webcast-va/grade_badge_icon_lite_lv1_v1.png~tplv-obj.image",
+              "https://p19-webcast.tiktokcdn.com/webcast-va/grade_badge_icon_lite_lv1_v1.png~tplv-obj.image"
+            ],
+            "uri": "webcast-va/grade_badge_icon_lite_lv1_v1.png",
+            "height": 0,
+            "width": 0,
+            "avgColor": "",
+            "imageType": 0,
+            "openWebUrl": "aweme://roma_redirect/?spark_page=user_level_main_page_privilege_panel",
+            "isAnimated": false
+          },
+          "str": "4",
+          "padding": {
+            "useSpecific": true,
+            "middlePadding": 3,
+            "badgeWidth": 32,
+            "leftPadding": 0,
+            "rightPadding": 0,
+            "iconTopPadding": 0,
+            "iconBottomPadding": 0,
+            "horizontalPaddingRule": 0,
+            "verticalPaddingRule": 0
+          },
+          "fontStyle": {
+            "fontSize": 0,
+            "fontWidth": 0,
+            "fontColor": "",
+            "borderColor": ""
+          },
+          "profileCardPanel": {
+            "useNewProfileCardStyle": false,
+            "badgeTextPosition": 0,
+            "projectionConfig": {
+              "useProjection": false,
+              "icon": {
+                "urlList": [],
+                "uri": "",
+                "height": 0,
+                "width": 0,
+                "avgColor": "",
+                "imageType": 0,
+                "openWebUrl": "",
+                "isAnimated": false
+              }
+            },
+            "profileContent": {
+              "useContent": false,
+              "iconList": []
+            }
+          },
+          "background": {
+            "image": {
+              "urlList": [],
+              "uri": "",
+              "height": 0,
+              "width": 0,
+              "avgColor": "",
+              "imageType": 0,
+              "openWebUrl": "",
+              "isAnimated": false
+            },
+            "backgroundColorCode": "#99789EE7",
+            "borderColorCode": "",
+            "leftSideImage": {
+              "urlList": [],
+              "uri": "",
+              "height": 0,
+              "width": 0,
+              "avgColor": "",
+              "imageType": 0,
+              "openWebUrl": "",
+              "isAnimated": false
+            }
+          },
+          "backgroundDarkMode": {
+            "image": {
+              "urlList": [],
+              "uri": "",
+              "height": 0,
+              "width": 0,
+              "avgColor": "",
+              "imageType": 0,
+              "openWebUrl": "",
+              "isAnimated": false
+            },
+            "backgroundColorCode": "#99789EE7",
+            "borderColorCode": "",
+            "leftSideImage": {
+              "urlList": [],
+              "uri": "",
+              "height": 0,
+              "width": 0,
+              "avgColor": "",
+              "imageType": 0,
+              "openWebUrl": "",
+              "isAnimated": false
+            }
+          },
+          "iconAutoMirrored": false,
+          "backgroundAutoMirrored": false,
+          "publicScreenShowStyle": 14,
+          "personalCardShowStyle": 15,
+          "ranklistOnlineAudienceShowStyle": 0,
+          "multiGuestShowStyle": 0,
+          "paddingNewFont": {
+            "useSpecific": true,
+            "middlePadding": 3,
+            "badgeWidth": 32,
+            "leftPadding": 0,
+            "rightPadding": 0,
+            "iconTopPadding": 0,
+            "iconBottomPadding": 0,
+            "horizontalPaddingRule": 0,
+            "verticalPaddingRule": 0
+          }
+        },
+        "isCustomized": false
+      },
+      {
+        "displayType": 4,
+        "priorityType": 30,
+        "sceneType": 10,
+        "position": 1,
+        "displayStatus": 0,
+        "greyedByClient": "0",
+        "exhibitionType": 0,
+        "openweburl": "",
+        "display": true,
+        "privilegeLogExtra": {
+          "dataVersion": "2",
+          "privilegeId": "7196929090442513157",
+          "privilegeVersion": "0",
+          "privilegeOrderId": "mock_fix_width_transparent_7196929090442513157",
+          "level": "2",
+          "startTime": "0",
+          "endTime": "0"
+        },
+        "combine": {
+          "displayType": 4,
+          "icon": {
+            "urlList": [
+              "https://p16-webcast.tiktokcdn.com/webcast-va/webcast-va-fans_badge_icon_lv1_v2.png~tplv-obj.image",
+              "https://p19-webcast.tiktokcdn.com/webcast-va/webcast-va-fans_badge_icon_lv1_v2.png~tplv-obj.image"
+            ],
+            "uri": "webcast-va/webcast-va-fans_badge_icon_lv1_v2.png",
+            "height": 0,
+            "width": 0,
+            "avgColor": "",
+            "imageType": 0,
+            "openWebUrl": "",
+            "isAnimated": false
+          },
+          "str": "GODS",
+          "padding": {
+            "useSpecific": true,
+            "middlePadding": 1,
+            "badgeWidth": 0,
+            "leftPadding": 2,
+            "rightPadding": 3,
+            "iconTopPadding": 0,
+            "iconBottomPadding": 0,
+            "horizontalPaddingRule": 1,
+            "verticalPaddingRule": 0
+          },
+          "fontStyle": {
+            "fontSize": 0,
+            "fontWidth": 0,
+            "fontColor": "",
+            "borderColor": ""
+          },
+          "profileCardPanel": {
+            "useNewProfileCardStyle": false,
+            "badgeTextPosition": 0,
+            "projectionConfig": {
+              "useProjection": false,
+              "icon": {
+                "urlList": [],
+                "uri": "",
+                "height": 0,
+                "width": 0,
+                "avgColor": "",
+                "imageType": 0,
+                "openWebUrl": "",
+                "isAnimated": false
+              }
+            },
+            "profileContent": {
+              "useContent": false,
+              "iconList": []
+            }
+          },
+          "background": {
+            "image": {
+              "urlList": [],
+              "uri": "",
+              "height": 0,
+              "width": 0,
+              "avgColor": "",
+              "imageType": 0,
+              "openWebUrl": "",
+              "isAnimated": false
+            },
+            "backgroundColorCode": "#80FF5E3A",
+            "borderColorCode": "",
+            "leftSideImage": {
+              "urlList": [],
+              "uri": "",
+              "height": 0,
+              "width": 0,
+              "avgColor": "",
+              "imageType": 0,
+              "openWebUrl": "",
+              "isAnimated": false
+            }
+          },
+          "backgroundDarkMode": {
+            "image": {
+              "urlList": [],
+              "uri": "",
+              "height": 0,
+              "width": 0,
+              "avgColor": "",
+              "imageType": 0,
+              "openWebUrl": "",
+              "isAnimated": false
+            },
+            "backgroundColorCode": "#80FF5E3A",
+            "borderColorCode": "",
+            "leftSideImage": {
+              "urlList": [],
+              "uri": "",
+              "height": 0,
+              "width": 0,
+              "avgColor": "",
+              "imageType": 0,
+              "openWebUrl": "",
+              "isAnimated": false
+            }
+          },
+          "iconAutoMirrored": false,
+          "backgroundAutoMirrored": false,
+          "publicScreenShowStyle": 14,
+          "personalCardShowStyle": 15,
+          "ranklistOnlineAudienceShowStyle": 0,
+          "multiGuestShowStyle": 0,
+          "paddingNewFont": {
+            "useSpecific": true,
+            "middlePadding": 1,
+            "badgeWidth": 0,
+            "leftPadding": 2,
+            "rightPadding": 3,
+            "iconTopPadding": 0,
+            "iconBottomPadding": 0,
+            "horizontalPaddingRule": 1,
+            "verticalPaddingRule": 0
+          }
+        },
+        "isCustomized": false
+      }
+    ],
+    "mintTypeLabel": [],
+    "deprecated19": false,
+    "allowFindByContacts": false,
+    "allowOthersDownloadVideo": false,
+    "allowOthersDownloadWhenSharingVideo": false,
+    "allowShareShowProfile": false,
+    "allowShowInGossip": false,
+    "allowShowMyAction": false,
+    "allowStrangeComment": false,
+    "allowUnfollowerComment": false,
+    "allowUseLinkmic": false,
+    "bgImgUrl": "",
+    "deprecated18": "",
+    "deprecated16": false,
+    "blockStatus": 0,
+    "commentRestrict": 0,
+    "constellation": "",
+    "disableIchat": 0,
+    "enableIchatImg": "0",
+    "exp": 0,
+    "fanTicketCount": "0",
+    "foldStrangerChat": false,
+    "followStatus": "0",
+    "deprecated28": false,
+    "deprecated29": "",
+    "ichatRestrictType": 0,
+    "idStr": "",
+    "isFollower": false,
+    "isFollowing": false,
+    "needProfileGuide": false,
+    "payScores": "0",
+    "pushCommentStatus": false,
+    "pushDigg": false,
+    "pushFollow": false,
+    "pushFriendAction": false,
+    "pushIchat": false,
+    "pushStatus": false,
+    "pushVideoPost": false,
+    "pushVideoRecommend": false,
+    "stats": {
+      "type": "Buffer",
+      "data": []
+    },
+    "deprecated17": false,
+    "verifiedReason": "",
+    "withCarManagementPermission": false,
+    "upcomingEventList": [],
+    "scmLabel": "",
+    "isBlock": false,
+    "isSubscribe": false,
+    "isAnchorMarked": false,
+    "enigmaInfo": {
+      "isEnigmaMaskOn": false
+    }
+  },
+  "content": "привет",
+  "visibleToSender": false,
+  "fullScreenTextColor": "",
+  "inputType": 0,
+  "emotes": [],
+  "contentLanguage": "ru",
+  "quickChatScene": 0,
+  "communityFlaggedStatus": 0,
+  "userIdentity": {
+    "isGiftGiverOfAnchor": false,
+    "isSubscriberOfAnchor": false,
+    "isMutualFollowingWithAnchor": false,
+    "isFollowerOfAnchor": true,
+    "isModeratorOfAnchor": false,
+    "isAnchor": false
+  },
+  "commentQualityScores": [
+    {
+      "version": "user_type_rule",
+      "score": "0"
+    },
+    {
+      "version": "community-flagged",
+      "score": "0"
+    },
+    {
+      "version": "commentator_id",
+      "score": "0"
+    },
+    {
+      "version": "default",
+      "score": "0"
+    },
+    {
+      "version": "default_app",
+      "score": "0"
+    },
+    {
+      "version": "rankV3",
+      "score": "0"
+    },
+    {
+      "version": "ttp_rule_rerank",
+      "score": "0"
+    },
+    {
+      "version": "timestamp_desc",
+      "score": "0"
+    },
+    {
+      "version": "tikcast_community_comment_18866_v7_r655069",
+      "score": "0"
+    },
+    {
+      "version": "tikcast_community_comment_18866_v7_r655069_desc",
+      "score": "0"
+    },
+    {
+      "version": "idc_rule_rerank",
+      "score": "0"
+    },
+    {
+      "version": "v13_r712088",
+      "score": "0"
+    },
+    {
+      "version": "batch_rank_v1",
+      "score": "0"
+    },
+    {
+      "version": "v20_r1002545",
+      "score": "0"
+    }
+  ],
+  "commentTag": [
+    0
+  ],
+  "publicAreaMessageCommon": {
+    "scrollGapCount": "0",
+    "anchorScrollGapCount": "0",
+    "releaseToScrollArea": false,
+    "anchorReleaseToScrollArea": false,
+    "isAnchorMarked": false,
+    "creatorSuccessInfo": {
+      "tags": [
+        {
+          "tagType": 15,
+          "tagText": {
+            "key": "ttlive_interactionTips_improveEngage_tag_heartMeTaskUndone",
+            "defaultPattern": "Не выполнили миссию «От всего сердца»",
+            "defaultFormat": {
+              "color": "",
+              "bold": false,
+              "italic": false,
+              "weight": 0,
+              "italicAngle": 0,
+              "fontSize": 0,
+              "useHeighLightColor": false,
+              "useRemoteClor": false
+            },
+            "pieces": []
+          },
+          "tagValue": "0",
+          "displayLocation": 0,
+          "eventTrackingFields": {},
+          "bizName": "",
+          "disableCountFrequencyControl": false,
+          "disableCrmClick": false
+        }
+      ],
+      "topic": {
+        "topicActionType": 0,
+        "topicText": {
+          "key": "ttlive_interactionTips_improveEngage_tag_heartMeTaskUndone",
+          "defaultPattern": "Не выполнили миссию «От всего сердца»",
+          "defaultFormat": {
+            "color": "",
+            "bold": false,
+            "italic": false,
+            "weight": 0,
+            "italicAngle": 0,
+            "fontSize": 0,
+            "useHeighLightColor": false,
+            "useRemoteClor": false
+          },
+          "pieces": []
+        },
+        "topicTips": {
+          "key": "ttlive_interactionTips_improveEngage_topic_heartMeTaskUndone",
+          "defaultPattern": "Напомните этим участникам, что они могут получать бонусные очки за выполнение всех ежедневных миссий.",
+          "defaultFormat": {
+            "color": "#ffffffff",
+            "bold": false,
+            "italic": false,
+            "weight": 400,
+            "italicAngle": 0,
+            "fontSize": 0,
+            "useHeighLightColor": false,
+            "useRemoteClor": false
+          },
+          "pieces": []
+        },
+        "hasButton": false,
+        "tagType": 15,
+        "displayLocation": 0,
+        "eventTrackingFields": {},
+        "bizName": "",
+        "disableCountFrequencyControl": false
+      },
+      "topicList": [
+        {
+          "topicActionType": 0,
+          "topicText": {
+            "key": "ttlive_interactionTips_improveEngage_tag_heartMeTaskUndone",
+            "defaultPattern": "Не выполнили миссию «От всего сердца»",
+            "defaultFormat": {
+              "color": "",
+              "bold": false,
+              "italic": false,
+              "weight": 0,
+              "italicAngle": 0,
+              "fontSize": 0,
+              "useHeighLightColor": false,
+              "useRemoteClor": false
+            },
+            "pieces": []
+          },
+          "topicTips": {
+            "key": "ttlive_interactionTips_improveEngage_topic_heartMeTaskUndone",
+            "defaultPattern": "Напомните этим участникам, что они могут получать бонусные очки за выполнение всех ежедневных миссий.",
+            "defaultFormat": {
+              "color": "#ffffffff",
+              "bold": false,
+              "italic": false,
+              "weight": 400,
+              "italicAngle": 0,
+              "fontSize": 0,
+              "useHeighLightColor": false,
+              "useRemoteClor": false
+            },
+            "pieces": []
+          },
+          "hasButton": false,
+          "tagType": 15,
+          "displayLocation": 0,
+          "eventTrackingFields": {},
+          "bizName": "",
+          "disableCountFrequencyControl": false
+        }
+      ]
+    },
+    "portraitInfo": {
+      "userMetrics": [
+        {
+          "type": 1,
+          "metricsValue": "4"
+        },
+        {
+          "type": 2,
+          "metricsValue": "0"
+        },
+        {
+          "type": 3,
+          "metricsValue": "1"
+        },
+        {
+          "type": 4,
+          "metricsValue": "2"
+        },
+        {
+          "type": 5,
+          "metricsValue": "3"
+        }
+      ],
+      "portraitTag": [
+        {
+          "tagId": "7399855526094195474",
+          "priority": "2",
+          "showValue": "ttlive_ls_msgGroups_viewerLabel_followedDays",
+          "showArgs": "{\"s_num\":\"19\",\"num\":\"19\"}"
+        },
+        {
+          "tagId": "7399855526094359314",
+          "priority": "5",
+          "showValue": "ttlive_ls_msgGroups_viewerLabel_memberDays",
+          "showArgs": "{\"s_num\":\"19\",\"num\":\"19\"}"
+        },
+        {
+          "tagId": "7399855526094244626",
+          "priority": "6",
+          "showValue": "ttlive_ls_msgGroups_viewerLabel_notSub",
+          "showArgs": ""
+        }
+      ]
+    },
+    "adminFoldType": "0",
+    "hideAboveScrollArea": false
+  },
+  "screenTime": "0",
+  "signature": "b6ed1bc0a473220fd3d7b1f96c87ef47",
+  "signatureVersion": "v1",
+  "ecStreamerKey": "",
+  "commentLabelScores": [],
+  "mentionUserList": [],
+  "mentionUsers": [],
+  "isOnCommentTray": false
+}

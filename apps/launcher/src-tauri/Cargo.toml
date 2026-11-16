@@ -1,0 +1,86 @@
+[package]
+name = "chlauncher"
+version = "1.0.0"
+edition = "2021"
+description = "chlauncher desktop app — TikTok Live games launcher & streamer hub"
+license = "MIT"
+
+# The launcher binary is produced by the Tauri tooling (`npm run tauri:dev` /
+# `npm run tauri:build`); the lib exists so unit tests can target modules.
+# NOTE: `cdylib` is intentionally absent — it is only needed for mobile
+# targets, and on windows-gnu it trips the DLL export-ordinal limit
+# (the dependency tree pushes 100k+ symbols).
+[lib]
+name = "chlauncher_lib"
+crate-type = ["staticlib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+# Embeds a comctl32-v6 manifest into test/example binaries on Windows —
+# see build.rs for why they otherwise crash at load time.
+embed-resource = "3"
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Async runtime shared by the game WS server, overlay HTTP server,
+# integrations and the download manager.
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.26"
+futures-util = "0.3"
+# Local HTTP + WS server for the browser overlay (TikTok Live Studio source).
+axum = { version = "0.8", features = ["ws"] }
+# ServeFile with Range for /media/:id — video in a Browser Source won't
+# seek (and sometimes won't play) without byte-range responses (§4.1).
+tower-http = { version = "0.6", features = ["fs"] }
+tower = "0.5"
+# Native file picker for media import.
+tauri-plugin-dialog = "2"
+# Downloads game zips and talks to the licensing REST API.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+# OS-level machine GUID → the HWID bound to the subscription.
+machine-uid = "0.5"
+uuid = { version = "1", features = ["v4"] }
+dirs = "6"
+thiserror = "2"
+# `chlauncher://` scheme registration — the billing return URL lands here.
+tauri-plugin-deep-link = "2"
+# Opens the hosted checkout page in the user's system browser.
+tauri-plugin-opener = "2"
+# Download integrity: incremental SHA-256 of fetched game zips (already in
+# the dep tree transitively — pinned as a direct dep).
+sha2 = "0.10"
+# Catalog-vs-installed version comparison for the update badge.
+semver = "1"
+# Chunked request bodies for streaming admin build uploads.
+bytes = "1"
+# Structured logging → stderr + rotated log file (Task 6).
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# In-app self-updates (signed artifacts verified against plugins.updater.pubkey).
+tauri-plugin-updater = "2"
+base64 = "0.23.1"
+tauri-plugin-global-shortcut = "2.4.1"
+regex = "1.13.1"
+qrcode = { version = "0.14", default-features = false }
+# Neural TTS: Microsoft Edge Read Aloud voices (400+ voices, RU+EN) —
+# pure Rust over WSS, no PowerShell/external player needed (§6.1).
+msedge-tts = { version = "0.4", default-features = false, features = ["tokio-runtime"] }
+# rustls is pulled transitively by msedge-tts AND reqwest — with both
+# aws-lc-rs and ring in the tree, `ClientConfig::builder()` panics on an
+# ambiguous CryptoProvider. We pin one explicitly at startup (Tts::new).
+rustls = "0.23"
+# Decodes WAV (SAPI) / MP3 (Edge) and plays to the default device —
+# the sink is stoppable, so mute cuts speech instantly (§6.3).
+rodio = { version = "0.21", default-features = false, features = ["playback", "mp3", "wav"] }
+tauri-plugin-single-instance = "2"
+
+# Smaller, faster shipped binary — fat LTO across the dep graph.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+
+[dev-dependencies]
+encoding_rs = "=0.8.44"

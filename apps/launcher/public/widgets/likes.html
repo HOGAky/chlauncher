@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Likes Widget</title>
+<style>
+  :root{
+    --fd:'Orbitron'; --fb:'Share Tech Mono';
+    --a1:#00f0ff; --a2:#b400ff; --a3:#ff00a8;
+    --ink:#e8fbff; --mut:#7ee9ff;
+    --panel:rgba(5,10,25,.78); --line:#00f0ff; --glow:#00f0ff;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:transparent; }
+  .stage {
+    position:absolute; left:50%; top:50%;
+    width:1080px; height:1920px;
+    transform-origin:center center;
+    font-family:var(--fb), monospace;
+    color:var(--ink);
+  }
+  .wrap { position:absolute; inset:0; padding:190px 70px 0 70px; }
+
+  .hud-title {
+    text-align:center; font-family:var(--fd); font-weight:900; font-size:52px;
+    letter-spacing:10px; color:var(--a1);
+    text-shadow:0 0 12px var(--a1), 0 0 40px color-mix(in srgb, var(--a1) 60%, transparent);
+    animation:flicker 4s infinite;
+  }
+  .hud-title .sub { display:block; font-size:22px; letter-spacing:14px; color:var(--a2); text-shadow:0 0 15px var(--a2); margin-top:8px; font-family:var(--fb); }
+
+  .counter-box {
+    margin:60px auto 0; width:760px; text-align:center; position:relative;
+    padding:50px 30px 56px;
+    clip-path:polygon(40px 0,100% 0,100% calc(100% - 40px),calc(100% - 40px) 100%,0 100%,0 40px);
+    background:linear-gradient(160deg, color-mix(in srgb, var(--a1) 10%, transparent), color-mix(in srgb, var(--a2) 10%, transparent) 70%);
+    border:3px solid var(--a1);
+    box-shadow:0 0 30px color-mix(in srgb, var(--a1) 35%, transparent), inset 0 0 60px color-mix(in srgb, var(--a1) 8%, transparent);
+  }
+  .counter-label { font-size:30px; letter-spacing:8px; color:var(--mut); font-family:var(--fb); }
+  .counter-value {
+    font-family:var(--fd); font-weight:900; font-size:150px; line-height:1;
+    color:#fff; text-shadow:0 0 18px var(--a1), 0 0 70px var(--a1), 0 0 120px var(--a2);
+    position:relative; display:inline-block;
+  }
+  .counter-value::before, .counter-value::after {
+    content:attr(data-text); position:absolute; left:0; top:0; width:100%;
+    overflow:hidden; opacity:0;
+  }
+  .counter-value::before { color:var(--a3); animation:glitch1 3.2s infinite linear; }
+  .counter-value::after  { color:var(--a1); animation:glitch2 2.7s infinite linear; }
+
+  .goal-wrap { margin:56px auto 0; width:880px; }
+  .goal-head { display:flex; justify-content:space-between; font-size:28px; letter-spacing:4px; color:var(--mut); margin-bottom:14px; }
+  .goal-head b { color:var(--a3); text-shadow:0 0 14px var(--a3); }
+  .goal-track {
+    height:46px; padding:6px;
+    clip-path:polygon(20px 0,100% 0,calc(100% - 20px) 100%,0 100%);
+    background:rgba(0,10,20,.7); border:2px solid var(--a1);
+    box-shadow:0 0 22px color-mix(in srgb, var(--a1) 40%, transparent);
+  }
+  .goal-fill {
+    height:100%; width:0%;
+    clip-path:polygon(14px 0,100% 0,calc(100% - 14px) 100%,0 100%);
+    background:linear-gradient(90deg,var(--a1),var(--a2) 55%,var(--a3));
+    box-shadow:0 0 25px var(--a1), 0 0 45px color-mix(in srgb, var(--a2) 70%, transparent);
+    transition:width .5s cubic-bezier(.2,.9,.3,1.3);
+    animation:pulse 1.6s ease-in-out infinite;
+  }
+
+  .lb { margin-top:70px; }
+  .lb-title {
+    text-align:center; font-family:var(--fd); font-weight:700; font-size:34px;
+    letter-spacing:9px; color:var(--a3); text-shadow:0 0 18px var(--a3); margin-bottom:34px;
+  }
+  .lb-row {
+    display:flex; align-items:center; gap:26px;
+    margin:0 auto 26px; width:900px; height:132px; padding:0 34px;
+    clip-path:polygon(26px 0,100% 0,calc(100% - 26px) 100%,0 100%);
+    background:var(--panel);
+    border-left:4px solid var(--c); border-right:4px solid var(--c);
+    box-shadow:0 0 22px color-mix(in srgb, var(--c) 55%, transparent), inset 0 0 40px color-mix(in srgb, var(--c) 12%, transparent);
+  }
+  .rank {
+    font-family:var(--fd); font-weight:900; font-size:52px; width:90px;
+    color:var(--c); text-shadow:0 0 16px var(--c);
+  }
+  .ava {
+    width:92px; height:92px; border-radius:50%; object-fit:cover;
+    border:3px solid var(--c); box-shadow:0 0 20px var(--c);
+    background:#0a1220;
+  }
+  .nick { flex:1; font-size:38px; letter-spacing:2px; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cnt { font-family:var(--fd); font-weight:700; font-size:46px; color:var(--c); text-shadow:0 0 16px var(--c); }
+  .cnt small { font-size:22px; letter-spacing:2px; color:var(--mut); font-family:var(--fb); }
+  .r1 { --c:#ffd23f; }
+  .r2 { --c:#9fd8ff; }
+  .r3 { --c:#ff5fd0; }
+
+  @keyframes flicker { 0%,100%{opacity:1} 92%{opacity:1} 93%{opacity:.4} 94%{opacity:1} 96%{opacity:.6} 97%{opacity:1} }
+  @keyframes pulse { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.5)} }
+  @keyframes glitch1 {
+    0%,89%{opacity:0; transform:none; clip-path:inset(0 0 0 0)}
+    90%{opacity:.8; transform:translate(-8px,3px); clip-path:inset(10% 0 60% 0)}
+    92%{opacity:.8; transform:translate(6px,-2px); clip-path:inset(50% 0 20% 0)}
+    94%{opacity:0}
+  }
+  @keyframes glitch2 {
+    0%,84%{opacity:0; transform:none; clip-path:inset(0 0 0 0)}
+    85%{opacity:.8; transform:translate(7px,-4px); clip-path:inset(30% 0 40% 0)}
+    87%{opacity:.8; transform:translate(-6px,2px); clip-path:inset(65% 0 8% 0)}
+    89%{opacity:0}
+  }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="wrap">
+    <div class="hud-title fx-text"><span id="hTitle">// LIKES.EXE</span><span class="sub" id="hSub">TOP TAPPERS ONLINE</span></div>
+
+    <div class="counter-box">
+      <div class="counter-label">TOTAL LIKES</div>
+      <div class="counter-value" id="total" data-text="0">0</div>
+    </div>
+
+    <div class="goal-wrap">
+      <div class="goal-head"><span>ЦЕЛЬ ЭФИРА</span><b id="goalText">0 / 500K</b></div>
+      <div class="goal-track"><div class="goal-fill" id="goalFill"></div></div>
+    </div>
+
+    <div class="lb">
+      <div class="lb-title fx-text">&#9650; ТОП-3 ТАПЕРА &#9650;</div>
+      <div id="rows"></div>
+    </div>
+  </div>
+</div>
+<script src="bridge.js"></script>
+<script src="themes.js"></script>
+<script>
+  TTW.apply('cyber');
+  const _q = new URLSearchParams(location.search);
+  if (_q.get('title')) document.getElementById('hTitle').textContent = _q.get('title');
+  if (_q.get('sub'))   document.getElementById('hSub').textContent   = _q.get('sub');
+  const stage = document.getElementById('stage');
+  function fit(){
+    const s = Math.min(innerWidth/1080, innerHeight/1920);
+    stage.style.transform = `translate(-50%,-50%) scale(${s})`;
+  }
+  addEventListener('resize', fit); fit();
+
+  const fmt = n => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : String(n);
+  const socket = io();
+  const medals = ['r1','r2','r3'];
+
+  socket.on('state', s => {
+    const t = document.getElementById('total');
+    t.textContent = fmt(s.likes.total); t.dataset.text = t.textContent;
+    document.getElementById('goalText').textContent = fmt(s.likes.total)+' / '+fmt(s.likes.goal);
+    document.getElementById('goalFill').style.width = Math.min(100, s.likes.total/s.likes.goal*100)+'%';
+
+    document.getElementById('rows').innerHTML = s.likes.top.map((u,i)=>`
+      <div class="lb-row ${medals[i]}">
+        <div class="rank">0${i+1}</div>
+        <img class="ava" src="${u.avatar||''}" onerror="this.src='https://api.dicebear.com/9.x/thumbs/png?seed=${encodeURIComponent(u.nickname)}'">
+        <div class="nick">${u.nickname}</div>
+        <div class="cnt">${fmt(u.count)} <small>LIKES</small></div>
+      </div>`).join('');
+  });
+</script>
+</body>
+</html>

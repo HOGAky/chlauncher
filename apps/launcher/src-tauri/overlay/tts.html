@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>chlauncher · tts</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: transparent; overflow: hidden;
+    font-family: 'Segoe UI', system-ui, sans-serif; color: #fff;
+  }
+  #badge {
+    position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+    background: rgba(15,17,26,.88); border: 1px solid rgba(255,255,255,.12);
+    border-radius: 12px; padding: 10px 20px; max-width: 80vw;
+    display: none; text-align: center;
+  }
+  #badge .icon { font-size: 11px; text-transform: uppercase; letter-spacing: .1em;
+                 color: #a78bfa; margin-bottom: 4px; }
+  #badge .text { font-size: 16px; font-weight: 500; }
+  #muted {
+    position: absolute; top: 12px; right: 12px; display: none;
+    background: rgba(200,30,30,.9); border-radius: 6px;
+    padding: 3px 10px; font-size: 11px; font-weight: 700; letter-spacing: .1em;
+  }
+</style>
+</head>
+<body>
+<div id="muted">MUTED</div>
+<div id="badge"><div class="icon">tts</div><div class="text"></div></div>
+<script>
+const token = new URLSearchParams(location.search).get('t') || '';
+// ?bg=rrggbb — solid chroma background for LIVE Studio window capture
+// (real transparency doesn't survive every capture path).
+const _bg = new URLSearchParams(location.search).get('bg');
+if (_bg && /^[0-9a-fA-F]{6}$/.test(_bg)) document.body.style.background = '#' + _bg;
+const badge = document.getElementById('badge');
+const muted = document.getElementById('muted');
+const txt = badge.querySelector('.text');
+const shown = {};
+let player = null;
+
+function playAudio(url, volume) {
+  if (!url) return;
+  if (player) { try { player.pause(); } catch (e) {} }
+  player = new Audio(url + (url.includes('?') ? '&' : '?') + 't=' + encodeURIComponent(token));
+  // Per-clip volume (gift-sound rules); default = as encoded.
+  player.volume = Math.min(1, Math.max(0, typeof volume === 'number' ? volume : 1));
+  // Badge stays until playback finishes — subtitles track the speech.
+  player.onended = () => {
+    if (!Object.keys(shown).length) badge.style.display = 'none';
+  };
+  player.play().catch(() => {});
+}
+
+function connect() {
+  const ws = new WebSocket(`ws://${location.host}/ws?t=${encodeURIComponent(token)}`);
+  ws.onopen = () => ws.send(JSON.stringify({ type: 'subscribe', channels: ['tts'] }));
+  ws.onmessage = (m) => {
+    try {
+      const f = JSON.parse(m.data);
+      if (f.type !== 'tts') return;
+      if (f.state === 'muted') {
+        muted.style.display = 'block';
+        badge.style.display = 'none';
+        if (player) { try { player.pause(); } catch (e) {} }
+        for (const k of Object.keys(shown)) delete shown[k];
+        return;
+      }
+      muted.style.display = 'none';
+      if (f.state === 'start') {
+        txt.textContent = f.text || '';
+        badge.style.display = 'block';
+        shown[f.id] = true;
+      } else if (f.state === 'end') {
+        delete shown[f.id];
+        if (f.audio_url) {
+          playAudio(f.audio_url, f.volume);
+        } else if (!Object.keys(shown).length) {
+          badge.style.display = 'none';
+        }
+      }
+    } catch (e) {}
+  };
+  ws.onclose = () => setTimeout(connect, 2000);
+}
+connect();
+</script>
+</body>
+</html>

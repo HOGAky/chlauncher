@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Top 3</title>
+<style>
+  :root{
+    --fd:'Bebas Neue'; --fb:'Space Grotesk';
+    --a1:#eef2f6; --a2:#8d969f; --a3:#ffffff;
+    --ink:#f2f5f8; --mut:#9aa4ad;
+    --panel:linear-gradient(170deg, rgba(18,20,24,.92), rgba(6,7,9,.95));
+    --line:rgba(220,228,236,.4); --glow:rgba(255,255,255,.35);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:transparent; }
+  .stage {
+    position:absolute; left:50%; top:50%;
+    width:1080px; height:1920px;
+    transform-origin:center center;
+    font-family:var(--fb), sans-serif; color:var(--ink);
+  }
+  .wrap { position:absolute; inset:0; padding:290px 70px 0; display:flex; flex-direction:column; align-items:center; gap:44px; }
+
+  .title { font-family:var(--fd); font-size:84px; letter-spacing:6px; text-transform:uppercase; text-align:center; }
+  .sub { font-size:30px; letter-spacing:8px; color:var(--mut); text-transform:uppercase; margin-top:-30px; margin-bottom:16px; }
+
+  .row {
+    width:100%; display:flex; align-items:center; gap:34px;
+    background:var(--panel); border:3px solid var(--line); border-radius:40px;
+    padding:30px 44px;
+    box-shadow:0 20px 50px rgba(0,0,0,.45);
+  }
+  /* look=glass — полупрозрачное стекло */
+  body[data-look="glass"] .row { background:rgba(255,255,255,.08); backdrop-filter:blur(14px); }
+  /* look=bare — без плашки вообще */
+  body[data-look="bare"] .row { background:none; border:none; box-shadow:none; }
+  /* look=outline — только контур */
+  body[data-look="outline"] .row { background:none; border:4px solid var(--line); }
+
+  .rank {
+    width:88px; height:88px; flex:none; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--fd); font-size:52px; color:#141414;
+  }
+  .r1 .rank { background:linear-gradient(160deg,#ffe98a,#d4a017); box-shadow:0 0 30px rgba(255,217,74,.55); }
+  .r2 .rank { background:linear-gradient(160deg,#f2f5f8,#9aa4ad); box-shadow:0 0 26px rgba(200,208,216,.45); }
+  .r3 .rank { background:linear-gradient(160deg,#f0a868,#9c5a1e); box-shadow:0 0 26px rgba(205,127,50,.45); }
+
+  .ava {
+    width:150px; height:150px; flex:none; border-radius:50%; object-fit:cover;
+    border:5px solid var(--a1); background:#14161a;
+    box-shadow:0 0 34px color-mix(in srgb, var(--a1) 45%, transparent);
+  }
+  .info { flex:1; min-width:0; }
+  .nick {
+    font-family:var(--fd); font-size:58px; letter-spacing:3px; text-transform:uppercase;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .cnt { display:flex; align-items:baseline; gap:14px; margin-top:6px; }
+  .cnt b { font-family:var(--fd); font-size:64px; color:var(--a1); line-height:1; }
+  .cnt span { font-size:28px; color:var(--mut); letter-spacing:3px; text-transform:uppercase; }
+  .empty { font-size:36px; color:var(--mut); padding:50px 0; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="wrap">
+    <div class="title fx-text" id="title">TOP-3</div>
+    <div class="sub" id="sub"></div>
+    <div id="rows" style="width:100%;display:flex;flex-direction:column;gap:34px"></div>
+    <div class="empty" id="empty">ждём данные с эфира…</div>
+  </div>
+</div>
+<script src="bridge.js"></script>
+<script src="themes.js"></script>
+<script>
+  const defTheme = TTW.apply('minimal');
+  const stage = document.getElementById('stage');
+  function fit(){
+    const s = Math.min(innerWidth/1080, innerHeight/1920);
+    stage.style.transform = `translate(-50%,-50%) scale(${s})`;
+  }
+  addEventListener('resize', fit); fit();
+
+  const q = new URLSearchParams(location.search);
+  const $ = id => document.getElementById(id);
+  const metric = q.get('metric') === 'coins' ? 'coins' : 'likes';
+
+  // --- заголовки ---
+  const TITLES = { likes: 'ТОП-3 ТАПЕРОВ', coins: 'ТОП-3 ДАРИТЕЛЕЙ' };
+  const SUBS = { likes: 'больше всех лайкал', coins: 'больше всех монет' };
+  $('title').textContent = q.get('title') || TITLES[metric];
+  $('sub').textContent = q.get('sub') || SUBS[metric];
+
+  // --- look: panel | glass | bare | outline ---
+  const LOOKS = ['panel', 'glass', 'bare', 'outline'];
+  document.body.dataset.look = LOOKS.includes(q.get('look')) ? q.get('look') : 'panel';
+
+  // --- accent: свой цвет акцента ---
+  if (q.get('accent')) {
+    document.documentElement.style.setProperty('--a1', q.get('accent'));
+    document.documentElement.style.setProperty('--glow', q.get('accent'));
+  }
+
+  // --- font: свой шрифт заголовков/цифр ---
+  const FONTS = {
+    bebas:  { fam: "'Bebas Neue'",       gf: 'family=Bebas+Neue' },
+    play:   { fam: "'Playfair Display'", gf: 'family=Playfair+Display:wght@800' },
+    mono:   { fam: "'Rubik Mono One'",   gf: 'family=Rubik+Mono+One' },
+    round:  { fam: "'Nunito'",           gf: 'family=Nunito:wght@800;900' },
+    hand:   { fam: "'Neucha'",           gf: 'family=Neucha' },
+    glitch: { fam: "'Rubik Glitch'",     gf: 'family=Rubik+Glitch' },
+    wet:    { fam: "'Rubik Wet Paint'",  gf: 'family=Rubik+Wet+Paint' },
+    russo:  { fam: "'Russo One'",        gf: 'family=Russo+One' },
+  };
+  const fnt = FONTS[q.get('font')];
+  if (fnt) {
+    const l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = 'https://fonts.googleapis.com/css2?' + fnt.gf + '&display=swap';
+    document.head.appendChild(l);
+    document.documentElement.style.setProperty('--fd', fnt.fam);
+  }
+
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const fmt = n => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : String(Math.floor(n));
+  const cntLabel = metric === 'coins' ? 'монет' : 'лайков';
+  const icon = metric === 'coins' ? '&#128142;' : '&#10084;';
+
+  io().on('state', s => {
+    const list = metric === 'coins' ? (s.gifts?.top || []) : (s.likes?.top || []);
+    const top = list.slice(0, 3);
+    $('empty').style.display = top.length ? 'none' : 'block';
+    $('rows').innerHTML = top.map((u, i) => `
+      <div class="row r${i+1}">
+        <div class="rank">${i+1}</div>
+        <img class="ava" src="${u.avatar || 'https://api.dicebear.com/9.x/thumbs/png?seed=' + encodeURIComponent(u.nickname)}"
+             onerror="this.src='https://api.dicebear.com/9.x/thumbs/png?seed=${encodeURIComponent(u.nickname)}'">
+        <div class="info">
+          <div class="nick">${esc(u.nickname)}</div>
+          <div class="cnt"><b>${icon} ${fmt(u.count ?? u.coins ?? 0)}</b><span>${cntLabel}</span></div>
+        </div>
+      </div>`).join('');
+  });
+</script>
+</body>
+</html>

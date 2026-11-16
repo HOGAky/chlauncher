@@ -1,0 +1,28 @@
+{
+  "relay": "https://certy.taildbf87b.ts.net:8443",
+  "stream_key": "PASTE_STREAM_KEY_FROM_LAUNCHER",
+  "poll_ms": 1500,
+  "rcon": {
+    "host": "127.0.0.1",
+    "port": 25575,
+    "password": "PASTE_RCON_PASSWORD"
+  },
+  "default_target": "Steve",
+  "commands": {
+    "spawn_chaser": "execute at {player} run summon minecraft:zombie ~ ~ ~",
+    "spawn_enemy": "execute at {player} run summon minecraft:zombie ~ ~ ~",
+    "spawn_boss": "execute at {player} run summon minecraft:wither ~ ~ ~",
+    "yeet": "effect give {player} minecraft:levitation 1 30",
+    "freeze": "effect give {player} minecraft:slowness 10 255",
+    "slow_field": "effect give {player} minecraft:slowness 15 3",
+    "invert_controls": "effect give {player} minecraft:nausea 20 255",
+    "camera_spin": "effect give {player} minecraft:nausea 10 255",
+    "drop_floor": "effect give {player} minecraft:mining_fatigue 15 5",
+    "coin_rain": "give {player} minecraft:gold_ingot {amount}",
+    "fireworks": "execute at {player} run summon minecraft:firework_rocket ~ ~ ~",
+    "shield": "effect give {player} minecraft:resistance 30 4",
+    "speed_boost": "effect give {player} minecraft:speed 30 3",
+    "heal_player": "effect give {player} minecraft:instant_health 1 2"
+  },
+  "fallback": "say [stream] {user}: {command}"
+}

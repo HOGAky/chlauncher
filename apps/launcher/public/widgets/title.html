@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Title Widget</title>
+<style>
+  :root{
+    --fd:'Anton'; --fb:'Space Grotesk';
+    --a1:#eef2f6; --a2:#8d969f; --a3:#ffffff;
+    --ink:#f2f5f8; --mut:#9aa4ad;
+    --panel:linear-gradient(170deg, rgba(18,20,24,.92), rgba(6,7,9,.95));
+    --line:rgba(220,228,236,.4); --glow:rgba(255,255,255,.35);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:transparent; }
+  .stage {
+    position:absolute; left:50%; top:50%;
+    width:1080px; height:1920px;
+    transform-origin:center center;
+    font-family:var(--fb), sans-serif; color:var(--ink);
+  }
+  .t-wrap {
+    position:absolute; left:50%; top:38%;
+    transform:translate(-50%,-50%);
+    width:1000px; text-align:center;
+  }
+  .t-pre {
+    font-family:var(--fb); font-weight:600; font-size:30px; letter-spacing:14px;
+    color:var(--mut); text-transform:uppercase; margin-bottom:26px;
+  }
+  .t-main {
+    font-family:var(--fd); color:var(--a1);
+    font-size:200px; line-height:.95; letter-spacing:2px;
+    text-transform:uppercase;
+    word-break:break-word;
+  }
+  .t-rule {
+    margin:34px auto 0; width:64%; height:2px;
+    background:linear-gradient(90deg, transparent, var(--a1), transparent);
+  }
+  .t-sub {
+    margin-top:26px; font-family:var(--fb); font-weight:600; font-size:38px;
+    letter-spacing:12px; color:var(--mut); text-transform:uppercase;
+  }
+  .t-glowline {
+    margin:44px auto 0; width:200px; height:6px; border-radius:6px;
+    background:var(--a1); box-shadow:0 0 24px var(--a1);
+  }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="t-wrap" id="twrap">
+    <div class="t-pre" id="pre" style="display:none"></div>
+    <div class="t-main fx-text" id="main">TEXT</div>
+    <div class="t-rule" id="rule"></div>
+    <div class="t-sub" id="sub" style="display:none"></div>
+    <div class="t-glowline"></div>
+  </div>
+</div>
+<script src="themes.js"></script>
+<script>
+  TTW.apply('chrome');
+  const q = new URLSearchParams(location.search);
+  const stage = document.getElementById('stage');
+  function fit(){
+    const s = Math.min(innerWidth/1080, innerHeight/1920);
+    stage.style.transform = `translate(-50%,-50%) scale(${s})`;
+  }
+  addEventListener('resize', fit); fit();
+
+  const main = document.getElementById('main');
+  const sub  = document.getElementById('sub');
+  const pre  = document.getElementById('pre');
+
+  main.textContent = q.get('text') || 'YOUR TEXT';
+  if (q.get('sub')) { sub.textContent = q.get('sub'); sub.style.display = 'block'; }
+  if (q.get('pre')) { pre.textContent = q.get('pre'); pre.style.display = 'block'; }
+  if (q.get('pos')) document.getElementById('twrap').style.top = q.get('pos') + '%';
+  if (q.get('norule')) document.getElementById('rule').style.display = 'none';
+
+  // авто-подгон размера под ширину 1000px
+  function fitText(){
+    let size = parseInt(q.get('size')) || 200;
+    main.style.fontSize = size + 'px';
+    while (main.scrollWidth > 980 && size > 40) {
+      size -= 6; main.style.fontSize = size + 'px';
+    }
+  }
+  fitText();
+  document.fonts && document.fonts.ready.then(fitText);
+</script>
+</body>
+</html>

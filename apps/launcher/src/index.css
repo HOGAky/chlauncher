@@ -1,0 +1,55 @@
+/**
+ * @file index.css
+ * Global styles: Tailwind layers + the dark "gamer hub" theme expressed as
+ * HSL CSS variables consumed by tailwind.config.js.
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root,
+.dark {
+  --background: 228 20% 7%;
+  --foreground: 220 15% 92%;
+  --card: 228 18% 11%;
+  --card-foreground: 220 15% 92%;
+  --primary: 262 83% 58%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 228 15% 16%;
+  --secondary-foreground: 220 15% 88%;
+  --muted: 228 14% 18%;
+  --muted-foreground: 220 10% 60%;
+  --accent: 330 80% 55%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 72% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 228 12% 20%;
+  --input: 228 12% 24%;
+  --ring: 262 83% 58%;
+  --radius: 0.65rem;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-background text-foreground antialiased;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+}
+
+/* Thin scrollbars to match the dark theme. */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted));
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}

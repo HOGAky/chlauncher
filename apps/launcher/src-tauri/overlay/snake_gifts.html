@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>Snake Gifts</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:transparent;font-family:system-ui,sans-serif;color:#fff}
+  canvas{position:fixed;inset:0;width:100%;height:100%}
+  .hud{position:fixed;top:10px;right:10px}.dot{width:10px;height:10px;border-radius:50%;background:#3f8}
+  .dot[data-s=reconnecting]{background:#f80}
+  #score{position:fixed;top:14px;left:50%;transform:translateX(-50%);font:800 30px/1 monospace;text-shadow:0 2px 8px #000}
+  #len{position:fixed;top:14px;left:18px;font:700 18px/1 monospace;text-shadow:0 2px 6px #000}
+  .feed{position:fixed;left:12px;bottom:12px;font:13px/1.5 monospace;text-shadow:0 1px 4px #000;opacity:.9}
+  .banners{position:fixed;top:24%;left:50%;transform:translateX(-50%);text-align:center;pointer-events:none}
+  .banner{font:800 38px/1.2 system-ui;text-shadow:0 3px 14px #000;animation:pop .3s}
+  .banner.big{color:#ffd34d}.banner.bad{color:#ff6b6b}
+  #board{position:fixed;top:56px;right:12px;font:12px/1.6 monospace;text-align:right;text-shadow:0 1px 4px #000;opacity:.85}
+  @keyframes pop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+  #pause{position:fixed;inset:0;display:none;place-items:center;font:800 46px/1 system-ui;background:rgba(0,0,0,.5);text-shadow:0 3px 10px #000}
+</style></head><body>
+<canvas id="cv"></canvas>
+<div id="score">0</div><div id="len">ДЛИНА: 5</div>
+<div id="board"></div><div id="pause">ПАУЗА</div>
+<script>
+'use strict';
+// Snake Gifts — автопилот-змейка: подарки кладут яблоки и растят хвост,
+// подписки/дорогие донаты подрезают длину. Змей сам ищет ближайшее яблоко
+// простым жадным ИИ; врезался в себя/стену → сброс с потерей очков.
+const BG = new URLSearchParams(location.search).get('bg');
+if (BG) document.body.style.background = '#' + BG;
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let HUD = null;
+const GAME = 'snake_gifts';
+
+const CELL = 22;
+const S = {
+  cfg: null, eng: null, running: true, over: false,
+  snake: [], dir: { x: 1, y: 0 }, grow: 0,
+  apples: [], score: 0, best: 0, deaths: 0,
+  speed: 7, acc: 0, speedBoostUntil: 0,
+  supporters: {}, stats: { events: 0, gifts: 0, coins: 0 },
+};
+
+function dims() {
+  return { cols: Math.max(10, Math.floor(cv.width / CELL)), rows: Math.max(10, Math.floor(cv.height / CELL)) };
+}
+const inb = (x, y) => {
+  const d = dims();
+  return x >= 0 && y >= 0 && x < d.cols && y < d.rows;
+};
+const free = (x, y) => !S.snake.some((s) => s.x === x && s.y === y);
+
+function spawnApple(kind = 'normal', count = 1) {
+  const d = dims();
+  for (let i = 0; i < count; i++) {
+    for (let t = 0; t < 40; t++) {
+      const x = Math.floor(Math.random() * d.cols);
+      const y = Math.floor(Math.random() * d.rows);
+      if (free(x, y) && !S.apples.some((a) => a.x === x && a.y === y)) {
+        S.apples.push({ x, y, kind, ttl: kind === 'gold' ? 400 : 0 });
+        break;
+      }
+    }
+  }
+}
+
+function shrink(n, user) {
+  const cut = Math.min(n, Math.max(0, S.snake.length - 5));
+  if (cut <= 0) return;
+  S.snake.splice(S.snake.length - cut, cut);
+  HUD.feed.push(`${user}: −${cut} звеньев`);
+  HUD.banners.push(`ПОДРЕЗКА −${cut}!`, 'bad');
+  GameKit.sfx('hit', S.cfg.volume);
+}
+
+function reset() {
+  const d = dims();
+  S.deaths++;
+  S.best = Math.max(S.best, S.score);
+  S.score = Math.max(0, S.score - 10);
+  S.snake = [];
+  const cy = Math.floor(d.rows / 2);
+  for (let i = 0; i < 5; i++) S.snake.push({ x: 4 - i, y: cy });
+  S.dir = { x: 1, y: 0 };
+  S.apples = [];
+  spawnApple();
+  HUD.banners.push('ЗМЕЙКА РАЗБИЛАСЬ!', 'bad');
+  GameKit.sfx('warn', S.cfg.volume);
+}
+
+/** Greedy autopilot: head toward nearest apple, avoid walls/self one step ahead. */
+function nextDir() {
+  const h = S.snake[0];
+  if (!S.apples.length) return S.dir;
+  let best = null, bd = 1e9;
+  for (const a of S.apples) {
+    const dd = Math.abs(a.x - h.x) + Math.abs(a.y - h.y);
+    if (dd < bd) { bd = dd; best = a; }
+  }
+  const cand = [];
+  const dx = Math.sign(best.x - h.x), dy = Math.sign(best.y - h.y);
+  if (dx) cand.push({ x: dx, y: 0 });
+  if (dy) cand.push({ x: 0, y: dy });
+  cand.push({ x: -S.dir.y, y: S.dir.x }, { x: S.dir.y, y: -S.dir.x });
+  for (const c of cand) {
+    if (c.x === -S.dir.x && c.y === -S.dir.y) continue; // no U-turn
+    const nx = h.x + c.x, ny = h.y + c.y;
+    if (inb(nx, ny) && free(nx, ny)) return c;
+  }
+  // Survival fallback: any non-lethal direction.
+  for (const c of [S.dir, { x: -S.dir.y, y: S.dir.x }, { x: S.dir.y, y: -S.dir.x }]) {
+    const nx = h.x + c.x, ny = h.y + c.y;
+    if (inb(nx, ny) && free(nx, ny)) return c;
+  }
+  return S.dir; // doomed — take the hit
+}
+
+function tick() {
+  S.dir = nextDir();
+  const h = S.snake[0];
+  const nx = h.x + S.dir.x, ny = h.y + S.dir.y;
+  if (!inb(nx, ny) || !free(nx, ny)) { reset(); return; }
+  S.snake.unshift({ x: nx, y: ny });
+  const ai = S.apples.findIndex((a) => a.x === nx && a.y === ny);
+  if (ai >= 0) {
+    const a = S.apples.splice(ai, 1)[0];
+    const pts = a.kind === 'gold' ? 5 : 1;
+    S.score += pts;
+    S.grow += a.kind === 'gold' ? 4 : 1;
+    GameKit.sfx('coin', S.cfg.volume);
+    if (!S.apples.length) spawnApple();
+  }
+  if (S.grow > 0) S.grow--;
+  else S.snake.pop();
+}
+
+function act(a) {
+  // `per` scales value by event count (like batches); `per_coin` — by coins.
+  if (a.per) a = { ...a, value: Math.max(1, Math.round((a.value || 1) * (a._count || 1) / a.per)) };
+  if (a.per_coin) a = { ...a, value: Math.max(1, Math.round((a.value || 1) * (a._coins || 1) * a.per_coin)) };
+  const u = a._user || '?';
+  S.supporters[u] = (S.supporters[u] || 0) + 1;
+  switch (a.type) {
+    case 'add_apple': {
+      spawnApple('normal', a.value || 1);
+      HUD.feed.push(`${u}: +${a.value || 1} яблоко`);
+      break;
+    }
+    case 'gold_apple': {
+      spawnApple('gold', a.value || 1);
+      HUD.feed.push(`${u}: ЗОЛОТОЕ яблоко!`);
+      HUD.banners.push('ЗОЛОТОЕ ЯБЛОКО!', 'big');
+      break;
+    }
+    case 'grow': {
+      S.grow += a.value || 1;
+      HUD.feed.push(`${u}: +${a.value || 1} звеньев`);
+      break;
+    }
+    case 'shrink': shrink(a.value || 10, u); break;
+    case 'speed': {
+      S.speedBoostUntil = Date.now() + (a.sec || 10) * 1000;
+      HUD.banners.push('УСКОРЕНИЕ!', 'big');
+      break;
+    }
+    case 'storm': {
+      spawnApple('normal', a.count || 8);
+      HUD.banners.push('ЯБЛОЧНАЯ БУРЯ!', 'big');
+      GameKit.sfx('big', S.cfg.volume);
+      break;
+    }
+  }
+}
+
+function step(dt) {
+  if (!S.running || S.over) return;
+  for (const a of S.apples) if (a.ttl > 0 && --a.ttl <= 0) a.dead = true;
+  S.apples = S.apples.filter((a) => !a.dead);
+  const spd = Date.now() < S.speedBoostUntil ? S.speed * 1.8 : S.speed;
+  S.acc += dt;
+  while (S.acc >= 1 / spd) { S.acc -= 1 / spd; tick(); }
+  for (const a of S.eng.pump()) act(a);
+}
+
+function draw() {
+  cv.width = cv.clientWidth; cv.height = cv.clientHeight;
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  const d = dims();
+  // grid
+  ctx.strokeStyle = 'rgba(255,255,255,.05)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x <= d.cols; x++) { ctx.beginPath(); ctx.moveTo(x * CELL, 0); ctx.lineTo(x * CELL, d.rows * CELL); ctx.stroke(); }
+  for (let y = 0; y <= d.rows; y++) { ctx.beginPath(); ctx.moveTo(0, y * CELL); ctx.lineTo(d.cols * CELL, y * CELL); ctx.stroke(); }
+  // apples
+  for (const a of S.apples) {
+    const cx = a.x * CELL + CELL / 2, cy = a.y * CELL + CELL / 2;
+    const r = a.kind === 'gold' ? 8 : 6;
+    const blink = a.kind === 'gold' && a.ttl < 120 && (a.ttl >> 3) % 2 === 0;
+    if (blink) continue;
+    ctx.fillStyle = a.kind === 'gold' ? '#ffd34d' : '#ff5c6c';
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#4caf50';
+    ctx.fillRect(cx - 1, cy - r - 4, 3, 5);
+  }
+  // snake
+  S.snake.forEach((s, i) => {
+    const t = i / Math.max(1, S.snake.length);
+    ctx.fillStyle = `hsl(${140 - t * 60} 80% ${55 - t * 20}%)`;
+    const pad = i === 0 ? 1 : 2 + t * 2;
+    ctx.beginPath();
+    ctx.roundRect(s.x * CELL + pad, s.y * CELL + pad, CELL - pad * 2, CELL - pad * 2, 6);
+    ctx.fill();
+    if (i === 0) {
+      ctx.fillStyle = '#fff';
+      const ex = s.x * CELL + CELL / 2 + S.dir.x * 4, ey = s.y * CELL + CELL / 2 + S.dir.y * 4;
+      ctx.beginPath(); ctx.arc(ex - 3, ey - 2, 2.4, 0, 7); ctx.arc(ex + 3, ey - 2, 2.4, 0, 7); ctx.fill();
+    }
+  });
+  document.getElementById('score').textContent = `★ ${S.score}`;
+  document.getElementById('len').textContent = `ДЛИНА: ${S.snake.length}`;
+  document.getElementById('board').innerHTML =
+    `СЕССИЯ: ${S.deaths} смертей · рекорд ${S.best}<br>` +
+    GameKit.leaderboard(S.supporters, 5).map((r, i) => `${i + 1}. ${r.user} — ${r.score}`).join('<br>');
+}
+
+async function main() {
+  HUD = GameKit.hud();
+  const { cfg } = await GameKit.fetchCfg(GAME);
+  S.cfg = cfg;
+  S.eng = new GameKit.Engine(cfg);
+  S.speed = cfg.speed || 7;
+  reset();
+  S.deaths = 0; S.score = 0; S.best = 0;
+  GameKit.connect(['game'], (ev) => {
+    if (ev.event_kind === 'gift') { S.stats.gifts++; S.stats.coins += ev.coins || 0; }
+    S.eng.feed(ev);
+  }, (s) => HUD.setStatus(s));
+  GameKit.watchSession(GAME, (status) => {
+    const paused = status === 'paused';
+    document.getElementById('pause').style.display = paused ? 'grid' : 'none';
+    S.running = status === 'running';
+  });
+  GameKit.unloadReport(GAME, () => {
+    if (!S.cfg) return null;
+    return {
+      duration_s: 0,
+      winner: `score ${S.score}`,
+      score: { score: S.score, best: S.best, deaths: S.deaths },
+      top: GameKit.leaderboard(S.supporters, 5),
+      stats: S.stats,
+    };
+  });
+  HUD.banners.push('SNAKE GIFTS — кормите змейку!', 'big');
+  GameKit.loop(step, draw);
+}
+{
+  const s = document.createElement('script');
+  s.src = '/gamekit.js?t=' + encodeURIComponent(new URLSearchParams(location.search).get('t') || '');
+  s.onload = () => main().catch((e) => {
+    document.body.innerHTML = `<pre style="color:#f66;padding:20px">${e}</pre>`;
+  });
+  s.onerror = () => { document.body.innerHTML = '<pre style="color:#f66;padding:20px">gamekit: 403 — проверьте токен</pre>'; };
+  document.head.appendChild(s);
+}
+</script></body></html>

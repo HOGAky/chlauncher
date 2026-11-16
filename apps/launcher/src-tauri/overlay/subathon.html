@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>chlauncher · subathon</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: transparent; overflow: hidden;
+    font-family: 'Segoe UI', system-ui, sans-serif; color: #fff;
+  }
+  #timer { position: absolute; top: 12px; right: 12px;
+           background: rgba(15,17,26,.88); border: 1px solid rgba(255,255,255,.12);
+           border-radius: 12px; padding: 8px 16px; text-align: center;
+           opacity: 0; transition: opacity .3s; }
+  #timer.on { opacity: 1; }
+  #timer .clock { font-size: 26px; font-weight: 700;
+                  font-variant-numeric: tabular-nums; letter-spacing: 1px;
+                  color: #f472b6; }
+  #timer .sub { font-size: 10px; color: rgba(255,255,255,.55); margin-top: 2px; }
+  #timer.low .clock { color: #ef4444; animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { opacity: .6; } }
+</style>
+</head>
+<body>
+<div id="timer">
+  <div class="clock" id="clock">00:00</div>
+  <div class="sub" id="sub">СУБАТОН</div>
+</div>
+<script>
+const params = new URLSearchParams(location.search);
+const token = params.get('t') || '';
+// ?bg=rrggbb — solid chroma background for LIVE Studio window capture.
+const _bg = params.get('bg');
+if (_bg && /^[0-9a-fA-F]{6}$/.test(_bg)) document.body.style.background = '#' + _bg;
+const box = document.getElementById('timer');
+const clock = document.getElementById('clock');
+const sub = document.getElementById('sub');
+
+function fmt(s) {
+  const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, ss = s % 60;
+  const mm = String(m).padStart(2, '0'), sss = String(ss).padStart(2, '0');
+  return h > 0 ? `${h}:${mm}:${sss}` : `${mm}:${sss}`;
+}
+
+function render(p) {
+  if (!p || !p.running) {
+    box.classList.remove('on');
+    return;
+  }
+  clock.textContent = fmt(p.remaining_s);
+  sub.textContent = 'СУБАТОН' + (p.added_s > 0 ? ' · +' + fmt(p.added_s) : '');
+  box.classList.toggle('low', p.remaining_s <= 60);
+  box.classList.add('on');
+}
+
+async function tick() {
+  try {
+    const r = await fetch(`/subathon.json?t=${encodeURIComponent(token)}`);
+    if (r.ok) render(await r.json());
+  } catch (_) { /* overlay server restarting — retry next tick */ }
+}
+tick();
+setInterval(tick, 1000);
+</script>
+</body>
+</html>

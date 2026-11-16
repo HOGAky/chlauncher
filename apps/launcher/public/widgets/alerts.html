@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Alerts Widget</title>
+<style>
+  :root{
+    --fd:'Anton'; --fb:'Space Grotesk';
+    --a1:#eef2f6; --a2:#8d969f; --a3:#ffffff;
+    --ink:#f2f5f8; --mut:#9aa4ad;
+    --panel:linear-gradient(170deg, rgba(18,20,24,.92), rgba(6,7,9,.95));
+    --line:rgba(220,228,236,.4); --glow:rgba(255,255,255,.35);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:transparent; }
+  .stage {
+    position:absolute; left:50%; top:50%;
+    width:1080px; height:1920px;
+    transform-origin:center center;
+    font-family:var(--fb), sans-serif; color:var(--ink);
+  }
+
+  .alert {
+    position:absolute; left:50%; top:26%;
+    transform:translate(-50%,-50%);
+    width:940px; padding:60px 56px;
+    display:flex; align-items:center; gap:44px;
+    background:var(--panel);
+    border:2px solid var(--line);
+    border-radius:36px;
+    box-shadow:0 30px 90px rgba(0,0,0,.65), 0 0 60px color-mix(in srgb, var(--a1) 18%, transparent), inset 0 1px 0 rgba(255,255,255,.18);
+    backdrop-filter:blur(10px);
+    opacity:0; pointer-events:none;
+  }
+  .alert.show { animation:aIn .55s cubic-bezier(.2,1.6,.35,1) forwards; }
+  .alert.hide { animation:aOut .4s ease-in forwards; }
+  @keyframes aIn { 0%{opacity:0; transform:translate(-50%,-50%) scale(.5) rotate(-4deg)} 100%{opacity:1; transform:translate(-50%,-50%) scale(1) rotate(0)} }
+  @keyframes aOut { 0%{opacity:1; transform:translate(-50%,-50%) scale(1)} 100%{opacity:0; transform:translate(-50%,-60%) scale(.8)} }
+
+  .a-ava {
+    width:200px; height:200px; flex:none; border-radius:50%; object-fit:cover;
+    border:5px solid var(--a1); background:#14161a;
+    box-shadow:0 0 34px color-mix(in srgb, var(--a1) 45%, transparent), 0 12px 24px rgba(0,0,0,.5);
+  }
+  .a-gift {
+    position:absolute; right:46px; top:50%; transform:translateY(-50%);
+    width:170px; height:170px; object-fit:contain;
+    filter:drop-shadow(0 10px 18px rgba(0,0,0,.5));
+    animation:bob 2.2s ease-in-out infinite;
+  }
+  .a-body { flex:1; min-width:0; }
+  .a-kind {
+    font-family:var(--fb); font-weight:600; font-size:26px; letter-spacing:8px;
+    color:var(--mut); text-transform:uppercase; margin-bottom:12px;
+  }
+  .a-nick {
+    font-family:var(--fd); font-size:84px; line-height:1.05; color:var(--a1);
+    letter-spacing:2px; text-transform:uppercase;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .a-detail {
+    margin-top:14px; font-family:var(--fb); font-weight:600; font-size:40px;
+    color:var(--ink); letter-spacing:1px;
+  }
+  .a-detail b { color:var(--a2); }
+  .a-stripes {
+    position:absolute; left:0; top:0; bottom:0; width:14px; border-radius:36px 0 0 36px;
+    background:repeating-linear-gradient(180deg, var(--a1) 0 26px, transparent 26px 52px);
+    opacity:.7;
+  }
+  @keyframes bob { 0%,100%{transform:translateY(-50%) rotate(-4deg)} 50%{transform:translateY(calc(-50% - 14px)) rotate(4deg)} }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="alert" id="alert">
+    <div class="a-stripes"></div>
+    <img class="a-ava" id="ava" src="">
+    <div class="a-body">
+      <div class="a-kind" id="kind">GIFT</div>
+      <div class="a-nick fx-text" id="nick">nickname</div>
+      <div class="a-detail" id="detail"></div>
+    </div>
+    <img class="a-gift" id="giftimg" src="" style="display:none">
+  </div>
+</div>
+<script src="bridge.js"></script>
+<script src="themes.js"></script>
+<script>
+  TTW.apply('chrome');
+  const stage = document.getElementById('stage');
+  function fit(){
+    const s = Math.min(innerWidth/1080, innerHeight/1920);
+    stage.style.transform = `translate(-50%,-50%) scale(${s})`;
+  }
+  addEventListener('resize', fit); fit();
+
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  const queue = [];
+  let busy = false;
+
+  function show(d){
+    busy = true;
+    const kinds = { gift:'&#127873; ПОДАРОК', follow:'&#128153; НОВЫЙ ФОЛЛОВЕР', share:'&#8599; ПОДЕЛИЛСЯ ЭФИРОМ' };
+    $('kind').innerHTML = kinds[d.type] || 'EVENT';
+    $('nick').textContent = d.nickname || '???';
+    $('ava').src = d.avatar || ('https://api.dicebear.com/9.x/thumbs/png?seed=' + encodeURIComponent(d.nickname||'x'));
+    if (d.type === 'gift') {
+      $('detail').innerHTML = `x${d.count} <b>${esc(d.giftName)}</b>${d.coins ? ' · '+d.coins+' &#128142;' : ''}`;
+      if (d.image) { $('giftimg').src = d.image; $('giftimg').style.display='block'; }
+      else $('giftimg').style.display='none';
+    } else {
+      $('detail').textContent = d.type === 'follow' ? 'добро пожаловать в семью' : 'спасибо за репост!';
+      $('giftimg').style.display='none';
+    }
+    const el = $('alert');
+    el.classList.remove('hide'); el.classList.add('show');
+    setTimeout(() => {
+      el.classList.remove('show'); el.classList.add('hide');
+      setTimeout(() => { busy = false; next(); }, 420);
+    }, 3400);
+  }
+  function next(){ if (!busy && queue.length) show(queue.shift()); }
+
+  io().on('alert', d => { queue.push(d); next(); });
+</script>
+</body>
+</html>

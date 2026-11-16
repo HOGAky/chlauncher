@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>EFIR Roulette</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:transparent; }
+  .stage {
+    position:absolute; left:50%; top:50%;
+    width:1200px; height:420px;
+    transform-origin:center center;
+    font-family:'Russo One','Rubik',system-ui,sans-serif;
+    display:none; align-items:center; justify-content:center;
+  }
+  .stage.on { display:flex; }
+
+  .wheel {
+    position:relative; width:1100px; height:210px;
+    background:var(--rs,#111827); border-radius:26px;
+    border:3px solid var(--rp,#6366f1);
+    box-shadow:0 0 40px color-mix(in srgb, var(--rp,#6366f1) 45%, transparent),
+               inset 0 0 80px rgba(0,0,0,.55);
+    overflow:hidden;
+  }
+  .fade-l,.fade-r { position:absolute; top:0; bottom:0; width:180px; z-index:2; pointer-events:none; }
+  .fade-l { left:0;  background:linear-gradient(90deg, var(--rs,#111827), transparent); }
+  .fade-r { right:0; background:linear-gradient(-90deg, var(--rs,#111827), transparent); }
+
+  .pointer {
+    position:absolute; left:50%; top:-6px; z-index:3;
+    transform:translateX(-50%);
+    width:0; height:0;
+    border-left:22px solid transparent; border-right:22px solid transparent;
+    border-top:34px solid var(--rp2,#f59e0b);
+    filter:drop-shadow(0 0 10px var(--rp2,#f59e0b));
+  }
+  .pointer::after {
+    content:''; position:absolute; left:-3px; top:30px;
+    width:6px; height:180px;
+    background:linear-gradient(var(--rp2,#f59e0b), transparent);
+  }
+
+  .strip {
+    position:absolute; left:0; top:50%; height:150px; margin-top:-75px;
+    display:flex; align-items:center; will-change:transform;
+  }
+  .slot {
+    flex:0 0 auto; width:190px; height:140px; margin:0 8px;
+    border-radius:18px; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center;
+    color:var(--rt,#fff); padding:10px;
+    background:linear-gradient(160deg, var(--sc,#6366f1), color-mix(in srgb, var(--sc,#6366f1) 55%, #000));
+    box-shadow:inset 0 0 30px rgba(0,0,0,.35), 0 0 16px color-mix(in srgb, var(--sc,#6366f1) 40%, transparent);
+  }
+  .slot .lbl { font-size:22px; font-weight:700; line-height:1.15; }
+  .slot .val { margin-top:6px; font-size:17px; opacity:.85; }
+
+  .who {
+    position:absolute; left:50%; top:-96px; transform:translateX(-50%);
+    display:flex; align-items:center; gap:14px; white-space:nowrap;
+    font-size:34px; font-weight:700; color:#fff;
+    text-shadow:0 0 14px rgba(0,0,0,.7), 2px 2px 0 rgba(0,0,0,.5);
+    animation:bonusPop .5s cubic-bezier(.2,1.4,.4,1) both;
+  }
+  .who img { width:58px; height:58px; border-radius:50%; border:3px solid var(--rp2,#f59e0b); object-fit:cover; }
+  .who .trg { color:var(--rp2,#f59e0b); }
+
+  .bigmsg {
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    font-size:84px; font-weight:700; color:#ffd23f; white-space:nowrap;
+    text-shadow:0 0 30px rgba(255,210,63,.9), 3px 3px 0 rgba(0,0,0,.6);
+    animation:bonusPop .6s cubic-bezier(.2,1.4,.4,1) both; z-index:4;
+  }
+
+  @keyframes bonusPop {
+    0%   { opacity:0; transform:translate(-50%,-50%) scale(.4); filter:blur(10px); }
+    60%  { opacity:1; transform:translate(-50%,-50%) scale(1.12); filter:blur(0); }
+    100% { opacity:1; transform:translate(-50%,-50%) scale(1); }
+  }
+  .who { animation-name:whoPop; }
+  @keyframes whoPop {
+    0%   { opacity:0; transform:translateX(-50%) scale(.4); }
+    100% { opacity:1; transform:translateX(-50%) scale(1); }
+  }
+
+  /* ---- «ход судьбы»: карты рубашкой вверх, донатер пишет цифру ---- */
+  .cardswrap {
+    position:absolute; inset:0; z-index:5; border-radius:26px;
+    background:var(--rs,#111827); display:none;
+    flex-direction:column; align-items:center; justify-content:center; gap:16px;
+  }
+  .ctitle { font-size:26px; color:var(--rt,#fff); letter-spacing:1px; text-align:center; }
+  .ctitle b { color:var(--rp2,#f59e0b); }
+  .cards { display:flex; gap:16px; }
+  .card { width:150px; height:200px; position:relative; transform-style:preserve-3d;
+          transition:transform .55s cubic-bezier(.2,.8,.3,1.1); }
+  .card .face { position:absolute; inset:0; border-radius:16px; backface-visibility:hidden;
+    display:flex; align-items:center; justify-content:center; text-align:center; padding:8px; }
+  .card .back { background:linear-gradient(160deg,var(--rp,#6366f1),#14122b);
+    border:3px solid var(--rp2,#f59e0b); font-size:52px; font-weight:700;
+    color:var(--rp2,#f59e0b); text-shadow:0 0 18px var(--rp2,#f59e0b); }
+  .card .front { transform:rotateY(180deg); font-size:19px; font-weight:700;
+    color:#fff; text-shadow:1px 1px 0 rgba(0,0,0,.6); }
+  .card.flip { transform:rotateY(180deg); }
+  .card .num { position:absolute; left:50%; bottom:-30px; transform:translateX(-50%);
+    font-size:22px; font-weight:700; color:var(--rt,#fff); opacity:.75; }
+  .card.pulse { animation:cardPulse 1.2s ease-in-out infinite; }
+  @keyframes cardPulse {
+    0%,100% { transform:translateY(0); }
+    50%     { transform:translateY(-7px); }
+  }
+  .ctimerwrap { width:70%; height:9px; border-radius:5px; overflow:hidden;
+    background:rgba(255,255,255,.14); }
+  .ctimerbar { height:100%; width:100%; background:var(--rp2,#f59e0b);
+    box-shadow:0 0 12px var(--rp2,#f59e0b); }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="wheel" id="wheel">
+    <div class="who" id="who" style="display:none">
+      <img id="whoAva" alt=""><span id="whoName"></span><span class="trg" id="whoTrg"></span>
+    </div>
+    <div class="pointer"></div>
+    <div class="strip" id="strip"></div>
+    <div class="fade-l"></div><div class="fade-r"></div>
+    <div class="bigmsg" id="bigmsg" style="display:none"></div>
+    <div class="cardswrap" id="cardswrap">
+      <div class="ctitle" id="ctitle"></div>
+      <div class="cards" id="cards"></div>
+      <div class="ctimerwrap"><div class="ctimerbar" id="ctimerbar"></div></div>
+    </div>
+  </div>
+</div>
+<div id="tb" style="position:fixed;top:0;left:0;right:0;height:30px;z-index:99;display:none;align-items:center;justify-content:flex-end;gap:6px;background:rgba(10,10,20,.55);backdrop-filter:blur(4px);font-family:system-ui">
+  <span style="flex:1;padding-left:10px;font-size:12px;color:#9ca3af;letter-spacing:2px" data-tauri-drag-region>EFIR ROULETTE</span>
+  <button id="tbClose" style="width:26px;height:22px;margin-right:4px;border:0;border-radius:5px;background:#7f1d1d;color:#fff;cursor:pointer;font-size:13px;line-height:1">✕</button>
+</div>
+<script>
+(function(){
+  const Q = new URLSearchParams(location.search);
+  const token = Q.get('t') || '';
+  const demo = Q.get('demo') === '1';
+
+  const stage = document.getElementById('stage');
+  function fit(){
+    const s = Math.min(innerWidth/1200, innerHeight/420);
+    stage.style.transform = `translate(-50%,-50%) scale(${s})`;
+  }
+  addEventListener('resize', fit); fit();
+
+  const el = id => document.getElementById(id);
+  const strip = el('strip'), who = el('who'), bigmsg = el('bigmsg');
+  const SLOT_W = 206;                       // 190 + 2*8 margins
+  const CENTER = 550;                       // half of .wheel width
+
+  let cfg = null, vol = 0.5, spinning = false, hideT = null;
+
+  function applyStyles(){
+    const st = (cfg && cfg.styles) || {};
+    const w = el('wheel');
+    w.style.setProperty('--rp', st.roulettePrimary || '#6366f1');
+    w.style.setProperty('--rp2', st.rouletteSecondary || '#f59e0b');
+    w.style.setProperty('--rs', st.rouletteSurface || '#111827');
+    w.style.setProperty('--rt', st.rouletteText || '#ffffff');
+    if (st.fontFamily) stage.style.fontFamily = st.fontFamily;
+    vol = cfg && typeof cfg.volume === 'number' ? cfg.volume : 0.5;
+  }
+
+  // ---- audio ticks ----
+  let ac = null;
+  function tick(f, dur){
+    if (vol <= 0) return;
+    try {
+      ac = ac || new (window.AudioContext||window.webkitAudioContext)();
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.frequency.value = f; o.type = 'square';
+      g.gain.setValueAtTime(vol*0.12, ac.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ac.currentTime+(dur||0.05));
+      o.connect(g).connect(ac.destination);
+      o.start(); o.stop(ac.currentTime+(dur||0.05)+0.02);
+    } catch(e){}
+  }
+  // Звук: media id ИЛИ spec {media,trimStartMs,trimEndMs,volume}
+  // (EFIR soundVolume + обрезка). Возвращает false → synth fallback.
+  function playSpec(spec){
+    if (!spec) return false;
+    const id = typeof spec === 'string' ? spec : spec.media;
+    if (!id) return false;
+    try {
+      const a = new Audio(`/media/${encodeURIComponent(id)}?t=${encodeURIComponent(token)}`);
+      const sv = (typeof spec === 'object' && spec && spec.volume != null) ? spec.volume : 1;
+      a.volume = Math.max(0, Math.min(1, vol * sv));
+      const t0 = (typeof spec === 'object' && spec) ? (spec.trimStartMs||0)/1000 : 0;
+      const t1 = (typeof spec === 'object' && spec) ? (spec.trimEndMs||0)/1000 : 0;
+      if (t0 > 0) a.addEventListener('loadedmetadata', () => { a.currentTime = t0; });
+      if (t1 > t0) a.addEventListener('timeupdate', function cut(){
+        if (a.currentTime >= t1) { a.pause(); a.removeEventListener('timeupdate', cut); }
+      });
+      a.play().catch(()=>{});
+      return true;
+    } catch(e){ return false; }
+  }
+  function playMedia(key){
+    const s = cfg && cfg.soundMap && (cfg.soundMap[key] || cfg.soundMap.default);
+    return playSpec(s);
+  }
+  function winJingle(){
+    if (playMedia('win')) return;
+    [523,659,784,1047].forEach((f,i)=>setTimeout(()=>tick(f,.18), i*110));
+  }
+
+  function esc(s){ return String(s).replace(/[<>&"]/g, c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
+  function slotHtml(s){
+    const v = s.textValue ||
+      (s.type && s.type.startsWith('mul') || s.type==='debuff' || s.type==='multiplier'
+        ? 'x'+(s.multiplierValue||2) : (s.value ? s.value+'с' : ''));
+    return `<div class="slot" style="--sc:${esc(s.color||'#6366f1')}">
+      <div class="lbl">${esc(s.label||'')}</div><div class="val">${esc(v)}</div></div>`;
+  }
+
+  // ---- spin: build a long strip, land `winnerIdx` under the pointer ----
+  function spin(frame){
+    const slots = (frame.slots||[]).filter(s=>s.isEnabled!==false);
+    if (!slots.length) return;
+    const dur = frame.spinMs || 7500;
+    const winner = frame.winner || slots[0];
+    const wIdx = Math.max(0, slots.findIndex(s=>s.id===winner.id));
+
+    // Layout: ~4 loops of the wheel; winner's copy sits near the end.
+    const loops = Math.max(4, Math.ceil(60/Math.max(1,slots.length)));
+    const total = loops*slots.length;
+    const landIdx = (loops-1)*slots.length + wIdx;
+
+    let html = '';
+    for (let i=0;i<total;i++) html += slotHtml(slots[i%slots.length]);
+    strip.innerHTML = html;
+
+    const target = -(landIdx*SLOT_W + SLOT_W/2 - CENTER);
+    strip.style.transition = 'none';
+    strip.style.transform = 'translateX(0px)';
+    strip.getBoundingClientRect();
+
+    // who header
+    who.style.display = 'flex';
+    el('whoName').textContent = (frame.user && frame.user.username) || '';
+    el('whoTrg').textContent = (frame.user && frame.user.triggerGift) ? '· '+frame.user.triggerGift : '';
+    const av = el('whoAva');
+    if (frame.user && frame.user.avatar){ av.src = frame.user.avatar; av.style.display=''; }
+    else av.style.display = 'none';
+    bigmsg.style.display = 'none';
+
+    stage.classList.add('on');
+    spinning = true;
+    clearTimeout(hideT);
+    playMedia('spin');
+
+    // ease-out cubic + per-slot ticks
+    const t0 = performance.now();
+    let lastIdx = -1;
+    function anim(now){
+      const p = Math.min(1, (now-t0)/dur);
+      const e = 1 - Math.pow(1-p, 4);
+      const x = target * e;
+      strip.style.transform = `translateX(${x}px)`;
+      const idx = Math.floor((-x + CENTER) / SLOT_W);
+      if (idx !== lastIdx){ lastIdx = idx; tick(1400 - p*700, .04); }
+      if (p < 1) requestAnimationFrame(anim);
+      else {
+        spinning = false;
+        winJingle();
+        bigmsg.textContent = winner.label || '';
+        bigmsg.style.display = 'block';
+        hideT = setTimeout(()=>{ stage.classList.remove('on'); }, 2600);
+      }
+    }
+    requestAnimationFrame(anim);
+  }
+
+  function bonusRoll(v){
+    stage.classList.add('on');
+    strip.innerHTML = '';
+    who.style.display = 'none';
+    bigmsg.style.display = 'block';
+    bigmsg.textContent = 'ДОП. ВРЕМЯ +' + (v.amount||0) + 'с — ' + (v.username||'');
+    if (!playMedia('bonus')) winJingle();
+    clearTimeout(hideT);
+    hideT = setTimeout(()=>{ stage.classList.remove('on'); }, 3000);
+  }
+
+  // ---- «ход судьбы»: колода карт, выбор цифрой в чате ----
+  let cardSession = null, cardTick = null;
+  function cardsShow(v){
+    cardSession = v;
+    clearTimeout(hideT); clearInterval(cardTick);
+    strip.style.display = 'none';
+    document.querySelector('.pointer').style.display = 'none';
+    who.style.display = 'none'; bigmsg.style.display = 'none';
+    el('ctitle').innerHTML =
+      '<b>' + esc(v.rouletteName || 'ХОД СУДЬБЫ') + '</b><br>' +
+      esc((v.user && v.user.username) || '') + ', пиши цифру в чат!';
+    el('cards').innerHTML = (v.cards || []).map((s, i) => `
+      <div class="card pulse" id="card${i}" style="animation-delay:${i*0.12}s">
+        <div class="face back">?</div>
+        <div class="face front" style="background:linear-gradient(160deg,${esc(s.color||'#6366f1')},color-mix(in srgb,${esc(s.color||'#6366f1')} 55%,#000))">${esc(s.label||'')}</div>
+        <div class="num">${i+1}</div>
+      </div>`).join('');
+    el('cardswrap').style.display = 'flex';
+    stage.classList.add('on');
+    if (!playMedia('cards')) tick(900, .15);
+    const total = (v.timeoutSeconds || 120) * 1000;
+    cardTick = setInterval(() => {
+      const left = Math.max(0, (v.deadline || 0) - Date.now());
+      el('ctimerbar').style.width = (100 * left / total) + '%';
+      if (left <= 0) clearInterval(cardTick);
+    }, 120);
+  }
+  function cardsReveal(v){
+    if (!cardSession || v.id !== cardSession.id) return;
+    const c = el('card' + v.index);
+    if (c){ c.classList.remove('pulse'); c.classList.add('flip'); }
+    tick(1250, .25);
+    setTimeout(() => winJingle(), 500);
+  }
+  function cardsDone(v){
+    if (!cardSession) return;
+    if (v.id && v.id !== cardSession.id) return;
+    clearInterval(cardTick);
+    const keep = v.phase === 'commit' ? 2200 : 300;
+    setTimeout(() => {
+      el('cardswrap').style.display = 'none';
+      strip.style.display = '';
+      document.querySelector('.pointer').style.display = '';
+      stage.classList.remove('on');
+      cardSession = null;
+    }, keep);
+  }
+
+  function onFrame(v){
+    switch (v.type){
+      case 'snapshot':
+        cfg = v.cfg || cfg; applyStyles();
+        if (v.card && v.card.phase === 'waiting')
+          cardsShow({ ...v.card, timeoutSeconds: Math.max(1, Math.round((v.card.deadline - Date.now())/1000)) });
+        break;
+      case 'settings': cfg = v.cfg || cfg; applyStyles(); break;
+      case 'spin': spin(v); break;
+      case 'bonus_roll': bonusRoll(v); break;
+      case 'card_choice':
+        if (v.phase === 'start') cardsShow(v);
+        else if (v.phase === 'reveal') cardsReveal(v);
+        else cardsDone(v);
+        break;
+    }
+  }
+
+  // ---- tauri window chrome ----
+  if (window.__TAURI__){
+    const tb = document.getElementById('tb');
+    tb.style.display = 'flex';
+    tb.setAttribute('data-tauri-drag-region','');
+    tb.addEventListener('mousedown', (e)=>{
+      if (e.target.id === 'tbClose') return;
+      try { window.__TAURI__.window.getCurrentWindow().startDragging(); } catch(_){}
+    });
+    document.getElementById('tbClose').onclick = () =>
+      window.__TAURI__.window.getCurrentWindow().close();
+  }
+
+  if (demo){
+    cfg = { volume:.5, styles:{} }; applyStyles();
+    const mk = (i)=>({id:'s'+i,label:['+60с','x2','ЩИТ','−120с','РУИНЕР','СЕЙВ','+300с','x0.5'][i%8],
+      type:'add_time',value:60,color:['#6366f1','#f59e0b','#0ea5e9','#f43f5e'][i%4],isEnabled:true});
+    setTimeout(()=>spin({slots:Array.from({length:8},(_,i)=>mk(i)),winner:mk(4),
+      user:{username:'demo_user',triggerGift:'Rose'},spinMs:7500}),600);
+    return;
+  }
+
+  let ws;
+  function connect(){
+    ws = new WebSocket(`ws://${location.host}/ws?t=${encodeURIComponent(token)}`);
+    ws.onopen = () => ws.send(JSON.stringify({ type:'subscribe', channels:['timer'] }));
+    ws.onmessage = e => { try { onFrame(JSON.parse(e.data)); } catch(_){} };
+    ws.onclose = () => setTimeout(connect, 2000);
+  }
+  connect();
+})();
+</script>
+</body>
+</html>

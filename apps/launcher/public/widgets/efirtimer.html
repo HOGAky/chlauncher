@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>EFIR Timer</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:transparent; }
+  .stage {
+    position:absolute; left:50%; top:50%;
+    width:1000px; height:560px;
+    transform-origin:center center;
+    font-family:'Russo One','Rubik',system-ui,sans-serif;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .core { position:relative; text-align:center; }
+
+  .timer {
+    font-size:170px; font-weight:700; line-height:1;
+    color:var(--tc,#fff); letter-spacing:2px;
+    transition:color .35s ease;
+    font-variant-numeric:tabular-nums;
+  }
+  .timer.small { font-size:120px; }
+
+  .banner {
+    font-size:64px; font-weight:700; letter-spacing:4px;
+    animation:bonusPop .6s cubic-bezier(.2,1.4,.4,1) both;
+  }
+  .sub {
+    margin-top:14px; font-size:34px; letter-spacing:6px;
+    color:#ffd23f; text-shadow:0 0 18px rgba(255,210,63,.8);
+    animation:snowTwinkle 1.2s ease-in-out infinite;
+  }
+
+  .card {
+    position:absolute; padding:18px 30px; border-radius:18px;
+    font-size:44px; font-weight:700; color:#fff;
+    background:var(--cbg,#10b981);
+    box-shadow:0 0 30px color-mix(in srgb, var(--cbg,#10b981) 60%, transparent);
+    white-space:nowrap;
+  }
+  .card small { display:block; font-size:22px; letter-spacing:3px; opacity:.9; }
+  .shield { left:-330px; top:50%; transform:translateY(-50%); --cbg:#0ea5e9; animation:shieldPulse 1.4s ease-in-out infinite; }
+  .mult   { right:-330px; top:50%; transform:translateY(-50%); animation:multBounce 1s ease-in-out infinite; }
+  .ruiner { left:50%; top:-150px; transform:translateX(-50%); --cbg:#dc2626; animation:shieldPulse 1s ease-in-out infinite; }
+
+  .float {
+    position:absolute; left:50%; top:12%;
+    font-size:56px; font-weight:700; white-space:nowrap;
+    animation:floatUpFade 2s ease-out forwards;
+    pointer-events:none;
+  }
+  .float .who { display:block; font-size:24px; letter-spacing:2px; opacity:.85; text-align:center; }
+
+  @keyframes floatUpFade {
+    0%   { opacity:0; transform:translate(-50%,30px) scale(.7); }
+    15%  { opacity:1; transform:translate(-50%,0) scale(1.05); }
+    30%  { transform:translate(-50%,-10px) scale(1); }
+    100% { opacity:0; transform:translate(-50%,-140px) scale(.95); }
+  }
+  @keyframes bonusPop {
+    0%   { opacity:0; transform:scale(.4); filter:blur(12px); }
+    60%  { opacity:1; transform:scale(1.12); filter:blur(0); }
+    100% { opacity:1; transform:scale(1); }
+  }
+  @keyframes snowTwinkle {
+    0%,100% { opacity:1; transform:scale(1) rotate(0deg); }
+    50%     { opacity:.65; transform:scale(1.06) rotate(1.5deg); }
+  }
+  @keyframes shieldPulse {
+    0%,100% { box-shadow:0 0 22px color-mix(in srgb, var(--cbg) 55%, transparent); }
+    50%     { box-shadow:0 0 55px var(--cbg), 0 0 90px color-mix(in srgb, var(--cbg) 55%, transparent); }
+  }
+  @keyframes multBounce {
+    0%,100% { transform:translateY(-50%) scale(1); }
+    50%     { transform:translateY(-56%) scale(1.08); }
+  }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="core">
+    <div class="card ruiner" id="ruinerCard" style="display:none">
+      <span id="ruinerTxt">РУИНЕР 60</span><small id="ruinerWho"></small>
+    </div>
+    <div class="card shield" id="shieldCard" style="display:none">ЩИТ<small id="shieldLeft"></small></div>
+    <div class="card mult" id="multCard" style="display:none"><span id="multTxt"></span><small id="multLeft"></small></div>
+
+    <div class="banner" id="banner" style="display:none"></div>
+    <div class="timer" id="timer">00:00</div>
+    <div class="sub" id="subline" style="display:none"></div>
+    <div id="floats"></div>
+  </div>
+</div>
+<div id="tb" style="position:fixed;top:0;left:0;right:0;height:30px;z-index:99;display:none;align-items:center;justify-content:flex-end;gap:6px;background:rgba(10,10,20,.55);backdrop-filter:blur(4px);font-family:system-ui">
+  <span style="flex:1;padding-left:10px;font-size:12px;color:#9ca3af;letter-spacing:2px" data-tauri-drag-region>EFIR TIMER</span>
+  <button id="tbClose" style="width:26px;height:22px;margin-right:4px;border:0;border-radius:5px;background:#7f1d1d;color:#fff;cursor:pointer;font-size:13px;line-height:1">✕</button>
+</div>
+<script>
+(function(){
+  const Q = new URLSearchParams(location.search);
+  const token = Q.get('t') || '';
+  const demo = Q.get('demo') === '1';
+
+  const stage = document.getElementById('stage');
+  function fit(){
+    const s = Math.min(innerWidth/1000, innerHeight/560);
+    stage.style.transform = `translate(-50%,-50%) scale(${s})`;
+  }
+  addEventListener('resize', fit); fit();
+
+  const el = id => document.getElementById(id);
+  const timerEl = el('timer'), bannerEl = el('banner'), subEl = el('subline');
+  const shieldCard = el('shieldCard'), shieldLeft = el('shieldLeft');
+  const multCard = el('multCard'), multTxt = el('multTxt'), multLeft = el('multLeft');
+  const ruinerCard = el('ruinerCard'), ruinerTxt = el('ruinerTxt'), ruinerWho = el('ruinerWho');
+  const floats = el('floats');
+
+  let cfg = null, state = null, tickTimer = null;
+
+  // ---- styling ----
+  function hexA(hex, a){
+    const h = hex.replace('#','');
+    const n = parseInt(h.length===3 ? h.split('').map(c=>c+c).join('') : h, 16);
+    return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`;
+  }
+  function applyStyles(){
+    const st = (cfg && cfg.styles) || {};
+    const ff = st.fontFamily || 'Russo One, sans-serif';
+    stage.style.fontFamily = ff;
+    const glow = (st.timerGlow ?? 0.4);
+    const stroke = st.enableStroke !== false;
+    const base = currentColor();
+    let shadows = `0 0 ${30*glow}px ${hexA(base,glow)}, 0 0 ${90*glow}px ${hexA(base,glow*.6)}`;
+    if (stroke) shadows = `0 0 0 #000, 3px 3px 0 rgba(0,0,0,.55), -2px -2px 0 rgba(0,0,0,.35), ` + shadows;
+    timerEl.style.textShadow = shadows;
+    bannerEl.style.textShadow = shadows;
+  }
+  function currentColor(){
+    const st = (cfg && cfg.styles) || {};
+    const s = state || {};
+    if (s.isFrozen) return st.buffColor || '#34d399';
+    if (s.isReversed) return '#ff4dd2';
+    if (s.multiplier && s.multiplier.active)
+      return s.multiplier.type === 'debuff' ? (st.debuffColor||'#f43f5e') : (st.buffColor||'#34d399');
+    if ((s.timeLeft||0) > 0 && s.timeLeft < 300) return '#ff3b3b';
+    return st.timerColor || '#ffffff';
+  }
+
+  // ---- time format: всегда HH:MM:SS (часы:минуты:секунды) ----
+  function fmt(s){
+    const neg = s < 0; s = Math.abs(s|0);
+    const h = String(Math.floor(s/3600)).padStart(2,'0');
+    const m = String(Math.floor(s/60)%60).padStart(2,'0');
+    const ss = String(s%60).padStart(2,'0');
+    return (neg?'-':'') + h + ':' + m + ':' + ss;
+  }
+  function fmtDelta(s){
+    const neg = s < 0; s = Math.abs(s|0);
+    if (s < 60) return (neg?'−':'+') + s + ' сек';
+    if (s < 3600){
+      const m = Math.floor(s/60), r = s%60;
+      return (neg?'−':'+') + m + ' мин' + (r? ' '+r+' с':'');
+    }
+    const h = Math.floor(s/3600), m = Math.floor(s/60)%60;
+    return (neg?'−':'+') + h + ' ч' + (m? ' '+m+' мин':'');
+  }
+
+  // ---- render ----
+  function render(){
+    const s = state || {};
+    const st = (cfg && cfg.styles) || {};
+    const c = currentColor();
+    timerEl.style.color = c;
+    applyStyles();
+
+    // main line: victory / bonus / timer
+    if (s.isVictory){
+      timerEl.style.display = 'none';
+      bannerEl.style.display = 'block';
+      bannerEl.textContent = 'ПОБЕДА';
+      bannerEl.style.color = '#ffd23f';
+      subEl.style.display = 'none';
+    } else if (s.isRollingBonus){
+      timerEl.style.display = 'none';
+      bannerEl.style.display = 'block';
+      bannerEl.textContent = 'БОНУСНЫЙ ПРОКРУТ…';
+      bannerEl.style.color = c;
+      subEl.style.display = 'none';
+    } else {
+      bannerEl.style.display = 'none';
+      timerEl.style.display = 'block';
+      const t = s.timeLeft || 0;
+      timerEl.textContent = fmt(t);
+      timerEl.classList.toggle('small', Math.abs(t) >= 360000);
+      subEl.style.display = s.isReversed ? 'block' : 'none';
+      if (s.isReversed) subEl.textContent = 'ВРЕМЯ ВСПЯТЬ!';
+    }
+
+    // cards
+    const fr = s.isFrozen && s.freezeTimeLeft > 0;
+    shieldCard.style.display = fr ? 'block' : 'none';
+    if (fr) shieldLeft.textContent = fmt(s.freezeTimeLeft);
+
+    const m = s.multiplier;
+    const mOn = m && m.active && !s.isFrozen;
+    multCard.style.display = mOn ? 'block' : 'none';
+    if (mOn){
+      const deb = m.type === 'debuff';
+      multCard.style.setProperty('--cbg', deb ? (st.debuffCardBg||'#e11d48') : (st.buffCardBg||'#10b981'));
+      multTxt.textContent = (deb ? '−x' : 'x') + (m.value || 2);
+      multLeft.textContent = fmt(m.timeLeft || 0);
+    }
+
+    const r = s.ruiner;
+    const rOn = r && r.active;
+    ruinerCard.style.display = rOn ? 'block' : 'none';
+    if (rOn){
+      ruinerTxt.textContent = 'РУИНЕР ' + fmt(r.timeLeft||0);
+      ruinerWho.textContent = r.username || '';
+    }
+  }
+
+  // ---- float-up alert ----
+  function floatAlert(a){
+    const d = document.createElement('div');
+    d.className = 'float';
+    const st = (cfg && cfg.styles) || {};
+    let txt, plus = (a.timeAdded||0) >= 0;
+    // Кошельковые события рисуют монеты, а не секунды.
+    if (a.alertType === 'wallet_credit'){
+      txt = '+' + (a.amount||0) + ' монет · баланс ' + (a.balance ?? '?');
+      plus = true;
+    } else if (a.alertType === 'wallet_command'){
+      txt = '−' + (a.amount||0) + ' монет · баланс ' + (a.balance ?? '?');
+      plus = false;
+    } else if (a.alertType === 'balance'){
+      txt = 'баланс: ' + (a.amount||0) + ' монет';
+      plus = true;
+    } else {
+      txt = (a.timeAdded ? fmtDelta(a.timeAdded) : (a.giftName||''));
+    }
+    d.style.color = plus ? (st.floatPlusColor||'#34d399') : (st.floatMinusColor||'#f87171');
+    d.innerHTML = `<span class="who">${esc(a.username||'')}${a.giftName? ' · '+esc(a.giftName):''}</span>${esc(txt)}`;
+    d.style.textShadow = `0 0 18px ${d.style.color}, 2px 2px 0 rgba(0,0,0,.6)`;
+    floats.appendChild(d);
+    setTimeout(()=>d.remove(), 2100);
+    // У команды может быть свой звук — играет вместо soundMap.
+    if (!playSpec(a.sound) && !playMedia(a.alertType)) sfx(a.alertType, plus);
+  }
+
+  // Звук: media id ИЛИ spec {media,trimStartMs,trimEndMs,volume}
+  // (EFIR soundVolume + обрезка). false → синтезированный сигнал.
+  function playSpec(spec){
+    if (!spec) return false;
+    const id = typeof spec === 'string' ? spec : spec.media;
+    if (!id) return false;
+    try {
+      const a = new Audio(`/media/${encodeURIComponent(id)}?t=${encodeURIComponent(token)}`);
+      const sv = (typeof spec === 'object' && spec && spec.volume != null) ? spec.volume : 1;
+      a.volume = Math.max(0, Math.min(1, (cfg.volume ?? 0.5) * sv));
+      const t0 = (typeof spec === 'object' && spec) ? (spec.trimStartMs||0)/1000 : 0;
+      const t1 = (typeof spec === 'object' && spec) ? (spec.trimEndMs||0)/1000 : 0;
+      if (t0 > 0) a.addEventListener('loadedmetadata', () => { a.currentTime = t0; });
+      if (t1 > t0) a.addEventListener('timeupdate', function cut(){
+        if (a.currentTime >= t1) { a.pause(); a.removeEventListener('timeupdate', cut); }
+      });
+      a.play().catch(()=>{});
+      return true;
+    } catch(e){ return false; }
+  }
+  // Media-library sound mapped in cfg.soundMap (key = alertType or
+  // "default"); falls back to the synth tick when unmapped.
+  function playMedia(key){
+    const s = cfg && cfg.soundMap && (cfg.soundMap[key] || cfg.soundMap.default);
+    return playSpec(s);
+  }
+  function esc(s){ return String(s).replace(/[<>&"]/g, c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
+
+  // ---- synth fallback: свой мотив на каждое действие (пока в медиатеке
+  // нет файлов). Формат: [freq, задержка, длит, волна] ----
+  let ac = null;
+  const SEQS = {
+    gift:           [[660,0,.14,'triangle'],[880,.12,.2,'triangle']],
+    penalty:        [[330,0,.18,'sawtooth'],[220,.16,.28,'sawtooth']],
+    ruiner:         [[220,0,.22,'sawtooth'],[170,.22,.22,'sawtooth'],[220,.44,.22,'sawtooth'],[140,.66,.4,'sawtooth']],
+    save:           [[523,0,.12,'triangle'],[659,.1,.12,'triangle'],[784,.2,.12,'triangle'],[1046,.3,.35,'triangle']],
+    freeze:         [[1150,0,.16,'triangle'],[920,.14,.16,'triangle'],[1080,.28,.3,'triangle']],
+    unfreeze:       [[800,0,.14,'triangle'],[1040,.12,.24,'triangle']],
+    reverse_time:   [[880,0,.15,'square'],[660,.13,.15,'square'],[880,.26,.15,'square'],[660,.39,.25,'square']],
+    multiplier:     [[440,0,.1,'triangle'],[660,.08,.1,'triangle'],[880,.16,.2,'triangle']],
+    debuff:         [[200,0,.22,'sawtooth'],[150,.2,.32,'sawtooth']],
+    set_time:       [[523,0,.1,'triangle'],[523,.1,.1,'triangle'],[784,.2,.28,'triangle']],
+    reset:          [[1046,0,.12,'triangle'],[784,.1,.12,'triangle'],[659,.2,.12,'triangle'],[523,.3,.35,'triangle']],
+    cards:          [[392,0,.16,'triangle'],[494,.14,.16,'triangle'],[587,.28,.16,'triangle'],[784,.42,.3,'triangle']],
+    bonus:          [[523,0,.12,'triangle'],[659,.1,.12,'triangle'],[784,.2,.3,'triangle']],
+    win:            [[523,0,.12,'triangle'],[659,.1,.12,'triangle'],[784,.2,.12,'triangle'],[1046,.3,.4,'triangle']],
+    roulette:       [[330,0,.12,'triangle'],[440,.1,.12,'triangle'],[550,.2,.28,'triangle']],
+    wallet_credit:  [[988,0,.1,'triangle'],[1319,.09,.22,'triangle']],
+    wallet_command: [[784,0,.12,'triangle'],[988,.11,.22,'triangle']],
+    balance:        [[660,0,.1,'triangle'],[880,.1,.12,'triangle'],[660,.22,.2,'triangle']],
+    wallet_fail:    [[220,0,.2,'sawtooth'],[180,.18,.25,'sawtooth']],
+    like:           [[1200,0,.09,'triangle']],
+    follow:         [[660,0,.1,'triangle'],[880,.09,.1,'triangle'],[1320,.18,.22,'triangle']],
+    frozen_gift:    [[300,0,.15,'sawtooth'],[300,.17,.15,'sawtooth']],
+  };
+  function sfx(type, plus){
+    if (!cfg || (cfg.volume ?? 0) <= 0) return;
+    try {
+      ac = ac || new (window.AudioContext||window.webkitAudioContext)();
+      if (ac.state === 'suspended') ac.resume();
+      let seq = SEQS[type];
+      if (!seq) seq = plus === false ? SEQS.penalty : SEQS.gift;
+      const base = ac.currentTime + 0.02;
+      for (const [f, t, d, w] of seq){
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.frequency.value = f; o.type = w || 'triangle';
+        g.gain.setValueAtTime((cfg.volume||0.5)*0.28, base + t);
+        g.gain.exponentialRampToValueAtTime(0.001, base + t + d + 0.08);
+        o.connect(g).connect(ac.destination);
+        o.start(base + t); o.stop(base + t + d + 0.1);
+      }
+    } catch(e){}
+  }
+
+  // ---- frames ----
+  function onFrame(v){
+    switch (v.type){
+      case 'snapshot': cfg = v.cfg || cfg; state = v.state || state; render(); break;
+      case 'settings': cfg = v.cfg || cfg; applyStyles(); render(); break;
+      case 'tick': state = v.state || state; render(); break;
+      case 'alert': floatAlert(v); break;
+      case 'spin': case 'bonus_roll': break; // efirroll.html owns the reel
+    }
+  }
+
+  // ---- demo ----
+  if (demo){
+    cfg = { styles:{} };
+    state = { timeLeft:3723, isRunning:true, isFrozen:false, freezeTimeLeft:0,
+      isReversed:false, multiplier:{active:true,type:'buff',value:2,timeLeft:42},
+      ruiner:{active:false,timeLeft:0,username:''}, isVictory:false };
+    render();
+    setInterval(()=>{ state.timeLeft--; if(state.multiplier.timeLeft>0)state.multiplier.timeLeft--; render(); },1000);
+    setInterval(()=>floatAlert({username:'demo_user',giftName:'Rose',timeAdded:15}),3000);
+    return;
+  }
+
+  // ---- tauri window chrome (drag + close) — detached windows only ----
+  if (window.__TAURI__){
+    const tb = document.getElementById('tb');
+    tb.style.display = 'flex';
+    tb.setAttribute('data-tauri-drag-region','');
+    tb.addEventListener('mousedown', (e)=>{
+      if (e.target.id === 'tbClose') return;
+      try { window.__TAURI__.window.getCurrentWindow().startDragging(); } catch(_){}
+    });
+    document.getElementById('tbClose').onclick = () =>
+      window.__TAURI__.window.getCurrentWindow().close();
+  }
+
+  // ---- ws ----
+  let ws;
+  function connect(){
+    ws = new WebSocket(`ws://${location.host}/ws?t=${encodeURIComponent(token)}`);
+    ws.onopen = () => ws.send(JSON.stringify({ type:'subscribe', channels:['timer'] }));
+    ws.onmessage = e => { try { onFrame(JSON.parse(e.data)); } catch(_){} };
+    ws.onclose = () => setTimeout(connect, 2000);
+  }
+  connect();
+})();
+</script>
+</body>
+</html>

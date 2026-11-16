@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Галерея виджетов</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    min-height:100vh; color:#eaf4ff; font-family:'Inter',sans-serif;
+    background:
+      radial-gradient(900px 500px at 15% -5%, rgba(0,240,255,.12), transparent 60%),
+      radial-gradient(900px 600px at 90% 10%, rgba(255,79,168,.1), transparent 60%),
+      #0a0c14;
+    padding:34px 24px 90px;
+  }
+  h1 {
+    font-family:'Unbounded'; font-weight:800; font-size:32px; text-align:center;
+    background:linear-gradient(90deg,#00f0ff,#ff4fa8,#fdf06e);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .sub { text-align:center; color:#7d8aa8; margin:10px 0 12px; font-size:14px; }
+  .nav { text-align:center; margin-bottom:36px; }
+  .nav a { color:#7ee9ff; text-decoration:none; font-size:14px; border:1px solid rgba(126,233,255,.3); border-radius:30px; padding:8px 20px; }
+  .nav a:hover { background:rgba(126,233,255,.1); }
+  .grid {
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(330px, 1fr));
+    gap:26px; max-width:1560px; margin:0 auto;
+  }
+  .card {
+    background:rgba(18,22,36,.85); border:1px solid rgba(122,148,255,.18);
+    border-radius:22px; overflow:hidden; backdrop-filter:blur(8px);
+  }
+  .card-head { display:flex; align-items:center; justify-content:space-between; padding:16px 18px 12px; }
+  .card-head .nm { font-family:'Unbounded'; font-size:14px; font-weight:500; color:#cdd9ff; }
+  .card-head select {
+    background:#0c1020; color:#9fb2d8; border:1px solid rgba(122,148,255,.3);
+    border-radius:10px; padding:6px 10px; font-size:13px; cursor:pointer; max-width:150px;
+  }
+  .preview {
+    position:relative; height:560px; overflow:hidden;
+    background:
+      linear-gradient(45deg, #14161f 25%, transparent 25%),
+      linear-gradient(-45deg, #14161f 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #14161f 75%),
+      linear-gradient(-45deg, transparent 75%, #14161f 75%);
+    background-size:28px 28px; background-position:0 0,0 14px,14px -14px,-14px 0;
+    background-color:#0d0f18;
+  }
+  .preview iframe {
+    width:1080px; height:1920px; border:0; pointer-events:none;
+    transform-origin:top left;
+  }
+  .card-foot { display:flex; gap:10px; padding:14px 16px 18px; }
+  .card-foot input {
+    flex:1; min-width:0; padding:10px 12px; border-radius:10px;
+    border:1px solid rgba(122,148,255,.3); background:#0c1020;
+    color:#7d8aa8; font-size:11px;
+  }
+  .card-foot button {
+    cursor:pointer; border:0; border-radius:10px; padding:10px 14px;
+    font-weight:800; font-size:12px; white-space:nowrap;
+    background:linear-gradient(90deg,#00d9e8,#00f0ff); color:#04121a;
+  }
+  .card-foot button.ghost { background:rgba(122,148,255,.15); color:#bcd0ff; border:1px solid rgba(122,148,255,.3); }
+  .hint { max-width:1560px; margin:30px auto 0; color:#66779a; font-size:13px; text-align:center; line-height:1.7; }
+</style>
+</head>
+<body>
+<h1>ГАЛЕРЕЯ ВИДЖЕТОВ</h1>
+<div class="sub">Живой предпросмотр · выбери тему · скопируй ссылку в OBS</div>
+<div class="nav"><a href="/">&larr; Панель управления</a>&nbsp;<a href="/titlemaker.html">&#9998; Титл-мейкер</a></div>
+<div class="grid" id="grid"></div>
+<div class="hint">Ссылка вида <code>/widgets/alerts.html?theme=thorns</code> — в OBS Browser Source ставь ширину 1080 и высоту 1920.<br>
+Включи «Демо-режим» в панели, чтобы виджеты ожили без эфира.</div>
+
+<script src="themes.js"></script>
+<script>
+  const grid = document.getElementById('grid');
+  const SCALE = 0.30; // 1080*0.3 = 324px ширина превью
+
+  TTW.WIDGETS.forEach(w => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="card-head">
+        <span class="nm">${w.name}</span>
+        <select>${Object.keys(TTW.THEMES).map(k =>
+          `<option value="${k}" ${k===w.def?'selected':''}>${TTW.THEMES[k].label}</option>`).join('')}
+        </select>
+      </div>
+      <div class="preview"><iframe loading="lazy"></iframe></div>
+      <div class="card-foot">
+        <input readonly>
+        <button class="copy">Копировать</button>
+        <button class="ghost open">Открыть</button>
+      </div>`;
+    grid.appendChild(card);
+
+    const sel = card.querySelector('select');
+    const iframe = card.querySelector('iframe');
+    const input = card.querySelector('input');
+    const tok = new URLSearchParams(location.search).get('t');
+    const sep = w.file.includes('?') ? '&' : '?';
+    const url = () => `${location.origin}${w.file}${sep}${tok ? 't='+tok+'&' : ''}theme=${sel.value}`;
+    const apply = () => {
+      const pw = card.querySelector('.preview').clientWidth;
+      const s = pw / 1080;
+      iframe.style.transform = `scale(${s})`;
+      card.querySelector('.preview').style.height = (1920 * s) + 'px';
+      iframe.src = url();
+      input.value = url();
+    };
+    sel.onchange = apply;
+    card.querySelector('.copy').onclick = () => { input.select(); navigator.clipboard.writeText(url()); };
+    card.querySelector('.open').onclick = () => window.open(url());
+    apply();
+  });
+</script>
+</body>
+</html>

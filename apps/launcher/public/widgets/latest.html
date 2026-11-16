@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Latest Supporter</title>
+<style>
+  :root{
+    --fd:'Iceberg'; --fb:'Exo 2';
+    --a1:#a5e8ff; --a2:#4aa8d8; --a3:#ffffff;
+    --ink:#eefaff; --mut:#8fc3dd;
+    --panel:linear-gradient(170deg, rgba(20,40,60,.85), rgba(8,18,30,.92));
+    --line:rgba(165,232,255,.45); --glow:#a5e8ff;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:transparent; }
+  .stage {
+    position:absolute; left:50%; top:50%;
+    width:1080px; height:1920px;
+    transform-origin:center center;
+    font-family:var(--fb), sans-serif; color:var(--ink);
+  }
+  .wrap { position:absolute; inset:0; padding:300px 70px 0; display:flex; flex-direction:column; align-items:center; }
+
+  .label { font-size:34px; letter-spacing:10px; color:var(--mut); text-transform:uppercase; font-weight:700; margin-bottom:40px; }
+  .card {
+    width:100%; display:flex; flex-direction:column; align-items:center;
+    background:var(--panel); border:3px solid var(--line); border-radius:52px;
+    padding:70px 50px 80px;
+    box-shadow:0 30px 80px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.14),
+               0 0 60px color-mix(in srgb, var(--glow) 25%, transparent);
+    backdrop-filter:blur(10px);
+  }
+  .card.pop { animation:pop .45s cubic-bezier(.22,1.4,.36,1); }
+  @keyframes pop { 0%{transform:scale(.7);opacity:0} 100%{transform:scale(1);opacity:1} }
+
+  .ava {
+    width:240px; height:240px; border-radius:50%; object-fit:cover;
+    border:8px solid var(--a1); background:#10161c;
+    box-shadow:0 0 50px color-mix(in srgb, var(--glow) 55%, transparent), 0 18px 34px rgba(0,0,0,.5);
+  }
+  .nick {
+    font-family:var(--fd); font-size:86px; margin-top:44px; letter-spacing:3px;
+    text-transform:uppercase; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .act { margin-top:22px; font-size:42px; font-weight:700; color:var(--a2); display:flex; align-items:center; gap:18px; }
+  .act img { width:64px; height:64px; object-fit:contain; }
+  .empty { font-size:40px; color:var(--mut); padding:40px 0; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="wrap">
+    <div class="label" id="label">Последний герой эфира</div>
+    <div class="card" id="card">
+      <img class="ava" id="ava" src="" style="display:none">
+      <div class="nick fx-text" id="nick">—</div>
+      <div class="act" id="act"><span class="empty">ждём первого события…</span></div>
+    </div>
+  </div>
+</div>
+<script src="bridge.js"></script>
+<script src="themes.js"></script>
+<script>
+  TTW.apply('ice');
+  const stage = document.getElementById('stage');
+  function fit(){
+    const s = Math.min(innerWidth/1080, innerHeight/1920);
+    stage.style.transform = `translate(-50%,-50%) scale(${s})`;
+  }
+  addEventListener('resize', fit); fit();
+
+  const q = new URLSearchParams(location.search);
+  const $ = id => document.getElementById(id);
+  if (q.get('title')) $('label').textContent = q.get('title');
+
+  const ACTIONS = {
+    gift: d => `подарил ${d.giftName}${d.count > 1 ? ' ×' + d.count : ''}`,
+    follow: () => 'подписался',
+    share: () => 'поделился эфиром',
+    join: () => 'зашёл на стрим',
+  };
+
+  io().on('alert', d => {
+    const fn = ACTIONS[d.type]; if (!fn) return;
+    const ava = $('ava');
+    ava.src = d.avatar || 'https://api.dicebear.com/9.x/thumbs/png?seed=' + encodeURIComponent(d.nickname);
+    ava.style.display = 'block';
+    $('nick').textContent = d.nickname;
+    $('act').innerHTML =
+      (d.type === 'gift' && d.image ? `<img src="${d.image}" alt="">` : '') +
+      `<span>${fn(d)}</span>`;
+    const card = $('card');
+    card.classList.remove('pop'); void card.offsetWidth; card.classList.add('pop');
+  });
+</script>
+</body>
+</html>

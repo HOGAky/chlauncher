@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Титл-мейкер — своя надпись в любом стиле</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;800&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    min-height:100vh; color:#eaf4ff; font-family:'Inter',sans-serif;
+    background:
+      radial-gradient(900px 500px at 15% -5%, rgba(0,240,255,.12), transparent 60%),
+      radial-gradient(900px 600px at 90% 10%, rgba(255,79,168,.1), transparent 60%),
+      #0a0c14;
+    padding:34px 24px 60px;
+  }
+  h1 {
+    font-family:'Unbounded'; font-weight:800; font-size:30px; text-align:center;
+    background:linear-gradient(90deg,#00f0ff,#ff4fa8,#fdf06e);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .sub { text-align:center; color:#7d8aa8; margin:10px 0 12px; font-size:14px; }
+  .nav { text-align:center; margin-bottom:34px; }
+  .nav a { color:#7ee9ff; text-decoration:none; font-size:13px; border:1px solid rgba(126,233,255,.3); border-radius:30px; padding:7px 18px; margin:0 5px; }
+  .nav a:hover { background:rgba(126,233,255,.1); }
+
+  .cols { display:grid; grid-template-columns:380px 1fr; gap:28px; max-width:1400px; margin:0 auto; align-items:start; }
+  @media (max-width:900px){ .cols{grid-template-columns:1fr} }
+
+  .panel {
+    background:rgba(18,22,36,.85); border:1px solid rgba(122,148,255,.18);
+    border-radius:20px; padding:24px; backdrop-filter:blur(8px);
+  }
+  .panel h2 { font-family:'Unbounded'; font-size:14px; font-weight:500; color:#9db4ff; margin-bottom:18px; }
+  label { display:block; font-size:11px; color:#7d8aa8; margin:14px 0 6px; text-transform:uppercase; letter-spacing:1px; }
+  input[type=text], select {
+    width:100%; padding:11px 13px; border-radius:11px; border:1px solid rgba(122,148,255,.3);
+    background:#0c1020; color:#fff; font-size:15px; outline:none;
+  }
+  input:focus, select:focus { border-color:#00f0ff; }
+  input[type=range] { width:100%; }
+  .chk { display:flex; align-items:center; gap:8px; margin-top:16px; font-size:13px; color:#9fb2d8; }
+  .chk input { width:16px; height:16px; }
+
+  .preview-wrap {
+    position:relative; border-radius:20px; overflow:hidden; border:1px solid rgba(122,148,255,.18);
+    background:
+      linear-gradient(45deg, #14161f 25%, transparent 25%),
+      linear-gradient(-45deg, #14161f 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #14161f 75%),
+      linear-gradient(-45deg, transparent 75%, #14161f 75%);
+    background-size:28px 28px; background-position:0 0,0 14px,14px -14px,-14px 0;
+    background-color:#0d0f18;
+    transition:background .3s;
+  }
+  .preview-wrap.dark { background:#050508 radial-gradient(ellipse 80% 60% at 50% 40%, #1a1c24, #050508); }
+  .preview-wrap iframe { width:1080px; height:1920px; border:0; pointer-events:none; transform-origin:top left; }
+
+  .urlrow { display:flex; gap:10px; margin-top:18px; }
+  .urlrow input { flex:1; min-width:0; padding:12px 14px; border-radius:11px; border:1px solid rgba(122,148,255,.3); background:#0c1020; color:#9fb2d8; font-size:12px; }
+  button {
+    cursor:pointer; border:0; border-radius:11px; padding:12px 18px;
+    font-weight:800; font-size:13px; white-space:nowrap;
+    background:linear-gradient(90deg,#00d9e8,#00f0ff); color:#04121a;
+  }
+  button.ghost { background:rgba(122,148,255,.15); color:#bcd0ff; border:1px solid rgba(122,148,255,.3); }
+  .hint { color:#66779a; font-size:12.5px; margin-top:14px; line-height:1.6; }
+</style>
+</head>
+<body>
+<h1>ТИТЛ-МАКЕР</h1>
+<div class="sub">пиши свою надпись — получай её в любом стиле, как на референсах</div>
+<div class="nav"><a href="/">&larr; Панель</a><a href="/gallery.html">Галерея виджетов</a></div>
+
+<div class="cols">
+  <div class="panel">
+    <h2>Надпись</h2>
+    <label>Верхняя мелкая строка (pre)</label>
+    <input type="text" id="fPre" placeholder="например: THE BEST">
+    <label>Основной текст *</label>
+    <input type="text" id="fText" value="ТГК МЕН">
+    <label>Подпись снизу (sub)</label>
+    <input type="text" id="fSub" placeholder="например: LIVE EVERY DAY">
+    <label>Стиль</label>
+    <select id="fTheme"></select>
+    <label>Размер букв: <b id="szVal">200</b>px</label>
+    <input type="range" id="fSize" min="60" max="340" value="200">
+    <label>Вертикальная позиция: <b id="posVal">38</b>%</label>
+    <input type="range" id="fPos" min="10" max="90" value="38">
+    <div class="chk"><input type="checkbox" id="fNoRule"><span>Убрать линию под текстом</span></div>
+    <div class="chk"><input type="checkbox" id="fDark" checked><span>Превью на чёрном фоне (как референсы)</span></div>
+    <div class="hint">Прозрачность в OBS сохраняется — «чёрный фон» здесь только для предпросмотра.</div>
+  </div>
+
+  <div>
+    <div class="preview-wrap dark" id="pwrap"><iframe id="pv" src=""></iframe></div>
+    <div class="urlrow">
+      <input readonly id="url">
+      <button onclick="copyUrl()">Копировать URL для OBS</button>
+      <button class="ghost" onclick="window.open(document.getElementById('url').value)">Открыть</button>
+    </div>
+  </div>
+</div>
+
+<script src="themes.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  const sel = $('fTheme');
+  sel.innerHTML = Object.keys(TTW.THEMES).map(k => `<option value="${k}">${TTW.THEMES[k].label}</option>`).join('');
+  sel.value = 'chrome';
+
+  const ownTok = new URLSearchParams(location.search).get('t');
+  function buildUrl(){
+    const p = new URLSearchParams();
+    if (ownTok) p.set('t', ownTok);
+    p.set('theme', sel.value);
+    p.set('text', $('fText').value || 'TEXT');
+    if ($('fPre').value) p.set('pre', $('fPre').value);
+    if ($('fSub').value) p.set('sub', $('fSub').value);
+    p.set('size', $('fSize').value);
+    p.set('pos', $('fPos').value);
+    if ($('fNoRule').checked) p.set('norule','1');
+    return location.origin + '/widgets/title.html?' + p.toString();
+  }
+
+  function fitPreview(){
+    const w = $('pwrap').clientWidth;
+    const s = w / 1080;
+    $('pv').style.transform = `scale(${s})`;
+    $('pwrap').style.height = (1920 * s) + 'px';
+  }
+
+  let t;
+  function update(){
+    clearTimeout(t);
+    t = setTimeout(() => { $('pv').src = buildUrl(); $('url').value = buildUrl(); }, 250);
+    $('szVal').textContent = $('fSize').value;
+    $('posVal').textContent = $('fPos').value;
+    $('pwrap').classList.toggle('dark', $('fDark').checked);
+  }
+
+  ['fPre','fText','fSub','fTheme','fSize','fPos','fNoRule','fDark'].forEach(id =>
+    $(id).addEventListener('input', update));
+  addEventListener('resize', () => { fitPreview(); });
+
+  function copyUrl(){ $('url').select(); navigator.clipboard.writeText($('url').value); }
+
+  fitPreview(); update();
+</script>
+</body>
+</html>

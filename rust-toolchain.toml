@@ -1,0 +1,12 @@
+# Toolchain for this repo: `stable` — on Windows this resolves to MSVC,
+# which is the only toolchain Tauri/WebView2 officially supports for
+# shipping binaries.
+#
+# LOCAL DEV on machines without MSVC Build Tools: override once per clone:
+#   rustup override set stable-x86_64-pc-windows-gnu
+# (needs MinGW-w64 binutils on PATH for `windres`).
+#
+# Release builds happen in CI on windows-latest (MSVC + static CRT via
+# .cargo/config.toml) — never ship a locally built GNU binary.
+[toolchain]
+channel = "stable"

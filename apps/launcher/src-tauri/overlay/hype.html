@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>chlauncher · hype</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: transparent; overflow: hidden;
+    font-family: 'Segoe UI', system-ui, sans-serif; color: #fff;
+  }
+  #hype { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+          width: 360px; opacity: 0; transition: opacity .4s; }
+  #hype.on { opacity: 1; }
+  #hype .label { display: flex; justify-content: space-between; font-size: 11px;
+                 margin-bottom: 4px; text-shadow: 0 1px 3px rgba(0,0,0,.8); }
+  #hype .label .pct { font-variant-numeric: tabular-nums; font-weight: 700; }
+  #hype .track { height: 14px; border-radius: 8px; background: rgba(15,17,26,.8);
+                 border: 1px solid rgba(255,255,255,.15); overflow: hidden; }
+  #hype .fill { height: 100%; border-radius: 8px; width: 0;
+                background: linear-gradient(90deg,#0ea5e9,#a855f7,#f59e0b,#ef4444);
+                background-size: 300% 100%;
+                transition: width .5s ease; }
+  #hype.hot .fill { animation: burn 1.2s linear infinite; }
+  @keyframes burn { to { background-position: 300% 0; } }
+  #hype.max .fill { background: linear-gradient(90deg,#f59e0b,#ef4444,#f59e0b);
+                    background-size: 200% 100%; animation: burn .6s linear infinite; }
+</style>
+</head>
+<body>
+<div id="hype">
+  <div class="label"><span>ХАЙП</span><span class="pct" id="pct">0%</span></div>
+  <div class="track"><div class="fill" id="fill"></div></div>
+</div>
+<script>
+const params = new URLSearchParams(location.search);
+const token = params.get('t') || '';
+// ?bg=rrggbb — solid chroma background for LIVE Studio window capture.
+const _bg = params.get('bg');
+if (_bg && /^[0-9a-fA-F]{6}$/.test(_bg)) document.body.style.background = '#' + _bg;
+const box = document.getElementById('hype');
+const fill = document.getElementById('fill');
+const pct = document.getElementById('pct');
+
+function render(h) {
+  const lvl = h ? h.level : 0;
+  if (!h || (h.coins <= 0 && lvl <= 0)) {
+    box.classList.remove('on');
+    return;
+  }
+  fill.style.width = lvl + '%';
+  pct.textContent = lvl + '%';
+  box.classList.toggle('hot', lvl >= 50 && lvl < 100);
+  box.classList.toggle('max', lvl >= 100);
+  box.classList.add('on');
+}
+
+async function tick() {
+  try {
+    const r = await fetch(`/hype.json?t=${encodeURIComponent(token)}`);
+    if (r.ok) render(await r.json());
+  } catch (_) { /* overlay server restarting — retry next tick */ }
+}
+tick();
+setInterval(tick, 1000);
+</script>
+</body>
+</html>

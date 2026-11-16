@@ -1,0 +1,175 @@
+# Release pipeline: pushing a `v*` tag builds the NSIS installer on MSVC
+# (the only toolchain Tauri officially supports for shipping Windows
+# binaries), produces signed updater artifacts, packages mock-game, and
+# publishes a GitHub Release.
+#
+# Required repo configuration:
+#   Secrets:
+#     TAURI_SIGNING_PRIVATE_KEY          – contents of ~/.tauri/chlauncher
+#     TAURI_SIGNING_PRIVATE_KEY_PASSWORD – key password (empty ok if unset)
+#   Vars:
+#     VITE_API_URL – prod backend URL, baked into the release binary
+#
+# Tag flow: `git tag v0.2.0 && git push origin v0.2.0` → this workflow
+# attaches chlauncher_<v>_x64-setup.exe, latest.json (+ .sig) and
+# mock-game-<v>.zip to the release.
+
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+env:
+  VITE_API_URL: ${{ vars.VITE_API_URL }}
+  ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+  ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write # creates the GitHub Release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # MSVC — rust-toolchain.toml `stable` resolves to it on the runner.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          target: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Bundle tiktok-sidecar (single-file, no node_modules)
+        working-directory: tools/tiktok-sidecar
+        run: |
+          npm ci
+          npm run bundle
+
+      - name: Fetch official node.exe for the sidecar
+        working-directory: tools/tiktok-sidecar
+        run: |
+          Invoke-WebRequest `
+            -Uri "https://nodejs.org/dist/v22.14.0/win-x64/node.exe" `
+            -OutFile dist/node.exe
+          if ((Get-Item dist/node.exe).Length -lt 30MB) {
+            throw "node.exe download looks truncated"
+          }
+
+      - name: Gate — server tests
+        run: npm run test:server
+
+      - name: Gate — Rust tests (game-sdk, mock-game)
+        run: cargo test --workspace --target x86_64-pc-windows-msvc
+
+      - name: Build mock-game release binary
+        run: cargo build -p mock-game --release --target x86_64-pc-windows-msvc
+
+      - name: Package mock-game zip + sha256
+        run: |
+          $ver = (Get-Content apps/mock-game/Cargo.toml | Select-String '^version = "([^"]+)"').Matches[0].Groups[1].Value
+          New-Item -ItemType Directory -Force -Path release-artifacts | Out-Null
+          Compress-Archive `
+            -Path target/x86_64-pc-windows-msvc/release/mock-game.exe `
+            -DestinationPath "release-artifacts/mock-game-$ver.zip" -Force
+          (Get-FileHash "release-artifacts/mock-game-$ver.zip" -Algorithm SHA256).Hash.ToLower() |
+            Set-Content release-artifacts/mock-game-$ver.sha256
+          echo "MOCK_GAME_VERSION=$ver" >> $env:GITHUB_ENV
+
+      - name: Build launcher (Tauri — NSIS + updater artifacts)
+        working-directory: apps/launcher
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri build
+
+      # dumpbin lives in the MSVC toolchain dir, not on PATH by default —
+      # msvc-dev-cmd runs the equivalent of vcvarsall so it is.
+      # (setup-msbuild only puts MSBuild on PATH, dumpbin is NOT included.)
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      # src-tauri is excluded from the workspace → its target dir is
+      # apps/launcher/src-tauri/target (host triple, no --target flag).
+      # Both shipped exes are scanned: MinGW CRT (libgcc/libstdc++/
+      # libwinpthread) and non-static MSVC CRT (vcruntime/msvcp) must not
+      # appear — WebView2Loader.dll is whitelisted (wry links it via NuGet;
+      # if it ever shows up dynamically, Tauri's NSIS bundler ships it
+      # next to the exe and it is a documented dependency).
+      - name: Smoke — no MinGW/non-static CRT dependencies in the exes
+        run: |
+          $exes = @(
+            "apps/launcher/src-tauri/target/release/chlauncher.exe",
+            "target/x86_64-pc-windows-msvc/release/mock-game.exe"
+          )
+          foreach ($exe in $exes) {
+            $deps = & dumpbin /dependents $exe |
+              Select-String '\.dll' | ForEach-Object { $_.Line.Trim() }
+            Write-Host "== $exe"; Write-Host $deps
+            $bad = $deps | Where-Object {
+              $_ -match 'libgcc|libstdc|libwinpthread|vcruntime|msvcp' -and
+              $_ -notmatch 'WebView2Loader'
+            }
+            if ($bad) {
+              throw "Non-static dependency in $exe — binary won't run on a clean OS: $bad"
+            }
+          }
+
+      - name: Collect artifacts
+        run: |
+          $nsis = "apps/launcher/src-tauri/target/release/bundle/nsis"
+          Copy-Item "$nsis/*.exe" release-artifacts/
+          Copy-Item "$nsis/*.sig" release-artifacts/ -ErrorAction SilentlyContinue
+          # npx tauri build signs the bundle but does NOT emit latest.json —
+          # that file is produced by tauri-action which we don't use.
+          # Generate the updater manifest ourselves in the Tauri v2 format.
+          $tag = $env:GITHUB_REF_NAME          # e.g. v0.1.0-rc1
+          $setupFile = Get-ChildItem "$nsis/*-setup.exe" | Select-Object -First 1
+          if (-not $setupFile) { throw "no NSIS setup exe in $nsis" }
+          $setup = $setupFile.Name
+          $ver = ($setupFile.BaseName -split '_')[1]   # app semver from filename
+          $sigPath = "$($setupFile.FullName).sig"
+          if (-not (Test-Path $sigPath)) { throw "missing updater signature: $sigPath" }
+          $latest = [ordered]@{
+            version  = $ver
+            notes    = "chlauncher $tag"
+            pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+            platforms = [ordered]@{
+              "windows-x86_64" = [ordered]@{
+                signature = (Get-Content $sigPath -Raw).Trim()
+                url       = "https://github.com/HOGAky/chlauncher/releases/download/$tag/$setup"
+              }
+            }
+          } | ConvertTo-Json -Depth 6
+          Set-Content release-artifacts/latest.json $latest
+          Get-ChildItem release-artifacts
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: release-artifacts/*
+
+      # Publish the game build to the prod catalog so launchers can
+      # download it right after the release lands. Skipped when the
+      # admin secrets are not configured.
+      - name: Publish mock-game to prod catalog
+        if: env.ADMIN_EMAIL != ''
+        env:
+          PROD_API_URL: ${{ vars.VITE_API_URL }}
+        run: |
+          node tools/publish-game.mjs `
+            --server $env:PROD_API_URL `
+            --email $env:ADMIN_EMAIL `
+            --password $env:ADMIN_PASSWORD `
+            --slug mock-game `
+            --version $env:MOCK_GAME_VERSION `
+            --zip "release-artifacts/mock-game-$env:MOCK_GAME_VERSION.zip" `
+            --publish

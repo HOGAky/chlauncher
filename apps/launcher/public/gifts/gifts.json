@@ -1,0 +1,8622 @@
+[
+ {
+  "name": "10/10",
+  "coins": 1,
+  "image": "gifts/10-10.webp"
+ },
+ {
+  "name": "2025",
+  "coins": 1,
+  "image": "gifts/2025.webp"
+ },
+ {
+  "name": "2025 Love",
+  "coins": 1,
+  "image": "gifts/2025-love.webp"
+ },
+ {
+  "name": "Внучата",
+  "coins": 1,
+  "image": "gifts/gift.webp"
+ },
+ {
+  "name": "Сердце Лэда",
+  "coins": 1,
+  "image": "gifts/gift-2.webp"
+ },
+ {
+  "name": "A Shard of Hope",
+  "coins": 1,
+  "image": "gifts/a-shard-of-hope.webp"
+ },
+ {
+  "name": "Aku Sih Yes",
+  "coins": 1,
+  "image": "gifts/aku-sih-yes.webp"
+ },
+ {
+  "name": "Alien Pet",
+  "coins": 1,
+  "image": "gifts/alien-pet.webp"
+ },
+ {
+  "name": "Angel TKM",
+  "coins": 1,
+  "image": "gifts/angel-tkm.webp"
+ },
+ {
+  "name": "Arche Kraft",
+  "coins": 1,
+  "image": "gifts/arche-kraft.webp"
+ },
+ {
+  "name": "Autumn Heart",
+  "coins": 1,
+  "image": "gifts/autumn-heart.webp"
+ },
+ {
+  "name": "Avaricia Cash",
+  "coins": 1,
+  "image": "gifts/avaricia-cash.webp"
+ },
+ {
+  "name": "Baseball",
+  "coins": 1,
+  "image": "gifts/baseball.webp"
+ },
+ {
+  "name": "Basketball",
+  "coins": 1,
+  "image": "gifts/basketball.webp"
+ },
+ {
+  "name": "Bibingka",
+  "coins": 1,
+  "image": "gifts/bibingka.webp"
+ },
+ {
+  "name": "Birthday Cake",
+  "coins": 1,
+  "image": "gifts/birthday-cake.webp"
+ },
+ {
+  "name": "Blow a kiss",
+  "coins": 1,
+  "image": "gifts/blow-a-kiss.webp"
+ },
+ {
+  "name": "Blue Heart",
+  "coins": 1,
+  "image": "gifts/blue-heart.webp"
+ },
+ {
+  "name": "Blue Lightning",
+  "coins": 1,
+  "image": "gifts/blue-lightning.webp"
+ },
+ {
+  "name": "Brat",
+  "coins": 1,
+  "image": "gifts/brat.webp"
+ },
+ {
+  "name": "Cake Slice",
+  "coins": 1,
+  "image": "gifts/cake-slice.webp"
+ },
+ {
+  "name": "CALVITO",
+  "coins": 1,
+  "image": "gifts/calvito.webp"
+ },
+ {
+  "name": "Candy",
+  "coins": 1,
+  "image": "gifts/candy.webp"
+ },
+ {
+  "name": "Cat Paws",
+  "coins": 1,
+  "image": "gifts/cat-paws.webp"
+ },
+ {
+  "name": "Charge me up",
+  "coins": 1,
+  "image": "gifts/charge-me-up.webp"
+ },
+ {
+  "name": "Chequered Flag",
+  "coins": 1,
+  "image": "gifts/chequered-flag.webp"
+ },
+ {
+  "name": "Chili",
+  "coins": 1,
+  "image": "gifts/chili.webp"
+ },
+ {
+  "name": "Chilli Pepper",
+  "coins": 1,
+  "image": "gifts/chilli-pepper.webp"
+ },
+ {
+  "name": "chipis",
+  "coins": 1,
+  "image": "gifts/chipis.webp"
+ },
+ {
+  "name": "Clap Clap",
+  "coins": 1,
+  "image": "gifts/clap-clap.webp"
+ },
+ {
+  "name": "Clapperboard",
+  "coins": 1,
+  "image": "gifts/clapperboard.webp"
+ },
+ {
+  "name": "Claw",
+  "coins": 1,
+  "image": "gifts/claw.webp"
+ },
+ {
+  "name": "Club Cheers",
+  "coins": 1,
+  "image": "gifts/club-cheers.webp"
+ },
+ {
+  "name": "Coffee",
+  "coins": 1,
+  "image": "gifts/coffee.webp"
+ },
+ {
+  "name": "coldy",
+  "coins": 1,
+  "image": "gifts/coldy.webp"
+ },
+ {
+  "name": "Community Gift",
+  "coins": 1,
+  "image": "gifts/community-gift.webp"
+ },
+ {
+  "name": "Community Heart",
+  "coins": 1,
+  "image": "gifts/community-heart.webp"
+ },
+ {
+  "name": "Congratulations",
+  "coins": 1,
+  "image": "gifts/congratulations.webp"
+ },
+ {
+  "name": "Cool",
+  "coins": 1,
+  "image": "gifts/cool.webp"
+ },
+ {
+  "name": "Cool love",
+  "coins": 1,
+  "image": "gifts/cool-love.webp"
+ },
+ {
+  "name": "Creator&#39;s Cap",
+  "coins": 1,
+  "image": "gifts/creator-39-s-cap.webp"
+ },
+ {
+  "name": "Creeper",
+  "coins": 1,
+  "image": "gifts/creeper.webp"
+ },
+ {
+  "name": "Cycling is life",
+  "coins": 1,
+  "image": "gifts/cycling-is-life.webp"
+ },
+ {
+  "name": "Dates",
+  "coins": 1,
+  "image": "gifts/dates.webp"
+ },
+ {
+  "name": "DexterFPS",
+  "coins": 1,
+  "image": "gifts/dexterfps.webp"
+ },
+ {
+  "name": "DIMMINI",
+  "coins": 1,
+  "image": "gifts/dimmini.webp"
+ },
+ {
+  "name": "Dinosaur footprint",
+  "coins": 1,
+  "image": "gifts/dinosaur-footprint.webp"
+ },
+ {
+  "name": "Diwali",
+  "coins": 1,
+  "image": "gifts/diwali.webp"
+ },
+ {
+  "name": "Dolce Vita",
+  "coins": 1,
+  "image": "gifts/dolce-vita.webp"
+ },
+ {
+  "name": "Easter Heart",
+  "coins": 1,
+  "image": "gifts/easter-heart.webp"
+ },
+ {
+  "name": "Enjoy Music",
+  "coins": 1,
+  "image": "gifts/enjoy-music.webp"
+ },
+ {
+  "name": "Eye for an Eye",
+  "coins": 1,
+  "image": "gifts/eye-for-an-eye.webp"
+ },
+ {
+  "name": "F1 Austin S",
+  "coins": 1,
+  "image": "gifts/f1-austin-s.webp"
+ },
+ {
+  "name": "Fairy wings",
+  "coins": 1,
+  "image": "gifts/fairy-wings.webp"
+ },
+ {
+  "name": "Falafel",
+  "coins": 1,
+  "image": "gifts/falafel.webp"
+ },
+ {
+  "name": "Fan",
+  "coins": 1,
+  "image": "gifts/fan.webp"
+ },
+ {
+  "name": "Fest Pop",
+  "coins": 1,
+  "image": "gifts/fest-pop.webp"
+ },
+ {
+  "name": "Fire",
+  "coins": 1,
+  "image": "gifts/fire.webp"
+ },
+ {
+  "name": "Flame heart",
+  "coins": 1,
+  "image": "gifts/flame-heart.webp"
+ },
+ {
+  "name": "Flamenco",
+  "coins": 1,
+  "image": "gifts/flamenco.webp"
+ },
+ {
+  "name": "Football",
+  "coins": 1,
+  "image": "gifts/football.webp"
+ },
+ {
+  "name": "Football Love",
+  "coins": 1,
+  "image": "gifts/football-love.webp"
+ },
+ {
+  "name": "Freestyle",
+  "coins": 1,
+  "image": "gifts/freestyle.webp"
+ },
+ {
+  "name": "Fried",
+  "coins": 1,
+  "image": "gifts/fried.webp"
+ },
+ {
+  "name": "Frozen Tulip",
+  "coins": 1,
+  "image": "gifts/frozen-tulip.webp"
+ },
+ {
+  "name": "fruneros",
+  "coins": 1,
+  "image": "gifts/fruneros.webp"
+ },
+ {
+  "name": "Gachetos Znak",
+  "coins": 1,
+  "image": "gifts/gachetos-znak.webp"
+ },
+ {
+  "name": "GASPOL!",
+  "coins": 1,
+  "image": "gifts/gaspol.webp"
+ },
+ {
+  "name": "GG",
+  "coins": 1,
+  "image": "gifts/gg.webp"
+ },
+ {
+  "name": "GG 2025",
+  "coins": 1,
+  "image": "gifts/gg-2025.webp"
+ },
+ {
+  "name": "Gingerbread Heart",
+  "coins": 1,
+  "image": "gifts/gingerbread-heart.webp"
+ },
+ {
+  "name": "Give It All",
+  "coins": 1,
+  "image": "gifts/give-it-all.webp"
+ },
+ {
+  "name": "Glass of Airan",
+  "coins": 1,
+  "image": "gifts/glass-of-airan.webp"
+ },
+ {
+  "name": "Glow Stick",
+  "coins": 1,
+  "image": "gifts/glow-stick.webp"
+ },
+ {
+  "name": "Go Alami",
+  "coins": 1,
+  "image": "gifts/go-alami.webp"
+ },
+ {
+  "name": "Go Ameed",
+  "coins": 1,
+  "image": "gifts/go-ameed.webp"
+ },
+ {
+  "name": "Go for it!",
+  "coins": 1,
+  "image": "gifts/go-for-it.webp"
+ },
+ {
+  "name": "Go Fursan",
+  "coins": 1,
+  "image": "gifts/go-fursan.webp"
+ },
+ {
+  "name": "Go lyooth",
+  "coins": 1,
+  "image": "gifts/go-lyooth.webp"
+ },
+ {
+  "name": "Go Malaki",
+  "coins": 1,
+  "image": "gifts/go-malaki.webp"
+ },
+ {
+  "name": "Go Popular",
+  "coins": 1,
+  "image": "gifts/go-popular.webp"
+ },
+ {
+  "name": "Go Za&#39;eem",
+  "coins": 1,
+  "image": "gifts/go-za-39-eem.webp"
+ },
+ {
+  "name": "GOAT",
+  "coins": 1,
+  "image": "gifts/goat.webp"
+ },
+ {
+  "name": "Good Job",
+  "coins": 1,
+  "image": "gifts/good-job.webp"
+ },
+ {
+  "name": "Graduation Bouquet",
+  "coins": 1,
+  "image": "gifts/graduation-bouquet.webp"
+ },
+ {
+  "name": "Green Paw",
+  "coins": 1,
+  "image": "gifts/green-paw.webp"
+ },
+ {
+  "name": "Guardian Wings",
+  "coins": 1,
+  "image": "gifts/guardian-wings.webp"
+ },
+ {
+  "name": "Gun Gemtak",
+  "coins": 1,
+  "image": "gifts/gun-gemtak.webp"
+ },
+ {
+  "name": "Halepas",
+  "coins": 1,
+  "image": "gifts/halepas.webp"
+ },
+ {
+  "name": "Halloween mood",
+  "coins": 1,
+  "image": "gifts/halloween-mood.webp"
+ },
+ {
+  "name": "Hamada",
+  "coins": 1,
+  "image": "gifts/hamada.webp"
+ },
+ {
+  "name": "Headphone",
+  "coins": 1,
+  "image": "gifts/headphone.webp"
+ },
+ {
+  "name": "Heart",
+  "coins": 1,
+  "image": "gifts/heart.webp"
+ },
+ {
+  "name": "Heart Me",
+  "coins": 1,
+  "image": "gifts/heart-me.webp"
+ },
+ {
+  "name": "Heart Puff",
+  "coins": 1,
+  "image": "gifts/heart-puff.webp"
+ },
+ {
+  "name": "Hearty Talk",
+  "coins": 1,
+  "image": "gifts/hearty-talk.webp"
+ },
+ {
+  "name": "Hello",
+  "coins": 1,
+  "image": "gifts/hello.webp"
+ },
+ {
+  "name": "House Firelight",
+  "coins": 1,
+  "image": "gifts/house-firelight.webp"
+ },
+ {
+  "name": "House Nightshade",
+  "coins": 1,
+  "image": "gifts/house-nightshade.webp"
+ },
+ {
+  "name": "House Whitewind",
+  "coins": 1,
+  "image": "gifts/house-whitewind.webp"
+ },
+ {
+  "name": "I Love UAE",
+  "coins": 1,
+  "image": "gifts/i-love-uae.webp"
+ },
+ {
+  "name": "I&#39;m Ready!",
+  "coins": 1,
+  "image": "gifts/i-39-m-ready.webp"
+ },
+ {
+  "name": "Ice Cream Cone",
+  "coins": 1,
+  "image": "gifts/ice-cream-cone.webp"
+ },
+ {
+  "name": "Ice Cube",
+  "coins": 1,
+  "image": "gifts/ice-cube.webp"
+ },
+ {
+  "name": "iHeart Jingle Ball",
+  "coins": 1,
+  "image": "gifts/iheart-jingle-ball.webp"
+ },
+ {
+  "name": "Isik",
+  "coins": 1,
+  "image": "gifts/isik.webp"
+ },
+ {
+  "name": "It’s corn",
+  "coins": 1,
+  "image": "gifts/it-s-corn.webp"
+ },
+ {
+  "name": "It&#39;s Match Time",
+  "coins": 1,
+  "image": "gifts/it-39-s-match-time.webp"
+ },
+ {
+  "name": "July Love",
+  "coins": 1,
+  "image": "gifts/july-love.webp"
+ },
+ {
+  "name": "Ka Pai",
+  "coins": 1,
+  "image": "gifts/ka-pai.webp"
+ },
+ {
+  "name": "King Horns",
+  "coins": 1,
+  "image": "gifts/king-horns.webp"
+ },
+ {
+  "name": "Kirsty Heart",
+  "coins": 1,
+  "image": "gifts/kirsty-heart.webp"
+ },
+ {
+  "name": "KSA",
+  "coins": 1,
+  "image": "gifts/ksa.webp"
+ },
+ {
+  "name": "Lag de Blazek",
+  "coins": 1,
+  "image": "gifts/lag-de-blazek.webp"
+ },
+ {
+  "name": "Light",
+  "coins": 1,
+  "image": "gifts/light.webp"
+ },
+ {
+  "name": "Lightning Bolt",
+  "coins": 1,
+  "image": "gifts/lightning-bolt.webp"
+ },
+ {
+  "name": "Lisica",
+  "coins": 1,
+  "image": "gifts/lisica.webp"
+ },
+ {
+  "name": "Little Acorn",
+  "coins": 1,
+  "image": "gifts/little-acorn.webp"
+ },
+ {
+  "name": "LIVE",
+  "coins": 1,
+  "image": "gifts/live.webp"
+ },
+ {
+  "name": "LMARSEL",
+  "coins": 1,
+  "image": "gifts/lmarsel.webp"
+ },
+ {
+  "name": "LonaVyx",
+  "coins": 1,
+  "image": "gifts/lonavyx.webp"
+ },
+ {
+  "name": "Love Egypt",
+  "coins": 1,
+  "image": "gifts/love-egypt.webp"
+ },
+ {
+  "name": "Love KSA",
+  "coins": 1,
+  "image": "gifts/love-ksa.webp"
+ },
+ {
+  "name": "Love Letter",
+  "coins": 1,
+  "image": "gifts/love-letter.webp"
+ },
+ {
+  "name": "Love Morocco",
+  "coins": 1,
+  "image": "gifts/love-morocco.webp"
+ },
+ {
+  "name": "Love Oman",
+  "coins": 1,
+  "image": "gifts/love-oman.webp"
+ },
+ {
+  "name": "Love you",
+  "coins": 1,
+  "image": "gifts/love-you.webp"
+ },
+ {
+  "name": "Love you so much",
+  "coins": 1,
+  "image": "gifts/love-you-so-much.webp"
+ },
+ {
+  "name": "LUVE Cheer",
+  "coins": 1,
+  "image": "gifts/luve-cheer.webp"
+ },
+ {
+  "name": "LUVX Cheer",
+  "coins": 1,
+  "image": "gifts/luvx-cheer.webp"
+ },
+ {
+  "name": "M7",
+  "coins": 1,
+  "image": "gifts/m7.webp"
+ },
+ {
+  "name": "Mamma Mia",
+  "coins": 1,
+  "image": "gifts/mamma-mia.webp"
+ },
+ {
+  "name": "Mantap",
+  "coins": 1,
+  "image": "gifts/mantap.webp"
+ },
+ {
+  "name": "Maracas",
+  "coins": 1,
+  "image": "gifts/maracas.webp"
+ },
+ {
+  "name": "Match Star",
+  "coins": 1,
+  "image": "gifts/match-star.webp"
+ },
+ {
+  "name": "Mate Melody",
+  "coins": 1,
+  "image": "gifts/mate-melody.webp"
+ },
+ {
+  "name": "Metal Tulip",
+  "coins": 1,
+  "image": "gifts/metal-tulip.webp"
+ },
+ {
+  "name": "Miaou",
+  "coins": 1,
+  "image": "gifts/miaou.webp"
+ },
+ {
+  "name": "Mic Smile",
+  "coins": 1,
+  "image": "gifts/mic-smile.webp"
+ },
+ {
+  "name": "Midsummer Cake",
+  "coins": 1,
+  "image": "gifts/midsummer-cake.webp"
+ },
+ {
+  "name": "Mirwas Beat",
+  "coins": 1,
+  "image": "gifts/mirwas-beat.webp"
+ },
+ {
+  "name": "Miss You",
+  "coins": 1,
+  "image": "gifts/miss-you.webp"
+ },
+ {
+  "name": "Morning Bloom",
+  "coins": 1,
+  "image": "gifts/morning-bloom.webp"
+ },
+ {
+  "name": "Mota ao Mic",
+  "coins": 1,
+  "image": "gifts/mota-ao-mic.webp"
+ },
+ {
+  "name": "Music  Album",
+  "coins": 1,
+  "image": "gifts/music-album.webp"
+ },
+ {
+  "name": "Music Mic",
+  "coins": 1,
+  "image": "gifts/music-mic.webp"
+ },
+ {
+  "name": "Music on Stage",
+  "coins": 1,
+  "image": "gifts/music-on-stage.webp"
+ },
+ {
+  "name": "Music Play",
+  "coins": 1,
+  "image": "gifts/music-play.webp"
+ },
+ {
+  "name": "My First Rose",
+  "coins": 1,
+  "image": "gifts/my-first-rose.webp"
+ },
+ {
+  "name": "Nasi Lemak",
+  "coins": 1,
+  "image": "gifts/nasi-lemak.webp"
+ },
+ {
+  "name": "Nice to meet you",
+  "coins": 1,
+  "image": "gifts/nice-to-meet-you.webp"
+ },
+ {
+  "name": "Oldies",
+  "coins": 1,
+  "image": "gifts/oldies.webp"
+ },
+ {
+  "name": "Omy Joy Smile",
+  "coins": 1,
+  "image": "gifts/omy-joy-smile.webp"
+ },
+ {
+  "name": "Orange Juice",
+  "coins": 1,
+  "image": "gifts/orange-juice.webp"
+ },
+ {
+  "name": "Paddington in Peru",
+  "coins": 1,
+  "image": "gifts/paddington-in-peru.webp"
+ },
+ {
+  "name": "Palm of Protection",
+  "coins": 1,
+  "image": "gifts/palm-of-protection.webp"
+ },
+ {
+  "name": "Parliyorsun!",
+  "coins": 1,
+  "image": "gifts/parliyorsun.webp"
+ },
+ {
+  "name": "Paw",
+  "coins": 1,
+  "image": "gifts/paw.webp"
+ },
+ {
+  "name": "Pixou Star",
+  "coins": 1,
+  "image": "gifts/pixou-star.webp"
+ },
+ {
+  "name": "Pop",
+  "coins": 1,
+  "image": "gifts/pop.webp"
+ },
+ {
+  "name": "Power hug",
+  "coins": 1,
+  "image": "gifts/power-hug.webp"
+ },
+ {
+  "name": "Power of Diamond",
+  "coins": 1,
+  "image": "gifts/power-of-diamond.webp"
+ },
+ {
+  "name": "Press Start",
+  "coins": 1,
+  "image": "gifts/press-start.webp"
+ },
+ {
+  "name": "PTRCK Heart",
+  "coins": 1,
+  "image": "gifts/ptrck-heart.webp"
+ },
+ {
+  "name": "Pumpkin",
+  "coins": 1,
+  "image": "gifts/pumpkin.webp"
+ },
+ {
+  "name": "Puso ni Anjai",
+  "coins": 1,
+  "image": "gifts/puso-ni-anjai.webp"
+ },
+ {
+  "name": "Rainbow",
+  "coins": 1,
+  "image": "gifts/rainbow.webp"
+ },
+ {
+  "name": "Rainbow Tulip",
+  "coins": 1,
+  "image": "gifts/rainbow-tulip.webp"
+ },
+ {
+  "name": "Ramadan Kareem",
+  "coins": 1,
+  "image": "gifts/ramadan-kareem.webp"
+ },
+ {
+  "name": "Ramadan Welcome",
+  "coins": 1,
+  "image": "gifts/ramadan-welcome.webp"
+ },
+ {
+  "name": "RAWR",
+  "coins": 1,
+  "image": "gifts/rawr.webp"
+ },
+ {
+  "name": "Razor Point",
+  "coins": 1,
+  "image": "gifts/razor-point.webp"
+ },
+ {
+  "name": "Red Lightning",
+  "coins": 1,
+  "image": "gifts/red-lightning.webp"
+ },
+ {
+  "name": "Rendang Chicken",
+  "coins": 1,
+  "image": "gifts/rendang-chicken.webp"
+ },
+ {
+  "name": "Rose",
+  "coins": 1,
+  "image": "gifts/rose.webp"
+ },
+ {
+  "name": "SEA Shell",
+  "coins": 1,
+  "image": "gifts/sea-shell.webp"
+ },
+ {
+  "name": "Shield",
+  "coins": 1,
+  "image": "gifts/shield.webp"
+ },
+ {
+  "name": "Silver Fern",
+  "coins": 1,
+  "image": "gifts/silver-fern.webp"
+ },
+ {
+  "name": "Slay",
+  "coins": 1,
+  "image": "gifts/slay.webp"
+ },
+ {
+  "name": "So Cute",
+  "coins": 1,
+  "image": "gifts/so-cute.webp"
+ },
+ {
+  "name": "Soccer",
+  "coins": 1,
+  "image": "gifts/soccer.webp"
+ },
+ {
+  "name": "Squirrel",
+  "coins": 1,
+  "image": "gifts/squirrel.webp"
+ },
+ {
+  "name": "Star",
+  "coins": 1,
+  "image": "gifts/star.webp"
+ },
+ {
+  "name": "Starfish",
+  "coins": 1,
+  "image": "gifts/starfish.webp"
+ },
+ {
+  "name": "Steven Wingman",
+  "coins": 1,
+  "image": "gifts/steven-wingman.webp"
+ },
+ {
+  "name": "Summer Pass S",
+  "coins": 1,
+  "image": "gifts/summer-pass-s.webp"
+ },
+ {
+  "name": "Suprised Fish",
+  "coins": 1,
+  "image": "gifts/suprised-fish.webp"
+ },
+ {
+  "name": "SZTORIADÓ Pop",
+  "coins": 1,
+  "image": "gifts/sztoriado-pop.webp"
+ },
+ {
+  "name": "Team Ale",
+  "coins": 1,
+  "image": "gifts/team-ale.webp"
+ },
+ {
+  "name": "Tennis Love",
+  "coins": 1,
+  "image": "gifts/tennis-love.webp"
+ },
+ {
+  "name": "TheTedas",
+  "coins": 1,
+  "image": "gifts/thetedas.webp"
+ },
+ {
+  "name": "Thumbs Up",
+  "coins": 1,
+  "image": "gifts/thumbs-up.webp"
+ },
+ {
+  "name": "Thunder Hammer",
+  "coins": 1,
+  "image": "gifts/thunder-hammer.webp"
+ },
+ {
+  "name": "TikTok",
+  "coins": 1,
+  "image": "gifts/tiktok.webp"
+ },
+ {
+  "name": "Tom the Tomato",
+  "coins": 1,
+  "image": "gifts/tom-the-tomato.webp"
+ },
+ {
+  "name": "Tortilla",
+  "coins": 1,
+  "image": "gifts/tortilla.webp"
+ },
+ {
+  "name": "Treasure Clover",
+  "coins": 1,
+  "image": "gifts/treasure-clover.webp"
+ },
+ {
+  "name": "Trio de Afine",
+  "coins": 1,
+  "image": "gifts/trio-de-afine.webp"
+ },
+ {
+  "name": "Tulip",
+  "coins": 1,
+  "image": "gifts/tulip.webp"
+ },
+ {
+  "name": "umbrella",
+  "coins": 1,
+  "image": "gifts/umbrella.webp"
+ },
+ {
+  "name": "Welcome Dallah",
+  "coins": 1,
+  "image": "gifts/welcome-dallah.webp"
+ },
+ {
+  "name": "White Dove",
+  "coins": 1,
+  "image": "gifts/white-dove.webp"
+ },
+ {
+  "name": "White Rose",
+  "coins": 1,
+  "image": "gifts/white-rose.webp"
+ },
+ {
+  "name": "Windvane",
+  "coins": 1,
+  "image": "gifts/windvane.webp"
+ },
+ {
+  "name": "Wink Charm",
+  "coins": 1,
+  "image": "gifts/wink-charm.webp"
+ },
+ {
+  "name": "Wink wink",
+  "coins": 1,
+  "image": "gifts/wink-wink.webp"
+ },
+ {
+  "name": "Yalla!habibi!",
+  "coins": 1,
+  "image": "gifts/yalla-habibi.webp"
+ },
+ {
+  "name": "Yellow Lightning",
+  "coins": 1,
+  "image": "gifts/yellow-lightning.webp"
+ },
+ {
+  "name": "You&#39;re awesome",
+  "coins": 1,
+  "image": "gifts/you-39-re-awesome.webp"
+ },
+ {
+  "name": "Yupidex",
+  "coins": 1,
+  "image": "gifts/yupidex.webp"
+ },
+ {
+  "name": "Zanahoria Pro",
+  "coins": 1,
+  "image": "gifts/zanahoria-pro.webp"
+ },
+ {
+  "name": "بطاطا عازف",
+  "coins": 1,
+  "image": "gifts/gift-3.webp"
+ },
+ {
+  "name": "쩡댕이",
+  "coins": 1,
+  "image": "gifts/gift-4.webp"
+ },
+ {
+  "name": "ワク枠",
+  "coins": 1,
+  "image": "gifts/gift-5.webp"
+ },
+ {
+  "name": "Baklava",
+  "coins": 2,
+  "image": "gifts/baklava.webp"
+ },
+ {
+  "name": "Team Bracelet",
+  "coins": 2,
+  "image": "gifts/team-bracelet.webp"
+ },
+ {
+  "name": "Thumbs Up",
+  "coins": 2,
+  "image": "gifts/thumbs-up-2.webp"
+ },
+ {
+  "name": "Blue Bead",
+  "coins": 5,
+  "image": "gifts/blue-bead.webp"
+ },
+ {
+  "name": "Bokuao",
+  "coins": 5,
+  "image": "gifts/bokuao.webp"
+ },
+ {
+  "name": "Brown Paw",
+  "coins": 5,
+  "image": "gifts/brown-paw.webp"
+ },
+ {
+  "name": "Choc Chip Cookie",
+  "coins": 5,
+  "image": "gifts/choc-chip-cookie.webp"
+ },
+ {
+  "name": "Chocolate",
+  "coins": 5,
+  "image": "gifts/chocolate.webp"
+ },
+ {
+  "name": "Coconut Drink",
+  "coins": 5,
+  "image": "gifts/coconut-drink.webp"
+ },
+ {
+  "name": "Cute Cat",
+  "coins": 5,
+  "image": "gifts/cute-cat.webp"
+ },
+ {
+  "name": "Duit Raya",
+  "coins": 5,
+  "image": "gifts/duit-raya.webp"
+ },
+ {
+  "name": "Embroidered Heart",
+  "coins": 5,
+  "image": "gifts/embroidered-heart.webp"
+ },
+ {
+  "name": "Encore Ticket",
+  "coins": 5,
+  "image": "gifts/encore-ticket.webp"
+ },
+ {
+  "name": "Espresso",
+  "coins": 5,
+  "image": "gifts/espresso.webp"
+ },
+ {
+  "name": "Finger Heart",
+  "coins": 5,
+  "image": "gifts/finger-heart.webp"
+ },
+ {
+  "name": "Fireball",
+  "coins": 5,
+  "image": "gifts/fireball.webp"
+ },
+ {
+  "name": "Fluffy Penguin",
+  "coins": 5,
+  "image": "gifts/fluffy-penguin.webp"
+ },
+ {
+  "name": "Golden Player",
+  "coins": 5,
+  "image": "gifts/golden-player.webp"
+ },
+ {
+  "name": "Green Packet",
+  "coins": 5,
+  "image": "gifts/green-packet.webp"
+ },
+ {
+  "name": "Hand held fan",
+  "coins": 5,
+  "image": "gifts/hand-held-fan.webp"
+ },
+ {
+  "name": "Hello Traveler",
+  "coins": 5,
+  "image": "gifts/hello-traveler.webp"
+ },
+ {
+  "name": "I’m blue",
+  "coins": 5,
+  "image": "gifts/i-m-blue.webp"
+ },
+ {
+  "name": "Ice cream",
+  "coins": 5,
+  "image": "gifts/ice-cream.webp"
+ },
+ {
+  "name": "Jelly Snakes",
+  "coins": 5,
+  "image": "gifts/jelly-snakes.webp"
+ },
+ {
+  "name": "Konafa",
+  "coins": 5,
+  "image": "gifts/konafa.webp"
+ },
+ {
+  "name": "Ladybug",
+  "coins": 5,
+  "image": "gifts/ladybug.webp"
+ },
+ {
+  "name": "Love in Scent",
+  "coins": 5,
+  "image": "gifts/love-in-scent.webp"
+ },
+ {
+  "name": "Mameshiba",
+  "coins": 5,
+  "image": "gifts/mameshiba.webp"
+ },
+ {
+  "name": "Name shoutout",
+  "coins": 5,
+  "image": "gifts/name-shoutout.webp"
+ },
+ {
+  "name": "New Year Protection",
+  "coins": 5,
+  "image": "gifts/new-year-protection.webp"
+ },
+ {
+  "name": "Okay",
+  "coins": 5,
+  "image": "gifts/okay.webp"
+ },
+ {
+  "name": "Overreact",
+  "coins": 5,
+  "image": "gifts/overreact.webp"
+ },
+ {
+  "name": "Padang Rice",
+  "coins": 5,
+  "image": "gifts/padang-rice.webp"
+ },
+ {
+  "name": "Peach",
+  "coins": 5,
+  "image": "gifts/peach.webp"
+ },
+ {
+  "name": "Pomegranate",
+  "coins": 5,
+  "image": "gifts/pomegranate.webp"
+ },
+ {
+  "name": "Pumpkin Pie",
+  "coins": 5,
+  "image": "gifts/pumpkin-pie.webp"
+ },
+ {
+  "name": "Rafflesia",
+  "coins": 5,
+  "image": "gifts/rafflesia.webp"
+ },
+ {
+  "name": "Rocket",
+  "coins": 5,
+  "image": "gifts/rocket.webp"
+ },
+ {
+  "name": "Sakura",
+  "coins": 5,
+  "image": "gifts/sakura.webp"
+ },
+ {
+  "name": "Seriously",
+  "coins": 5,
+  "image": "gifts/seriously.webp"
+ },
+ {
+  "name": "Shamrock",
+  "coins": 5,
+  "image": "gifts/shamrock.webp"
+ },
+ {
+  "name": "Spinning Soccer",
+  "coins": 5,
+  "image": "gifts/spinning-soccer.webp"
+ },
+ {
+  "name": "Star Light",
+  "coins": 5,
+  "image": "gifts/star-light.webp"
+ },
+ {
+  "name": "Support",
+  "coins": 5,
+  "image": "gifts/support.webp"
+ },
+ {
+  "name": "Tiny Diny Mic",
+  "coins": 5,
+  "image": "gifts/tiny-diny-mic.webp"
+ },
+ {
+  "name": "Tofu",
+  "coins": 5,
+  "image": "gifts/tofu.webp"
+ },
+ {
+  "name": "Turkish coffee",
+  "coins": 5,
+  "image": "gifts/turkish-coffee.webp"
+ },
+ {
+  "name": "Turkish kebab",
+  "coins": 5,
+  "image": "gifts/turkish-kebab.webp"
+ },
+ {
+  "name": "TV Mic",
+  "coins": 5,
+  "image": "gifts/tv-mic.webp"
+ },
+ {
+  "name": "W",
+  "coins": 5,
+  "image": "gifts/w.webp"
+ },
+ {
+  "name": "Wave Firework",
+  "coins": 5,
+  "image": "gifts/wave-firework.webp"
+ },
+ {
+  "name": "Yes TikTok Live",
+  "coins": 5,
+  "image": "gifts/yes-tiktok-live.webp"
+ },
+ {
+  "name": "Divine Fingers",
+  "coins": 6,
+  "image": "gifts/divine-fingers.webp"
+ },
+ {
+  "name": "Carnation",
+  "coins": 7,
+  "image": "gifts/carnation.webp"
+ },
+ {
+  "name": "Cheer Bonbon",
+  "coins": 7,
+  "image": "gifts/cheer-bonbon.webp"
+ },
+ {
+  "name": "Applause",
+  "coins": 9,
+  "image": "gifts/applause.webp"
+ },
+ {
+  "name": "Cheer You Up",
+  "coins": 9,
+  "image": "gifts/cheer-you-up.webp"
+ },
+ {
+  "name": "Club Power",
+  "coins": 9,
+  "image": "gifts/club-power.webp"
+ },
+ {
+  "name": "Super Popular",
+  "coins": 9,
+  "image": "gifts/super-popular.webp"
+ },
+ {
+  "name": "The Lucky 9",
+  "coins": 9,
+  "image": "gifts/the-lucky-9.webp"
+ },
+ {
+  "name": "ASMR Time",
+  "coins": 10,
+  "image": "gifts/asmr-time.webp"
+ },
+ {
+  "name": "Azura card fiery",
+  "coins": 10,
+  "image": "gifts/azura-card-fiery.webp"
+ },
+ {
+  "name": "Azura tranquil",
+  "coins": 10,
+  "image": "gifts/azura-tranquil.webp"
+ },
+ {
+  "name": "Baby Hippo",
+  "coins": 10,
+  "image": "gifts/baby-hippo.webp"
+ },
+ {
+  "name": "Balloons",
+  "coins": 10,
+  "image": "gifts/balloons.webp"
+ },
+ {
+  "name": "Banana Peel",
+  "coins": 10,
+  "image": "gifts/banana-peel.webp"
+ },
+ {
+  "name": "Black Paw",
+  "coins": 10,
+  "image": "gifts/black-paw.webp"
+ },
+ {
+  "name": "Cherry Blossom Bunny",
+  "coins": 10,
+  "image": "gifts/cherry-blossom-bunny.webp"
+ },
+ {
+  "name": "Chocolate",
+  "coins": 10,
+  "image": "gifts/chocolate-2.webp"
+ },
+ {
+  "name": "Courage potion",
+  "coins": 10,
+  "image": "gifts/courage-potion.webp"
+ },
+ {
+  "name": "DJ Vinyl",
+  "coins": 10,
+  "image": "gifts/dj-vinyl.webp"
+ },
+ {
+  "name": "Dolphin",
+  "coins": 10,
+  "image": "gifts/dolphin.webp"
+ },
+ {
+  "name": "Drip Brewing",
+  "coins": 10,
+  "image": "gifts/drip-brewing.webp"
+ },
+ {
+  "name": "EWC",
+  "coins": 10,
+  "image": "gifts/ewc.webp"
+ },
+ {
+  "name": "FANDOM Fan",
+  "coins": 10,
+  "image": "gifts/fandom-fan.webp"
+ },
+ {
+  "name": "Firelight Seal",
+  "coins": 10,
+  "image": "gifts/firelight-seal.webp"
+ },
+ {
+  "name": "Fried Chicken",
+  "coins": 10,
+  "image": "gifts/fried-chicken.webp"
+ },
+ {
+  "name": "Friendship Necklace",
+  "coins": 10,
+  "image": "gifts/friendship-necklace.webp"
+ },
+ {
+  "name": "Fukkachan",
+  "coins": 10,
+  "image": "gifts/fukkachan.webp"
+ },
+ {
+  "name": "Go Go Go",
+  "coins": 10,
+  "image": "gifts/go-go-go.webp"
+ },
+ {
+  "name": "Gold Boxing Gloves",
+  "coins": 10,
+  "image": "gifts/gold-boxing-gloves.webp"
+ },
+ {
+  "name": "Good day",
+  "coins": 10,
+  "image": "gifts/good-day.webp"
+ },
+ {
+  "name": "Gutab",
+  "coins": 10,
+  "image": "gifts/gutab.webp"
+ },
+ {
+  "name": "Heart",
+  "coins": 10,
+  "image": "gifts/heart-2.webp"
+ },
+ {
+  "name": "Heart Gaze",
+  "coins": 10,
+  "image": "gifts/heart-gaze.webp"
+ },
+ {
+  "name": "Hi Bear",
+  "coins": 10,
+  "image": "gifts/hi-bear.webp"
+ },
+ {
+  "name": "I Like What I See",
+  "coins": 10,
+  "image": "gifts/i-like-what-i-see.webp"
+ },
+ {
+  "name": "I love you",
+  "coins": 10,
+  "image": "gifts/i-love-you.webp"
+ },
+ {
+  "name": "I&#39;m Yours",
+  "coins": 10,
+  "image": "gifts/i-39-m-yours.webp"
+ },
+ {
+  "name": "Ice Lolly",
+  "coins": 10,
+  "image": "gifts/ice-lolly.webp"
+ },
+ {
+  "name": "Intimacy",
+  "coins": 10,
+  "image": "gifts/intimacy.webp"
+ },
+ {
+  "name": "Journey Pass",
+  "coins": 10,
+  "image": "gifts/journey-pass.webp"
+ },
+ {
+  "name": "Koala Refuel",
+  "coins": 10,
+  "image": "gifts/koala-refuel.webp"
+ },
+ {
+  "name": "League Ball",
+  "coins": 10,
+  "image": "gifts/league-ball.webp"
+ },
+ {
+  "name": "Little Ghost",
+  "coins": 10,
+  "image": "gifts/little-ghost.webp"
+ },
+ {
+  "name": "LIVE Island",
+  "coins": 10,
+  "image": "gifts/live-island.webp"
+ },
+ {
+  "name": "LIVE Ranking Ticket",
+  "coins": 10,
+  "image": "gifts/live-ranking-ticket.webp"
+ },
+ {
+  "name": "LIVE Star",
+  "coins": 10,
+  "image": "gifts/live-star.webp"
+ },
+ {
+  "name": "Love Piggy",
+  "coins": 10,
+  "image": "gifts/love-piggy.webp"
+ },
+ {
+  "name": "Lucky Pig",
+  "coins": 10,
+  "image": "gifts/lucky-pig.webp"
+ },
+ {
+  "name": "Lucky Pony",
+  "coins": 10,
+  "image": "gifts/lucky-pony.webp"
+ },
+ {
+  "name": "Magic Feather",
+  "coins": 10,
+  "image": "gifts/magic-feather.webp"
+ },
+ {
+  "name": "Magnifying Glass",
+  "coins": 10,
+  "image": "gifts/magnifying-glass.webp"
+ },
+ {
+  "name": "Meowthumbs Up",
+  "coins": 10,
+  "image": "gifts/meowthumbs-up.webp"
+ },
+ {
+  "name": "Mind Blown",
+  "coins": 10,
+  "image": "gifts/mind-blown.webp"
+ },
+ {
+  "name": "Minecraft",
+  "coins": 10,
+  "image": "gifts/minecraft.webp"
+ },
+ {
+  "name": "Mokena",
+  "coins": 10,
+  "image": "gifts/mokena.webp"
+ },
+ {
+  "name": "Nebaarukun",
+  "coins": 10,
+  "image": "gifts/nebaarukun.webp"
+ },
+ {
+  "name": "Nightshade Seal",
+  "coins": 10,
+  "image": "gifts/nightshade-seal.webp"
+ },
+ {
+  "name": "Pan de Muerto",
+  "coins": 10,
+  "image": "gifts/pan-de-muerto.webp"
+ },
+ {
+  "name": "Panther",
+  "coins": 10,
+  "image": "gifts/panther.webp"
+ },
+ {
+  "name": "PK Cheer bump",
+  "coins": 10,
+  "image": "gifts/pk-cheer-bump.webp"
+ },
+ {
+  "name": "Pork Rice Bowl",
+  "coins": 10,
+  "image": "gifts/pork-rice-bowl.webp"
+ },
+ {
+  "name": "Potato with ice cream",
+  "coins": 10,
+  "image": "gifts/potato-with-ice-cream.webp"
+ },
+ {
+  "name": "Pumpkin Latte",
+  "coins": 10,
+  "image": "gifts/pumpkin-latte.webp"
+ },
+ {
+  "name": "Record Breaker",
+  "coins": 10,
+  "image": "gifts/record-breaker.webp"
+ },
+ {
+  "name": "Rosa",
+  "coins": 10,
+  "image": "gifts/rosa.webp"
+ },
+ {
+  "name": "Sakura Mochi",
+  "coins": 10,
+  "image": "gifts/sakura-mochi.webp"
+ },
+ {
+  "name": "Shamrock",
+  "coins": 10,
+  "image": "gifts/shamrock-2.webp"
+ },
+ {
+  "name": "Shepherd",
+  "coins": 10,
+  "image": "gifts/shepherd.webp"
+ },
+ {
+  "name": "Sing Together",
+  "coins": 10,
+  "image": "gifts/sing-together.webp"
+ },
+ {
+  "name": "Slow motion",
+  "coins": 10,
+  "image": "gifts/slow-motion.webp"
+ },
+ {
+  "name": "Songs of LIVE",
+  "coins": 10,
+  "image": "gifts/songs-of-live.webp"
+ },
+ {
+  "name": "Squirrel",
+  "coins": 10,
+  "image": "gifts/squirrel-2.webp"
+ },
+ {
+  "name": "Star",
+  "coins": 10,
+  "image": "gifts/star-2.webp"
+ },
+ {
+  "name": "Style Me Up",
+  "coins": 10,
+  "image": "gifts/style-me-up.webp"
+ },
+ {
+  "name": "Tiny Diny",
+  "coins": 10,
+  "image": "gifts/tiny-diny.webp"
+ },
+ {
+  "name": "Treasure&#39;s Key",
+  "coins": 10,
+  "image": "gifts/treasure-39-s-key.webp"
+ },
+ {
+  "name": "Udon-nou",
+  "coins": 10,
+  "image": "gifts/udon-nou.webp"
+ },
+ {
+  "name": "Watermelon",
+  "coins": 10,
+  "image": "gifts/watermelon.webp"
+ },
+ {
+  "name": "Whistle",
+  "coins": 10,
+  "image": "gifts/whistle.webp"
+ },
+ {
+  "name": "Whitewind Seal",
+  "coins": 10,
+  "image": "gifts/whitewind-seal.webp"
+ },
+ {
+  "name": "You’re the Best!",
+  "coins": 10,
+  "image": "gifts/you-re-the-best.webp"
+ },
+ {
+  "name": "Aragusuku Satonushi",
+  "coins": 15,
+  "image": "gifts/aragusuku-satonushi.webp"
+ },
+ {
+  "name": "Baby Hippo",
+  "coins": 15,
+  "image": "gifts/baby-hippo-2.webp"
+ },
+ {
+  "name": "Bravo!",
+  "coins": 15,
+  "image": "gifts/bravo.webp"
+ },
+ {
+  "name": "Flower Garland",
+  "coins": 15,
+  "image": "gifts/flower-garland.webp"
+ },
+ {
+  "name": "Kudos for My Star",
+  "coins": 15,
+  "image": "gifts/kudos-for-my-star.webp"
+ },
+ {
+  "name": "Live Up Earth",
+  "coins": 15,
+  "image": "gifts/live-up-earth.webp"
+ },
+ {
+  "name": "Lyric Mail",
+  "coins": 15,
+  "image": "gifts/lyric-mail.webp"
+ },
+ {
+  "name": "My Melody &amp; Kuromi",
+  "coins": 15,
+  "image": "gifts/my-melody-amp-kuromi.webp"
+ },
+ {
+  "name": "Romanian Polenta",
+  "coins": 15,
+  "image": "gifts/romanian-polenta.webp"
+ },
+ {
+  "name": "Tiny Diny in Love",
+  "coins": 15,
+  "image": "gifts/tiny-diny-in-love.webp"
+ },
+ {
+  "name": "Appetizers",
+  "coins": 19,
+  "image": "gifts/appetizers.webp"
+ },
+ {
+  "name": "Bouquet",
+  "coins": 20,
+  "image": "gifts/bouquet.webp"
+ },
+ {
+  "name": "Candle",
+  "coins": 20,
+  "image": "gifts/candle.webp"
+ },
+ {
+  "name": "Carnival Tent",
+  "coins": 20,
+  "image": "gifts/carnival-tent.webp"
+ },
+ {
+  "name": "Dombra",
+  "coins": 20,
+  "image": "gifts/dombra.webp"
+ },
+ {
+  "name": "G.O.A.T. Busker",
+  "coins": 20,
+  "image": "gifts/g-o-a-t-busker.webp"
+ },
+ {
+  "name": "Headphone TikTok",
+  "coins": 20,
+  "image": "gifts/headphone-tiktok.webp"
+ },
+ {
+  "name": "Headphones",
+  "coins": 20,
+  "image": "gifts/headphones.webp"
+ },
+ {
+  "name": "Huh?",
+  "coins": 20,
+  "image": "gifts/huh.webp"
+ },
+ {
+  "name": "Let &#39;Em Cook",
+  "coins": 20,
+  "image": "gifts/let-39-em-cook.webp"
+ },
+ {
+  "name": "little kisses",
+  "coins": 20,
+  "image": "gifts/little-kisses.webp"
+ },
+ {
+  "name": "LOL",
+  "coins": 20,
+  "image": "gifts/lol.webp"
+ },
+ {
+  "name": "Mushroom",
+  "coins": 20,
+  "image": "gifts/mushroom.webp"
+ },
+ {
+  "name": "New Year Keyboard",
+  "coins": 20,
+  "image": "gifts/new-year-keyboard.webp"
+ },
+ {
+  "name": "No Comment",
+  "coins": 20,
+  "image": "gifts/no-comment.webp"
+ },
+ {
+  "name": "Perfume",
+  "coins": 20,
+  "image": "gifts/perfume.webp"
+ },
+ {
+  "name": "Rage Mode",
+  "coins": 20,
+  "image": "gifts/rage-mode.webp"
+ },
+ {
+  "name": "S Flowers",
+  "coins": 20,
+  "image": "gifts/s-flowers.webp"
+ },
+ {
+  "name": "Summer Sun",
+  "coins": 20,
+  "image": "gifts/summer-sun.webp"
+ },
+ {
+  "name": "Sushi Set",
+  "coins": 20,
+  "image": "gifts/sushi-set.webp"
+ },
+ {
+  "name": "Tiny Blush",
+  "coins": 20,
+  "image": "gifts/tiny-blush.webp"
+ },
+ {
+  "name": "Tiny Diny Hotdog",
+  "coins": 20,
+  "image": "gifts/tiny-diny-hotdog.webp"
+ },
+ {
+  "name": "Traffic Cone",
+  "coins": 20,
+  "image": "gifts/traffic-cone.webp"
+ },
+ {
+  "name": "Gamer Press Start",
+  "coins": 25,
+  "image": "gifts/gamer-press-start.webp"
+ },
+ {
+  "name": "Adventure",
+  "coins": 30,
+  "image": "gifts/adventure.webp"
+ },
+ {
+  "name": "Bouquet Flower",
+  "coins": 30,
+  "image": "gifts/bouquet-flower.webp"
+ },
+ {
+  "name": "Bubble Tea",
+  "coins": 30,
+  "image": "gifts/bubble-tea.webp"
+ },
+ {
+  "name": "Capybara",
+  "coins": 30,
+  "image": "gifts/capybara.webp"
+ },
+ {
+  "name": "Cheese Donuts",
+  "coins": 30,
+  "image": "gifts/cheese-donuts.webp"
+ },
+ {
+  "name": "Choco Strawberries",
+  "coins": 30,
+  "image": "gifts/choco-strawberries.webp"
+ },
+ {
+  "name": "Doughnut",
+  "coins": 30,
+  "image": "gifts/doughnut.webp"
+ },
+ {
+  "name": "Energy Capsule",
+  "coins": 30,
+  "image": "gifts/energy-capsule.webp"
+ },
+ {
+  "name": "Energy Drop",
+  "coins": 30,
+  "image": "gifts/energy-drop.webp"
+ },
+ {
+  "name": "Ghostfire",
+  "coins": 30,
+  "image": "gifts/ghostfire.webp"
+ },
+ {
+  "name": "Kafu",
+  "coins": 30,
+  "image": "gifts/kafu.webp"
+ },
+ {
+  "name": "Magic Card",
+  "coins": 30,
+  "image": "gifts/magic-card.webp"
+ },
+ {
+  "name": "U make Miso happy!",
+  "coins": 30,
+  "image": "gifts/u-make-miso-happy.webp"
+ },
+ {
+  "name": "Warm Cocoa",
+  "coins": 30,
+  "image": "gifts/warm-cocoa.webp"
+ },
+ {
+  "name": "Witchy Kitty",
+  "coins": 30,
+  "image": "gifts/witchy-kitty.webp"
+ },
+ {
+  "name": "Woodland Wonder",
+  "coins": 30,
+  "image": "gifts/woodland-wonder.webp"
+ },
+ {
+  "name": "You are my Jam",
+  "coins": 30,
+  "image": "gifts/you-are-my-jam.webp"
+ },
+ {
+  "name": "You are on a Roll",
+  "coins": 30,
+  "image": "gifts/you-are-on-a-roll.webp"
+ },
+ {
+  "name": "Bagel",
+  "coins": 35,
+  "image": "gifts/bagel.webp"
+ },
+ {
+  "name": "Soccer Ball",
+  "coins": 39,
+  "image": "gifts/soccer-ball.webp"
+ },
+ {
+  "name": "Sign language love",
+  "coins": 49,
+  "image": "gifts/sign-language-love.webp"
+ },
+ {
+  "name": "Genius",
+  "coins": 50,
+  "image": "gifts/genius.webp"
+ },
+ {
+  "name": "Tea",
+  "coins": 50,
+  "image": "gifts/tea.webp"
+ },
+ {
+  "name": "Single Strike",
+  "coins": 70,
+  "image": "gifts/single-strike.webp"
+ },
+ {
+  "name": "Butterfly",
+  "coins": 88,
+  "image": "gifts/butterfly.webp"
+ },
+ {
+  "name": "Cendol",
+  "coins": 88,
+  "image": "gifts/cendol.webp"
+ },
+ {
+  "name": "December",
+  "coins": 88,
+  "image": "gifts/december.webp"
+ },
+ {
+  "name": "Harika",
+  "coins": 88,
+  "image": "gifts/harika.webp"
+ },
+ {
+  "name": "Love Letter",
+  "coins": 88,
+  "image": "gifts/love-letter-2.webp"
+ },
+ {
+  "name": "Midsummer Moose",
+  "coins": 88,
+  "image": "gifts/midsummer-moose.webp"
+ },
+ {
+  "name": "October",
+  "coins": 88,
+  "image": "gifts/october.webp"
+ },
+ {
+  "name": "Small Ghost",
+  "coins": 88,
+  "image": "gifts/small-ghost.webp"
+ },
+ {
+  "name": "Takoyaki",
+  "coins": 88,
+  "image": "gifts/takoyaki.webp"
+ },
+ {
+  "name": "Chart topper",
+  "coins": 90,
+  "image": "gifts/chart-topper.webp"
+ },
+ {
+  "name": "Family",
+  "coins": 90,
+  "image": "gifts/family.webp"
+ },
+ {
+  "name": "Fist bump",
+  "coins": 90,
+  "image": "gifts/fist-bump.webp"
+ },
+ {
+  "name": "Music Cube",
+  "coins": 90,
+  "image": "gifts/music-cube.webp"
+ },
+ {
+  "name": "Sending strength",
+  "coins": 90,
+  "image": "gifts/sending-strength.webp"
+ },
+ {
+  "name": "Batik Bucket Hat",
+  "coins": 99,
+  "image": "gifts/batik-bucket-hat.webp"
+ },
+ {
+  "name": "Birthday Crown",
+  "coins": 99,
+  "image": "gifts/birthday-crown.webp"
+ },
+ {
+  "name": "Birthday Hat",
+  "coins": 99,
+  "image": "gifts/birthday-hat.webp"
+ },
+ {
+  "name": "Bloom Melody",
+  "coins": 99,
+  "image": "gifts/bloom-melody.webp"
+ },
+ {
+  "name": "Breakthrough Star",
+  "coins": 99,
+  "image": "gifts/breakthrough-star.webp"
+ },
+ {
+  "name": "Breeze Quena",
+  "coins": 99,
+  "image": "gifts/breeze-quena.webp"
+ },
+ {
+  "name": "Bubble Gum",
+  "coins": 99,
+  "image": "gifts/bubble-gum.webp"
+ },
+ {
+  "name": "Candy Blast",
+  "coins": 99,
+  "image": "gifts/candy-blast.webp"
+ },
+ {
+  "name": "Cap",
+  "coins": 99,
+  "image": "gifts/cap.webp"
+ },
+ {
+  "name": "Charmer Bow",
+  "coins": 99,
+  "image": "gifts/charmer-bow.webp"
+ },
+ {
+  "name": "Club Victory",
+  "coins": 99,
+  "image": "gifts/club-victory.webp"
+ },
+ {
+  "name": "Community Style",
+  "coins": 99,
+  "image": "gifts/community-style.webp"
+ },
+ {
+  "name": "Cow-napping",
+  "coins": 99,
+  "image": "gifts/cow-napping.webp"
+ },
+ {
+  "name": "Crescent Chain",
+  "coins": 99,
+  "image": "gifts/crescent-chain.webp"
+ },
+ {
+  "name": "Cupid’s Bow",
+  "coins": 99,
+  "image": "gifts/cupid-s-bow.webp"
+ },
+ {
+  "name": "Cursed Kick",
+  "coins": 99,
+  "image": "gifts/cursed-kick.webp"
+ },
+ {
+  "name": "Egypt Heart",
+  "coins": 99,
+  "image": "gifts/egypt-heart.webp"
+ },
+ {
+  "name": "Fest Gear",
+  "coins": 99,
+  "image": "gifts/fest-gear.webp"
+ },
+ {
+  "name": "Fiesta Accordion",
+  "coins": 99,
+  "image": "gifts/fiesta-accordion.webp"
+ },
+ {
+  "name": "Greeting Heart",
+  "coins": 99,
+  "image": "gifts/greeting-heart.webp"
+ },
+ {
+  "name": "Groove Guitar",
+  "coins": 99,
+  "image": "gifts/groove-guitar.webp"
+ },
+ {
+  "name": "Guitar",
+  "coins": 99,
+  "image": "gifts/guitar.webp"
+ },
+ {
+  "name": "Hat and Mustache",
+  "coins": 99,
+  "image": "gifts/hat-and-mustache.webp"
+ },
+ {
+  "name": "Healing Sape",
+  "coins": 99,
+  "image": "gifts/healing-sape.webp"
+ },
+ {
+  "name": "Heart KSA",
+  "coins": 99,
+  "image": "gifts/heart-ksa.webp"
+ },
+ {
+  "name": "Heart Me Flex",
+  "coins": 99,
+  "image": "gifts/heart-me-flex.webp"
+ },
+ {
+  "name": "Heart Oman",
+  "coins": 99,
+  "image": "gifts/heart-oman.webp"
+ },
+ {
+  "name": "Hot Shot",
+  "coins": 99,
+  "image": "gifts/hot-shot.webp"
+ },
+ {
+  "name": "Kiss your Heart",
+  "coins": 99,
+  "image": "gifts/kiss-your-heart.webp"
+ },
+ {
+  "name": "Level-up Sparks",
+  "coins": 99,
+  "image": "gifts/level-up-sparks.webp"
+ },
+ {
+  "name": "Like-Pop",
+  "coins": 99,
+  "image": "gifts/like-pop.webp"
+ },
+ {
+  "name": "Little Crown",
+  "coins": 99,
+  "image": "gifts/little-crown.webp"
+ },
+ {
+  "name": "Little Wing",
+  "coins": 99,
+  "image": "gifts/little-wing.webp"
+ },
+ {
+  "name": "LIVE On Air",
+  "coins": 99,
+  "image": "gifts/live-on-air.webp"
+ },
+ {
+  "name": "Love Chain",
+  "coins": 99,
+  "image": "gifts/love-chain.webp"
+ },
+ {
+  "name": "Love Luck",
+  "coins": 99,
+  "image": "gifts/love-luck.webp"
+ },
+ {
+  "name": "Love Painting",
+  "coins": 99,
+  "image": "gifts/love-painting.webp"
+ },
+ {
+  "name": "Lucky Star",
+  "coins": 99,
+  "image": "gifts/lucky-star.webp"
+ },
+ {
+  "name": "Mark of Love",
+  "coins": 99,
+  "image": "gifts/mark-of-love.webp"
+ },
+ {
+  "name": "Murtabak",
+  "coins": 99,
+  "image": "gifts/murtabak.webp"
+ },
+ {
+  "name": "Noor",
+  "coins": 99,
+  "image": "gifts/noor.webp"
+ },
+ {
+  "name": "Pad Master",
+  "coins": 99,
+  "image": "gifts/pad-master.webp"
+ },
+ {
+  "name": "Palace Qanun",
+  "coins": 99,
+  "image": "gifts/palace-qanun.webp"
+ },
+ {
+  "name": "Paper Crane",
+  "coins": 99,
+  "image": "gifts/paper-crane.webp"
+ },
+ {
+  "name": "Party Balloons",
+  "coins": 99,
+  "image": "gifts/party-balloons.webp"
+ },
+ {
+  "name": "Pearl Chime",
+  "coins": 99,
+  "image": "gifts/pearl-chime.webp"
+ },
+ {
+  "name": "Pixel GG",
+  "coins": 99,
+  "image": "gifts/pixel-gg.webp"
+ },
+ {
+  "name": "Ready, go!",
+  "coins": 99,
+  "image": "gifts/ready-go.webp"
+ },
+ {
+  "name": "Rising Star",
+  "coins": 99,
+  "image": "gifts/rising-star.webp"
+ },
+ {
+  "name": "Rock the Stage",
+  "coins": 99,
+  "image": "gifts/rock-the-stage.webp"
+ },
+ {
+  "name": "Send Heart",
+  "coins": 99,
+  "image": "gifts/send-heart.webp"
+ },
+ {
+  "name": "Singing Mushroom",
+  "coins": 99,
+  "image": "gifts/singing-mushroom.webp"
+ },
+ {
+  "name": "Snow Rabbit",
+  "coins": 99,
+  "image": "gifts/snow-rabbit.webp"
+ },
+ {
+  "name": "Stabilizer",
+  "coins": 99,
+  "image": "gifts/stabilizer.webp"
+ },
+ {
+  "name": "Star",
+  "coins": 99,
+  "image": "gifts/star-3.webp"
+ },
+ {
+  "name": "Sundae Bowl",
+  "coins": 99,
+  "image": "gifts/sundae-bowl.webp"
+ },
+ {
+  "name": "Throw Tomatoes",
+  "coins": 99,
+  "image": "gifts/throw-tomatoes.webp"
+ },
+ {
+  "name": "UAE Heart",
+  "coins": 99,
+  "image": "gifts/uae-heart.webp"
+ },
+ {
+  "name": "Winning Wednesday",
+  "coins": 99,
+  "image": "gifts/winning-wednesday.webp"
+ },
+ {
+  "name": "Wobbler",
+  "coins": 99,
+  "image": "gifts/wobbler.webp"
+ },
+ {
+  "name": "Aussie Pie",
+  "coins": 100,
+  "image": "gifts/aussie-pie.webp"
+ },
+ {
+  "name": "Balloon Gift Box",
+  "coins": 100,
+  "image": "gifts/balloon-gift-box.webp"
+ },
+ {
+  "name": "Bouquet",
+  "coins": 100,
+  "image": "gifts/bouquet-2.webp"
+ },
+ {
+  "name": "Chicken and Cola",
+  "coins": 100,
+  "image": "gifts/chicken-and-cola.webp"
+ },
+ {
+  "name": "Compact",
+  "coins": 100,
+  "image": "gifts/compact.webp"
+ },
+ {
+  "name": "Confetti",
+  "coins": 100,
+  "image": "gifts/confetti.webp"
+ },
+ {
+  "name": "Danger Door",
+  "coins": 100,
+  "image": "gifts/danger-door.webp"
+ },
+ {
+  "name": "DJ Headphone",
+  "coins": 100,
+  "image": "gifts/dj-headphone.webp"
+ },
+ {
+  "name": "FANDOM Stamp",
+  "coins": 100,
+  "image": "gifts/fandom-stamp.webp"
+ },
+ {
+  "name": "Flowers",
+  "coins": 100,
+  "image": "gifts/flowers.webp"
+ },
+ {
+  "name": "Game Controller",
+  "coins": 100,
+  "image": "gifts/game-controller.webp"
+ },
+ {
+  "name": "Gate to Treasure",
+  "coins": 100,
+  "image": "gifts/gate-to-treasure.webp"
+ },
+ {
+  "name": "Hand Heart",
+  "coins": 100,
+  "image": "gifts/hand-heart.webp"
+ },
+ {
+  "name": "Haunted Houseparty",
+  "coins": 100,
+  "image": "gifts/haunted-houseparty.webp"
+ },
+ {
+  "name": "Heart My Earthling",
+  "coins": 100,
+  "image": "gifts/heart-my-earthling.webp"
+ },
+ {
+  "name": "Heart Signal",
+  "coins": 100,
+  "image": "gifts/heart-signal.webp"
+ },
+ {
+  "name": "Infinity Chain",
+  "coins": 100,
+  "image": "gifts/infinity-chain.webp"
+ },
+ {
+  "name": "KO!",
+  "coins": 100,
+  "image": "gifts/ko.webp"
+ },
+ {
+  "name": "Marvelous Confetti",
+  "coins": 100,
+  "image": "gifts/marvelous-confetti.webp"
+ },
+ {
+  "name": "Match Wand",
+  "coins": 100,
+  "image": "gifts/match-wand.webp"
+ },
+ {
+  "name": "Minecraft Bee",
+  "coins": 100,
+  "image": "gifts/minecraft-bee.webp"
+ },
+ {
+  "name": "Mini Star",
+  "coins": 100,
+  "image": "gifts/mini-star.webp"
+ },
+ {
+  "name": "Mishka Bear",
+  "coins": 100,
+  "image": "gifts/mishka-bear.webp"
+ },
+ {
+  "name": "Mountain Baby",
+  "coins": 100,
+  "image": "gifts/mountain-baby.webp"
+ },
+ {
+  "name": "Music Bubbles",
+  "coins": 100,
+  "image": "gifts/music-bubbles.webp"
+ },
+ {
+  "name": "Power Chip",
+  "coins": 100,
+  "image": "gifts/power-chip.webp"
+ },
+ {
+  "name": "Rainbow Ministar",
+  "coins": 100,
+  "image": "gifts/rainbow-ministar.webp"
+ },
+ {
+  "name": "Scooter",
+  "coins": 100,
+  "image": "gifts/scooter.webp"
+ },
+ {
+  "name": "Shell Energy",
+  "coins": 100,
+  "image": "gifts/shell-energy.webp"
+ },
+ {
+  "name": "Singing Magic",
+  "coins": 100,
+  "image": "gifts/singing-magic.webp"
+ },
+ {
+  "name": "Super GG",
+  "coins": 100,
+  "image": "gifts/super-gg.webp"
+ },
+ {
+  "name": "Tomato Burst",
+  "coins": 100,
+  "image": "gifts/tomato-burst.webp"
+ },
+ {
+  "name": "Tsar",
+  "coins": 100,
+  "image": "gifts/tsar.webp"
+ },
+ {
+  "name": "Wooden Box",
+  "coins": 100,
+  "image": "gifts/wooden-box.webp"
+ },
+ {
+  "name": "Wooden Rod",
+  "coins": 100,
+  "image": "gifts/wooden-rod.webp"
+ },
+ {
+  "name": "Crossette Firework",
+  "coins": 129,
+  "image": "gifts/crossette-firework.webp"
+ },
+ {
+  "name": "Balloon Crown",
+  "coins": 149,
+  "image": "gifts/balloon-crown.webp"
+ },
+ {
+  "name": "Big Shout Out",
+  "coins": 149,
+  "image": "gifts/big-shout-out.webp"
+ },
+ {
+  "name": "Bowknot",
+  "coins": 149,
+  "image": "gifts/bowknot.webp"
+ },
+ {
+  "name": "Caterpillar Chaos",
+  "coins": 149,
+  "image": "gifts/caterpillar-chaos.webp"
+ },
+ {
+  "name": "Catrina",
+  "coins": 149,
+  "image": "gifts/catrina.webp"
+ },
+ {
+  "name": "Chatting Popcorn",
+  "coins": 149,
+  "image": "gifts/chatting-popcorn.webp"
+ },
+ {
+  "name": "Dizzy Bird",
+  "coins": 149,
+  "image": "gifts/dizzy-bird.webp"
+ },
+ {
+  "name": "Fairy Hide",
+  "coins": 149,
+  "image": "gifts/fairy-hide.webp"
+ },
+ {
+  "name": "Feather Tiara",
+  "coins": 149,
+  "image": "gifts/feather-tiara.webp"
+ },
+ {
+  "name": "Frog Conductor",
+  "coins": 149,
+  "image": "gifts/frog-conductor.webp"
+ },
+ {
+  "name": "Groove Clarinet",
+  "coins": 149,
+  "image": "gifts/groove-clarinet.webp"
+ },
+ {
+  "name": "Heart Rain",
+  "coins": 149,
+  "image": "gifts/heart-rain.webp"
+ },
+ {
+  "name": "Love Glasses",
+  "coins": 149,
+  "image": "gifts/love-glasses.webp"
+ },
+ {
+  "name": "Masquerade",
+  "coins": 149,
+  "image": "gifts/masquerade.webp"
+ },
+ {
+  "name": "Mystic Ney",
+  "coins": 149,
+  "image": "gifts/mystic-ney.webp"
+ },
+ {
+  "name": "Otter with Fish",
+  "coins": 149,
+  "image": "gifts/otter-with-fish.webp"
+ },
+ {
+  "name": "Raving Snail",
+  "coins": 149,
+  "image": "gifts/raving-snail.webp"
+ },
+ {
+  "name": "Santa Cocoa",
+  "coins": 149,
+  "image": "gifts/santa-cocoa.webp"
+ },
+ {
+  "name": "Sweetheart Macaron",
+  "coins": 149,
+  "image": "gifts/sweetheart-macaron.webp"
+ },
+ {
+  "name": "Tempo Flute",
+  "coins": 149,
+  "image": "gifts/tempo-flute.webp"
+ },
+ {
+  "name": "A Bubbly Time",
+  "coins": 150,
+  "image": "gifts/a-bubbly-time.webp"
+ },
+ {
+  "name": "Cruiser",
+  "coins": 150,
+  "image": "gifts/cruiser.webp"
+ },
+ {
+  "name": "Kiss",
+  "coins": 150,
+  "image": "gifts/kiss.webp"
+ },
+ {
+  "name": "Penlight",
+  "coins": 150,
+  "image": "gifts/penlight.webp"
+ },
+ {
+  "name": "Potato Transformation",
+  "coins": 150,
+  "image": "gifts/potato-transformation.webp"
+ },
+ {
+  "name": "Puffer Fish",
+  "coins": 150,
+  "image": "gifts/puffer-fish.webp"
+ },
+ {
+  "name": "Salentinian Blossom",
+  "coins": 150,
+  "image": "gifts/salentinian-blossom.webp"
+ },
+ {
+  "name": "Sceptre",
+  "coins": 150,
+  "image": "gifts/sceptre.webp"
+ },
+ {
+  "name": "Song of Harvest",
+  "coins": 150,
+  "image": "gifts/song-of-harvest.webp"
+ },
+ {
+  "name": "Umbrella",
+  "coins": 150,
+  "image": "gifts/umbrella-2.webp"
+ },
+ {
+  "name": "Bruiser",
+  "coins": 153,
+  "image": "gifts/bruiser.webp"
+ },
+ {
+  "name": "Birthday Glasses",
+  "coins": 199,
+  "image": "gifts/birthday-glasses.webp"
+ },
+ {
+  "name": "Bloom Brass",
+  "coins": 199,
+  "image": "gifts/bloom-brass.webp"
+ },
+ {
+  "name": "Blow Bubbles",
+  "coins": 199,
+  "image": "gifts/blow-bubbles.webp"
+ },
+ {
+  "name": "Blowing Bubbles",
+  "coins": 199,
+  "image": "gifts/blowing-bubbles.webp"
+ },
+ {
+  "name": "Bowtiful Crown",
+  "coins": 199,
+  "image": "gifts/bowtiful-crown.webp"
+ },
+ {
+  "name": "Cheer For You",
+  "coins": 199,
+  "image": "gifts/cheer-for-you.webp"
+ },
+ {
+  "name": "Cheering Crab",
+  "coins": 199,
+  "image": "gifts/cheering-crab.webp"
+ },
+ {
+  "name": "Chirpy Kisses",
+  "coins": 199,
+  "image": "gifts/chirpy-kisses.webp"
+ },
+ {
+  "name": "Christmas Prawn",
+  "coins": 199,
+  "image": "gifts/christmas-prawn.webp"
+ },
+ {
+  "name": "Coconut",
+  "coins": 199,
+  "image": "gifts/coconut.webp"
+ },
+ {
+  "name": "Coconut Juice",
+  "coins": 199,
+  "image": "gifts/coconut-juice.webp"
+ },
+ {
+  "name": "Coconut Tree",
+  "coins": 199,
+  "image": "gifts/coconut-tree.webp"
+ },
+ {
+  "name": "Coffee Magic",
+  "coins": 199,
+  "image": "gifts/coffee-magic.webp"
+ },
+ {
+  "name": "Crown",
+  "coins": 199,
+  "image": "gifts/crown.webp"
+ },
+ {
+  "name": "Dancing Hands",
+  "coins": 199,
+  "image": "gifts/dancing-hands.webp"
+ },
+ {
+  "name": "Eye See You",
+  "coins": 199,
+  "image": "gifts/eye-see-you.webp"
+ },
+ {
+  "name": "Fan Cat",
+  "coins": 199,
+  "image": "gifts/fan-cat.webp"
+ },
+ {
+  "name": "Feed Chocolate",
+  "coins": 199,
+  "image": "gifts/feed-chocolate.webp"
+ },
+ {
+  "name": "Festival Fan",
+  "coins": 199,
+  "image": "gifts/festival-fan.webp"
+ },
+ {
+  "name": "Floating Octopus",
+  "coins": 199,
+  "image": "gifts/floating-octopus.webp"
+ },
+ {
+  "name": "Flower Headband",
+  "coins": 199,
+  "image": "gifts/flower-headband.webp"
+ },
+ {
+  "name": "Forest Beginnings",
+  "coins": 199,
+  "image": "gifts/forest-beginnings.webp"
+ },
+ {
+  "name": "Gamer Cat",
+  "coins": 199,
+  "image": "gifts/gamer-cat.webp"
+ },
+ {
+  "name": "Garland Headpiece",
+  "coins": 199,
+  "image": "gifts/garland-headpiece.webp"
+ },
+ {
+  "name": "Gear",
+  "coins": 199,
+  "image": "gifts/gear.webp"
+ },
+ {
+  "name": "Goal Strike",
+  "coins": 199,
+  "image": "gifts/goal-strike.webp"
+ },
+ {
+  "name": "Goalkeeper Save",
+  "coins": 199,
+  "image": "gifts/goalkeeper-save.webp"
+ },
+ {
+  "name": "Hampers",
+  "coins": 199,
+  "image": "gifts/hampers.webp"
+ },
+ {
+  "name": "Hanging Lights",
+  "coins": 199,
+  "image": "gifts/hanging-lights.webp"
+ },
+ {
+  "name": "Headphone",
+  "coins": 199,
+  "image": "gifts/headphone-2.webp"
+ },
+ {
+  "name": "Heart Hood",
+  "coins": 199,
+  "image": "gifts/heart-hood.webp"
+ },
+ {
+  "name": "Hearts",
+  "coins": 199,
+  "image": "gifts/hearts.webp"
+ },
+ {
+  "name": "Hero’s Helmet",
+  "coins": 199,
+  "image": "gifts/hero-s-helmet.webp"
+ },
+ {
+  "name": "Indoor Fan",
+  "coins": 199,
+  "image": "gifts/indoor-fan.webp"
+ },
+ {
+  "name": "Joker Ball",
+  "coins": 199,
+  "image": "gifts/joker-ball.webp"
+ },
+ {
+  "name": "Juicy Smile",
+  "coins": 199,
+  "image": "gifts/juicy-smile.webp"
+ },
+ {
+  "name": "Juicy Tomato",
+  "coins": 199,
+  "image": "gifts/juicy-tomato.webp"
+ },
+ {
+  "name": "League Countdown",
+  "coins": 199,
+  "image": "gifts/league-countdown.webp"
+ },
+ {
+  "name": "Lots of Bread",
+  "coins": 199,
+  "image": "gifts/lots-of-bread.webp"
+ },
+ {
+  "name": "Love Charger",
+  "coins": 199,
+  "image": "gifts/love-charger.webp"
+ },
+ {
+  "name": "Love Rain",
+  "coins": 199,
+  "image": "gifts/love-rain.webp"
+ },
+ {
+  "name": "Love You",
+  "coins": 199,
+  "image": "gifts/love-you-2.webp"
+ },
+ {
+  "name": "Massage for You",
+  "coins": 199,
+  "image": "gifts/massage-for-you.webp"
+ },
+ {
+  "name": "May you blossom",
+  "coins": 199,
+  "image": "gifts/may-you-blossom.webp"
+ },
+ {
+  "name": "Meerkat",
+  "coins": 199,
+  "image": "gifts/meerkat.webp"
+ },
+ {
+  "name": "Melon Juice",
+  "coins": 199,
+  "image": "gifts/melon-juice.webp"
+ },
+ {
+  "name": "Music Player",
+  "coins": 199,
+  "image": "gifts/music-player.webp"
+ },
+ {
+  "name": "Mystic Panpipes",
+  "coins": 199,
+  "image": "gifts/mystic-panpipes.webp"
+ },
+ {
+  "name": "Night Star",
+  "coins": 199,
+  "image": "gifts/night-star.webp"
+ },
+ {
+  "name": "Panda Climb",
+  "coins": 199,
+  "image": "gifts/panda-climb.webp"
+ },
+ {
+  "name": "Panther Paws",
+  "coins": 199,
+  "image": "gifts/panther-paws.webp"
+ },
+ {
+  "name": "Party Pony",
+  "coins": 199,
+  "image": "gifts/party-pony.webp"
+ },
+ {
+  "name": "Peeka-Bro",
+  "coins": 199,
+  "image": "gifts/peeka-bro.webp"
+ },
+ {
+  "name": "Pinch Cheek",
+  "coins": 199,
+  "image": "gifts/pinch-cheek.webp"
+ },
+ {
+  "name": "Potato in Paris",
+  "coins": 199,
+  "image": "gifts/potato-in-paris.webp"
+ },
+ {
+  "name": "Prism Shine",
+  "coins": 199,
+  "image": "gifts/prism-shine.webp"
+ },
+ {
+  "name": "Ramadan Moon",
+  "coins": 199,
+  "image": "gifts/ramadan-moon.webp"
+ },
+ {
+  "name": "Restore HP",
+  "coins": 199,
+  "image": "gifts/restore-hp.webp"
+ },
+ {
+  "name": "Rhythm Bot",
+  "coins": 199,
+  "image": "gifts/rhythm-bot.webp"
+ },
+ {
+  "name": "Rose Hand",
+  "coins": 199,
+  "image": "gifts/rose-hand.webp"
+ },
+ {
+  "name": "Santa Hat",
+  "coins": 199,
+  "image": "gifts/santa-hat.webp"
+ },
+ {
+  "name": "Sending positivity",
+  "coins": 199,
+  "image": "gifts/sending-positivity.webp"
+ },
+ {
+  "name": "Shiba Inu",
+  "coins": 199,
+  "image": "gifts/shiba-inu.webp"
+ },
+ {
+  "name": "Side by Side",
+  "coins": 199,
+  "image": "gifts/side-by-side.webp"
+ },
+ {
+  "name": "Smile Latte",
+  "coins": 199,
+  "image": "gifts/smile-latte.webp"
+ },
+ {
+  "name": "Sour Buddy",
+  "coins": 199,
+  "image": "gifts/sour-buddy.webp"
+ },
+ {
+  "name": "Sparklers",
+  "coins": 199,
+  "image": "gifts/sparklers.webp"
+ },
+ {
+  "name": "Spider",
+  "coins": 199,
+  "image": "gifts/spider.webp"
+ },
+ {
+  "name": "Star Glasses",
+  "coins": 199,
+  "image": "gifts/star-glasses.webp"
+ },
+ {
+  "name": "Stinging Bee",
+  "coins": 199,
+  "image": "gifts/stinging-bee.webp"
+ },
+ {
+  "name": "Stroke Hair",
+  "coins": 199,
+  "image": "gifts/stroke-hair.webp"
+ },
+ {
+  "name": "Suitcase",
+  "coins": 199,
+  "image": "gifts/suitcase.webp"
+ },
+ {
+  "name": "Sunglasses",
+  "coins": 199,
+  "image": "gifts/sunglasses.webp"
+ },
+ {
+  "name": "Sunny Side Up",
+  "coins": 199,
+  "image": "gifts/sunny-side-up.webp"
+ },
+ {
+  "name": "Take the Mic",
+  "coins": 199,
+  "image": "gifts/take-the-mic.webp"
+ },
+ {
+  "name": "Talking Heartbeat",
+  "coins": 199,
+  "image": "gifts/talking-heartbeat.webp"
+ },
+ {
+  "name": "The Crown",
+  "coins": 199,
+  "image": "gifts/the-crown.webp"
+ },
+ {
+  "name": "Twinkling Star",
+  "coins": 199,
+  "image": "gifts/twinkling-star.webp"
+ },
+ {
+  "name": "Tyubeteika",
+  "coins": 199,
+  "image": "gifts/tyubeteika.webp"
+ },
+ {
+  "name": "Wooly Hat",
+  "coins": 199,
+  "image": "gifts/wooly-hat.webp"
+ },
+ {
+  "name": "Xmas Mishka Bear",
+  "coins": 199,
+  "image": "gifts/xmas-mishka-bear.webp"
+ },
+ {
+  "name": "Baglama",
+  "coins": 200,
+  "image": "gifts/baglama.webp"
+ },
+ {
+  "name": "Balloons",
+  "coins": 200,
+  "image": "gifts/balloons-2.webp"
+ },
+ {
+  "name": "Bunny Ears",
+  "coins": 200,
+  "image": "gifts/bunny-ears.webp"
+ },
+ {
+  "name": "Castanets",
+  "coins": 200,
+  "image": "gifts/castanets.webp"
+ },
+ {
+  "name": "Cute Bunny",
+  "coins": 200,
+  "image": "gifts/cute-bunny.webp"
+ },
+ {
+  "name": "Diamond Heart necklace",
+  "coins": 200,
+  "image": "gifts/diamond-heart-necklace.webp"
+ },
+ {
+  "name": "Dino cap",
+  "coins": 200,
+  "image": "gifts/dino-cap.webp"
+ },
+ {
+  "name": "Fiesta Taco",
+  "coins": 200,
+  "image": "gifts/fiesta-taco.webp"
+ },
+ {
+  "name": "GOAT",
+  "coins": 200,
+  "image": "gifts/goat-2.webp"
+ },
+ {
+  "name": "Gold Medal",
+  "coins": 200,
+  "image": "gifts/gold-medal.webp"
+ },
+ {
+  "name": "Gold necklace",
+  "coins": 200,
+  "image": "gifts/gold-necklace.webp"
+ },
+ {
+  "name": "Golden Chain",
+  "coins": 200,
+  "image": "gifts/golden-chain.webp"
+ },
+ {
+  "name": "Heart",
+  "coins": 200,
+  "image": "gifts/heart-3.webp"
+ },
+ {
+  "name": "I Love TikTok LIVE",
+  "coins": 200,
+  "image": "gifts/i-love-tiktok-live.webp"
+ },
+ {
+  "name": "Magic Genie",
+  "coins": 200,
+  "image": "gifts/magic-genie.webp"
+ },
+ {
+  "name": "Ramune",
+  "coins": 200,
+  "image": "gifts/ramune.webp"
+ },
+ {
+  "name": "Rilakkuma&#39;s ear",
+  "coins": 200,
+  "image": "gifts/rilakkuma-39-s-ear.webp"
+ },
+ {
+  "name": "Semsemia",
+  "coins": 200,
+  "image": "gifts/semsemia.webp"
+ },
+ {
+  "name": "Tulip Box",
+  "coins": 200,
+  "image": "gifts/tulip-box.webp"
+ },
+ {
+  "name": "Rose Bear",
+  "coins": 214,
+  "image": "gifts/rose-bear.webp"
+ },
+ {
+  "name": "Cat",
+  "coins": 222,
+  "image": "gifts/cat.webp"
+ },
+ {
+  "name": "Shiba Inu",
+  "coins": 222,
+  "image": "gifts/shiba-inu-2.webp"
+ },
+ {
+  "name": "2025 Glasses",
+  "coins": 225,
+  "image": "gifts/2025-glasses.webp"
+ },
+ {
+  "name": "2025 JoyLens",
+  "coins": 225,
+  "image": "gifts/2025-joylens.webp"
+ },
+ {
+  "name": "Amped Up",
+  "coins": 249,
+  "image": "gifts/amped-up.webp"
+ },
+ {
+  "name": "Blast Drum",
+  "coins": 249,
+  "image": "gifts/blast-drum.webp"
+ },
+ {
+  "name": "Candy Bouquet",
+  "coins": 249,
+  "image": "gifts/candy-bouquet.webp"
+ },
+ {
+  "name": "Cheer Mic",
+  "coins": 249,
+  "image": "gifts/cheer-mic.webp"
+ },
+ {
+  "name": "Darbuka Drum",
+  "coins": 249,
+  "image": "gifts/darbuka-drum.webp"
+ },
+ {
+  "name": "Dreamy Strings",
+  "coins": 249,
+  "image": "gifts/dreamy-strings.webp"
+ },
+ {
+  "name": "Face-pulling",
+  "coins": 249,
+  "image": "gifts/face-pulling.webp"
+ },
+ {
+  "name": "Flower Courier",
+  "coins": 249,
+  "image": "gifts/flower-courier.webp"
+ },
+ {
+  "name": "Flower wreath",
+  "coins": 249,
+  "image": "gifts/flower-wreath.webp"
+ },
+ {
+  "name": "Forest Elf",
+  "coins": 249,
+  "image": "gifts/forest-elf.webp"
+ },
+ {
+  "name": "Ice Cream Mic",
+  "coins": 249,
+  "image": "gifts/ice-cream-mic.webp"
+ },
+ {
+  "name": "Melodic birds",
+  "coins": 249,
+  "image": "gifts/melodic-birds.webp"
+ },
+ {
+  "name": "Midsummer Hair",
+  "coins": 249,
+  "image": "gifts/midsummer-hair.webp"
+ },
+ {
+  "name": "Music Bubbles",
+  "coins": 249,
+  "image": "gifts/music-bubbles-2.webp"
+ },
+ {
+  "name": "Oud",
+  "coins": 249,
+  "image": "gifts/oud.webp"
+ },
+ {
+  "name": "Palm Breeze",
+  "coins": 249,
+  "image": "gifts/palm-breeze.webp"
+ },
+ {
+  "name": "Party Blossom",
+  "coins": 249,
+  "image": "gifts/party-blossom.webp"
+ },
+ {
+  "name": "Pinch Face",
+  "coins": 249,
+  "image": "gifts/pinch-face.webp"
+ },
+ {
+  "name": "PK Paw Bump",
+  "coins": 249,
+  "image": "gifts/pk-paw-bump.webp"
+ },
+ {
+  "name": "Poetry Score",
+  "coins": 249,
+  "image": "gifts/poetry-score.webp"
+ },
+ {
+  "name": "Singing Frog",
+  "coins": 249,
+  "image": "gifts/singing-frog.webp"
+ },
+ {
+  "name": "Snow Bloom",
+  "coins": 249,
+  "image": "gifts/snow-bloom.webp"
+ },
+ {
+  "name": "Star Goggles",
+  "coins": 249,
+  "image": "gifts/star-goggles.webp"
+ },
+ {
+  "name": "Surfing Penguin",
+  "coins": 249,
+  "image": "gifts/surfing-penguin.webp"
+ },
+ {
+  "name": "Sweet Flutter",
+  "coins": 249,
+  "image": "gifts/sweet-flutter.webp"
+ },
+ {
+  "name": "Treasured Voice",
+  "coins": 249,
+  "image": "gifts/treasured-voice.webp"
+ },
+ {
+  "name": "Tiny Diny Float",
+  "coins": 250,
+  "image": "gifts/tiny-diny-float.webp"
+ },
+ {
+  "name": "Triple Thunder",
+  "coins": 289,
+  "image": "gifts/triple-thunder.webp"
+ },
+ {
+  "name": "Azura Horns",
+  "coins": 299,
+  "image": "gifts/azura-horns.webp"
+ },
+ {
+  "name": "Bat Headwear",
+  "coins": 299,
+  "image": "gifts/bat-headwear.webp"
+ },
+ {
+  "name": "Bell",
+  "coins": 299,
+  "image": "gifts/bell.webp"
+ },
+ {
+  "name": "Boxing Gloves",
+  "coins": 299,
+  "image": "gifts/boxing-gloves.webp"
+ },
+ {
+  "name": "Brazilian Vibe Cap",
+  "coins": 299,
+  "image": "gifts/brazilian-vibe-cap.webp"
+ },
+ {
+  "name": "Budding Heart",
+  "coins": 299,
+  "image": "gifts/budding-heart.webp"
+ },
+ {
+  "name": "Butterfly for You",
+  "coins": 299,
+  "image": "gifts/butterfly-for-you.webp"
+ },
+ {
+  "name": "Cello Romance",
+  "coins": 299,
+  "image": "gifts/cello-romance.webp"
+ },
+ {
+  "name": "Cheering Towel",
+  "coins": 299,
+  "image": "gifts/cheering-towel.webp"
+ },
+ {
+  "name": "Cherry Scoop",
+  "coins": 299,
+  "image": "gifts/cherry-scoop.webp"
+ },
+ {
+  "name": "Chocolate Box",
+  "coins": 299,
+  "image": "gifts/chocolate-box.webp"
+ },
+ {
+  "name": "Come On!",
+  "coins": 299,
+  "image": "gifts/come-on.webp"
+ },
+ {
+  "name": "Cooked",
+  "coins": 299,
+  "image": "gifts/cooked.webp"
+ },
+ {
+  "name": "Corgi",
+  "coins": 299,
+  "image": "gifts/corgi.webp"
+ },
+ {
+  "name": "Crescent Lanterns",
+  "coins": 299,
+  "image": "gifts/crescent-lanterns.webp"
+ },
+ {
+  "name": "Crystal Shoe",
+  "coins": 299,
+  "image": "gifts/crystal-shoe.webp"
+ },
+ {
+  "name": "Dancing Flower",
+  "coins": 299,
+  "image": "gifts/dancing-flower.webp"
+ },
+ {
+  "name": "Daruma",
+  "coins": 299,
+  "image": "gifts/daruma.webp"
+ },
+ {
+  "name": "Dash",
+  "coins": 299,
+  "image": "gifts/dash.webp"
+ },
+ {
+  "name": "Dream Team",
+  "coins": 299,
+  "image": "gifts/dream-team.webp"
+ },
+ {
+  "name": "Dreamy Penguin",
+  "coins": 299,
+  "image": "gifts/dreamy-penguin.webp"
+ },
+ {
+  "name": "EID Gift Box",
+  "coins": 299,
+  "image": "gifts/eid-gift-box.webp"
+ },
+ {
+  "name": "Elephant trunk",
+  "coins": 299,
+  "image": "gifts/elephant-trunk.webp"
+ },
+ {
+  "name": "Falling For You",
+  "coins": 299,
+  "image": "gifts/falling-for-you.webp"
+ },
+ {
+  "name": "Fest Cheers",
+  "coins": 299,
+  "image": "gifts/fest-cheers.webp"
+ },
+ {
+  "name": "Floral Lute",
+  "coins": 299,
+  "image": "gifts/floral-lute.webp"
+ },
+ {
+  "name": "Flower",
+  "coins": 299,
+  "image": "gifts/flower.webp"
+ },
+ {
+  "name": "French Handshake",
+  "coins": 299,
+  "image": "gifts/french-handshake.webp"
+ },
+ {
+  "name": "Fruit Friends",
+  "coins": 299,
+  "image": "gifts/fruit-friends.webp"
+ },
+ {
+  "name": "Full moon",
+  "coins": 299,
+  "image": "gifts/full-moon.webp"
+ },
+ {
+  "name": "Gamer 2025",
+  "coins": 299,
+  "image": "gifts/gamer-2025.webp"
+ },
+ {
+  "name": "Glitter Cap",
+  "coins": 299,
+  "image": "gifts/glitter-cap.webp"
+ },
+ {
+  "name": "Go Hamster",
+  "coins": 299,
+  "image": "gifts/go-hamster.webp"
+ },
+ {
+  "name": "Golden Crown",
+  "coins": 299,
+  "image": "gifts/golden-crown.webp"
+ },
+ {
+  "name": "Hawaiian Lei",
+  "coins": 299,
+  "image": "gifts/hawaiian-lei.webp"
+ },
+ {
+  "name": "Heart Love Plate",
+  "coins": 299,
+  "image": "gifts/heart-love-plate.webp"
+ },
+ {
+  "name": "Hi! Rosie!",
+  "coins": 299,
+  "image": "gifts/hi-rosie.webp"
+ },
+ {
+  "name": "Journal",
+  "coins": 299,
+  "image": "gifts/journal.webp"
+ },
+ {
+  "name": "Judy Pose",
+  "coins": 299,
+  "image": "gifts/judy-pose.webp"
+ },
+ {
+  "name": "Kicker Challenge",
+  "coins": 299,
+  "image": "gifts/kicker-challenge.webp"
+ },
+ {
+  "name": "Koala Love",
+  "coins": 299,
+  "image": "gifts/koala-love.webp"
+ },
+ {
+  "name": "Labor Power",
+  "coins": 299,
+  "image": "gifts/labor-power.webp"
+ },
+ {
+  "name": "Legend Crown",
+  "coins": 299,
+  "image": "gifts/legend-crown.webp"
+ },
+ {
+  "name": "LIVE Ranking Crown",
+  "coins": 299,
+  "image": "gifts/live-ranking-crown.webp"
+ },
+ {
+  "name": "LIVE Ranking Headband",
+  "coins": 299,
+  "image": "gifts/live-ranking-headband.webp"
+ },
+ {
+  "name": "Llama Greetings",
+  "coins": 299,
+  "image": "gifts/llama-greetings.webp"
+ },
+ {
+  "name": "Love Call",
+  "coins": 299,
+  "image": "gifts/love-call.webp"
+ },
+ {
+  "name": "Magic Hat",
+  "coins": 299,
+  "image": "gifts/magic-hat.webp"
+ },
+ {
+  "name": "Melody Glasses",
+  "coins": 299,
+  "image": "gifts/melody-glasses.webp"
+ },
+ {
+  "name": "Music Mate",
+  "coins": 299,
+  "image": "gifts/music-mate.webp"
+ },
+ {
+  "name": "Mysterious Mask",
+  "coins": 299,
+  "image": "gifts/mysterious-mask.webp"
+ },
+ {
+  "name": "Naughty Chicken",
+  "coins": 299,
+  "image": "gifts/naughty-chicken.webp"
+ },
+ {
+  "name": "Paddington Hat",
+  "coins": 299,
+  "image": "gifts/paddington-hat.webp"
+ },
+ {
+  "name": "Pawfect",
+  "coins": 299,
+  "image": "gifts/pawfect.webp"
+ },
+ {
+  "name": "Penguin Snowpal",
+  "coins": 299,
+  "image": "gifts/penguin-snowpal.webp"
+ },
+ {
+  "name": "Piano Bow",
+  "coins": 299,
+  "image": "gifts/piano-bow.webp"
+ },
+ {
+  "name": "Play for You",
+  "coins": 299,
+  "image": "gifts/play-for-you.webp"
+ },
+ {
+  "name": "Pony Lantern",
+  "coins": 299,
+  "image": "gifts/pony-lantern.webp"
+ },
+ {
+  "name": "Potato on a Vespa",
+  "coins": 299,
+  "image": "gifts/potato-on-a-vespa.webp"
+ },
+ {
+  "name": "Pug",
+  "coins": 299,
+  "image": "gifts/pug.webp"
+ },
+ {
+  "name": "Puppy Kisses",
+  "coins": 299,
+  "image": "gifts/puppy-kisses.webp"
+ },
+ {
+  "name": "Rain Doll",
+  "coins": 299,
+  "image": "gifts/rain-doll.webp"
+ },
+ {
+  "name": "Ramadan Crescent",
+  "coins": 299,
+  "image": "gifts/ramadan-crescent.webp"
+ },
+ {
+  "name": "Rhythm Crown",
+  "coins": 299,
+  "image": "gifts/rhythm-crown.webp"
+ },
+ {
+  "name": "Rising Key",
+  "coins": 299,
+  "image": "gifts/rising-key.webp"
+ },
+ {
+  "name": "Rock Star",
+  "coins": 299,
+  "image": "gifts/rock-star.webp"
+ },
+ {
+  "name": "Rookies Cup",
+  "coins": 299,
+  "image": "gifts/rookies-cup.webp"
+ },
+ {
+  "name": "Sax Groove",
+  "coins": 299,
+  "image": "gifts/sax-groove.webp"
+ },
+ {
+  "name": "Scroll",
+  "coins": 299,
+  "image": "gifts/scroll.webp"
+ },
+ {
+  "name": "Spider on web",
+  "coins": 299,
+  "image": "gifts/spider-on-web.webp"
+ },
+ {
+  "name": "Spring Sprout",
+  "coins": 299,
+  "image": "gifts/spring-sprout.webp"
+ },
+ {
+  "name": "Starlight Compass",
+  "coins": 299,
+  "image": "gifts/starlight-compass.webp"
+ },
+ {
+  "name": "Super Dog",
+  "coins": 299,
+  "image": "gifts/super-dog.webp"
+ },
+ {
+  "name": "Swing Cello",
+  "coins": 299,
+  "image": "gifts/swing-cello.webp"
+ },
+ {
+  "name": "The Mullet",
+  "coins": 299,
+  "image": "gifts/the-mullet.webp"
+ },
+ {
+  "name": "TikTok Crown",
+  "coins": 299,
+  "image": "gifts/tiktok-crown.webp"
+ },
+ {
+  "name": "Tiny Diny on Triangle",
+  "coins": 299,
+  "image": "gifts/tiny-diny-on-triangle.webp"
+ },
+ {
+  "name": "Trick or Treat",
+  "coins": 299,
+  "image": "gifts/trick-or-treat.webp"
+ },
+ {
+  "name": "Tropical Mask",
+  "coins": 299,
+  "image": "gifts/tropical-mask.webp"
+ },
+ {
+  "name": "UAE Cake",
+  "coins": 299,
+  "image": "gifts/uae-cake.webp"
+ },
+ {
+  "name": "United Heart",
+  "coins": 299,
+  "image": "gifts/united-heart.webp"
+ },
+ {
+  "name": "Victory Sign",
+  "coins": 299,
+  "image": "gifts/victory-sign.webp"
+ },
+ {
+  "name": "Waiting Frog",
+  "coins": 299,
+  "image": "gifts/waiting-frog.webp"
+ },
+ {
+  "name": "Wakey Mallow",
+  "coins": 299,
+  "image": "gifts/wakey-mallow.webp"
+ },
+ {
+  "name": "Air Dancer",
+  "coins": 300,
+  "image": "gifts/air-dancer.webp"
+ },
+ {
+  "name": "Anniversary Cake",
+  "coins": 300,
+  "image": "gifts/anniversary-cake.webp"
+ },
+ {
+  "name": "Birthday Cake",
+  "coins": 300,
+  "image": "gifts/birthday-cake-2.webp"
+ },
+ {
+  "name": "Diamond ring of love",
+  "coins": 300,
+  "image": "gifts/diamond-ring-of-love.webp"
+ },
+ {
+  "name": "Feather Mask",
+  "coins": 300,
+  "image": "gifts/feather-mask.webp"
+ },
+ {
+  "name": "Galaxy&#39;s Bestest",
+  "coins": 300,
+  "image": "gifts/galaxy-39-s-bestest.webp"
+ },
+ {
+  "name": "Golden Sunset",
+  "coins": 300,
+  "image": "gifts/golden-sunset.webp"
+ },
+ {
+  "name": "Oud",
+  "coins": 300,
+  "image": "gifts/oud-2.webp"
+ },
+ {
+  "name": "Shaun&#39;s head",
+  "coins": 300,
+  "image": "gifts/shaun-39-s-head.webp"
+ },
+ {
+  "name": "Summer Solstice",
+  "coins": 300,
+  "image": "gifts/summer-solstice.webp"
+ },
+ {
+  "name": "Backing Monkey",
+  "coins": 349,
+  "image": "gifts/backing-monkey.webp"
+ },
+ {
+  "name": "Batwing Hat",
+  "coins": 349,
+  "image": "gifts/batwing-hat.webp"
+ },
+ {
+  "name": "Beach Maracas",
+  "coins": 349,
+  "image": "gifts/beach-maracas.webp"
+ },
+ {
+  "name": "Become Kitten",
+  "coins": 349,
+  "image": "gifts/become-kitten.webp"
+ },
+ {
+  "name": "Butterfly Vibe",
+  "coins": 349,
+  "image": "gifts/butterfly-vibe.webp"
+ },
+ {
+  "name": "Calcaldan",
+  "coins": 349,
+  "image": "gifts/calcaldan.webp"
+ },
+ {
+  "name": "Candy Bouquet",
+  "coins": 349,
+  "image": "gifts/candy-bouquet-2.webp"
+ },
+ {
+  "name": "Chopin in the Rain",
+  "coins": 349,
+  "image": "gifts/chopin-in-the-rain.webp"
+ },
+ {
+  "name": "Craft Dreamer",
+  "coins": 349,
+  "image": "gifts/craft-dreamer.webp"
+ },
+ {
+  "name": "Djembe Master",
+  "coins": 349,
+  "image": "gifts/djembe-master.webp"
+ },
+ {
+  "name": "Electro Vibes",
+  "coins": 349,
+  "image": "gifts/electro-vibes.webp"
+ },
+ {
+  "name": "Festival Bracelet",
+  "coins": 349,
+  "image": "gifts/festival-bracelet.webp"
+ },
+ {
+  "name": "Gingerbread Man",
+  "coins": 349,
+  "image": "gifts/gingerbread-man.webp"
+ },
+ {
+  "name": "Juicy Cap",
+  "coins": 349,
+  "image": "gifts/juicy-cap.webp"
+ },
+ {
+  "name": "Marked with Love",
+  "coins": 349,
+  "image": "gifts/marked-with-love.webp"
+ },
+ {
+  "name": "Mom&#39;s Bonnet",
+  "coins": 349,
+  "image": "gifts/mom-39-s-bonnet.webp"
+ },
+ {
+  "name": "Munch Monster",
+  "coins": 349,
+  "image": "gifts/munch-monster.webp"
+ },
+ {
+  "name": "Mystic Drink",
+  "coins": 349,
+  "image": "gifts/mystic-drink.webp"
+ },
+ {
+  "name": "Retro Headset",
+  "coins": 349,
+  "image": "gifts/retro-headset.webp"
+ },
+ {
+  "name": "Retro Melody",
+  "coins": 349,
+  "image": "gifts/retro-melody.webp"
+ },
+ {
+  "name": "Rock Demon",
+  "coins": 349,
+  "image": "gifts/rock-demon.webp"
+ },
+ {
+  "name": "Rocking Shroom",
+  "coins": 349,
+  "image": "gifts/rocking-shroom.webp"
+ },
+ {
+  "name": "Rose Wreath",
+  "coins": 349,
+  "image": "gifts/rose-wreath.webp"
+ },
+ {
+  "name": "Sparkle Pony",
+  "coins": 349,
+  "image": "gifts/sparkle-pony.webp"
+ },
+ {
+  "name": "Spin Seal",
+  "coins": 349,
+  "image": "gifts/spin-seal.webp"
+ },
+ {
+  "name": "Spring Bouquet",
+  "coins": 349,
+  "image": "gifts/spring-bouquet.webp"
+ },
+ {
+  "name": "Starry Seal",
+  "coins": 349,
+  "image": "gifts/starry-seal.webp"
+ },
+ {
+  "name": "Summer Pass M",
+  "coins": 349,
+  "image": "gifts/summer-pass-m.webp"
+ },
+ {
+  "name": "Ukulele Player",
+  "coins": 349,
+  "image": "gifts/ukulele-player.webp"
+ },
+ {
+  "name": "Vintage flight",
+  "coins": 349,
+  "image": "gifts/vintage-flight.webp"
+ },
+ {
+  "name": "Vinyl Flip",
+  "coins": 349,
+  "image": "gifts/vinyl-flip.webp"
+ },
+ {
+  "name": "LIVE Pro Honor",
+  "coins": 350,
+  "image": "gifts/live-pro-honor.webp"
+ },
+ {
+  "name": "Campfire",
+  "coins": 388,
+  "image": "gifts/campfire.webp"
+ },
+ {
+  "name": "KSA",
+  "coins": 394,
+  "image": "gifts/ksa-2.webp"
+ },
+ {
+  "name": "Singing frogs",
+  "coins": 398,
+  "image": "gifts/singing-frogs.webp"
+ },
+ {
+  "name": "Alien Buddy",
+  "coins": 399,
+  "image": "gifts/alien-buddy.webp"
+ },
+ {
+  "name": "Astronaut Koala",
+  "coins": 399,
+  "image": "gifts/astronaut-koala.webp"
+ },
+ {
+  "name": "Aurora Groove",
+  "coins": 399,
+  "image": "gifts/aurora-groove.webp"
+ },
+ {
+  "name": "BBQ",
+  "coins": 399,
+  "image": "gifts/bbq.webp"
+ },
+ {
+  "name": "Beat Wings",
+  "coins": 399,
+  "image": "gifts/beat-wings.webp"
+ },
+ {
+  "name": "Blossom Fairy",
+  "coins": 399,
+  "image": "gifts/blossom-fairy.webp"
+ },
+ {
+  "name": "Cactus Shuffle",
+  "coins": 399,
+  "image": "gifts/cactus-shuffle.webp"
+ },
+ {
+  "name": "Cheer Squad",
+  "coins": 399,
+  "image": "gifts/cheer-squad.webp"
+ },
+ {
+  "name": "Confetti Bear",
+  "coins": 399,
+  "image": "gifts/confetti-bear.webp"
+ },
+ {
+  "name": "Cotton the Seal",
+  "coins": 399,
+  "image": "gifts/cotton-the-seal.webp"
+ },
+ {
+  "name": "Desert Survivals",
+  "coins": 399,
+  "image": "gifts/desert-survivals.webp"
+ },
+ {
+  "name": "DJ Set",
+  "coins": 399,
+  "image": "gifts/dj-set.webp"
+ },
+ {
+  "name": "Dreamy Hat",
+  "coins": 399,
+  "image": "gifts/dreamy-hat.webp"
+ },
+ {
+  "name": "Echo Mom",
+  "coins": 399,
+  "image": "gifts/echo-mom.webp"
+ },
+ {
+  "name": "Fairy Locket",
+  "coins": 399,
+  "image": "gifts/fairy-locket.webp"
+ },
+ {
+  "name": "Fire up",
+  "coins": 399,
+  "image": "gifts/fire-up.webp"
+ },
+ {
+  "name": "Floral Serenade",
+  "coins": 399,
+  "image": "gifts/floral-serenade.webp"
+ },
+ {
+  "name": "Flower Flight",
+  "coins": 399,
+  "image": "gifts/flower-flight.webp"
+ },
+ {
+  "name": "Forever Rosa",
+  "coins": 399,
+  "image": "gifts/forever-rosa.webp"
+ },
+ {
+  "name": "Fortune Cat",
+  "coins": 399,
+  "image": "gifts/fortune-cat.webp"
+ },
+ {
+  "name": "Gamer Cyber Mask",
+  "coins": 399,
+  "image": "gifts/gamer-cyber-mask.webp"
+ },
+ {
+  "name": "Gaming Headset",
+  "coins": 399,
+  "image": "gifts/gaming-headset.webp"
+ },
+ {
+  "name": "Health Potion",
+  "coins": 399,
+  "image": "gifts/health-potion.webp"
+ },
+ {
+  "name": "Hug Me",
+  "coins": 399,
+  "image": "gifts/hug-me.webp"
+ },
+ {
+  "name": "Jiggly Pudding",
+  "coins": 399,
+  "image": "gifts/jiggly-pudding.webp"
+ },
+ {
+  "name": "Jollie the Joy Bean",
+  "coins": 399,
+  "image": "gifts/jollie-the-joy-bean.webp"
+ },
+ {
+  "name": "Jollie&#39;s Community",
+  "coins": 399,
+  "image": "gifts/jollie-39-s-community.webp"
+ },
+ {
+  "name": "Ketupat Tree",
+  "coins": 399,
+  "image": "gifts/ketupat-tree.webp"
+ },
+ {
+  "name": "Kitten Kneading",
+  "coins": 399,
+  "image": "gifts/kitten-kneading.webp"
+ },
+ {
+  "name": "Kuromi Head",
+  "coins": 399,
+  "image": "gifts/kuromi-head.webp"
+ },
+ {
+  "name": "League Boost",
+  "coins": 399,
+  "image": "gifts/league-boost.webp"
+ },
+ {
+  "name": "Let butterfly dances",
+  "coins": 399,
+  "image": "gifts/let-butterfly-dances.webp"
+ },
+ {
+  "name": "Lucky Cat",
+  "coins": 399,
+  "image": "gifts/lucky-cat.webp"
+ },
+ {
+  "name": "Magic Rhythm",
+  "coins": 399,
+  "image": "gifts/magic-rhythm.webp"
+ },
+ {
+  "name": "Melody Headset",
+  "coins": 399,
+  "image": "gifts/melody-headset.webp"
+ },
+ {
+  "name": "Otter Kiss",
+  "coins": 399,
+  "image": "gifts/otter-kiss.webp"
+ },
+ {
+  "name": "Panda Snap",
+  "coins": 399,
+  "image": "gifts/panda-snap.webp"
+ },
+ {
+  "name": "Papa Capybara",
+  "coins": 399,
+  "image": "gifts/papa-capybara.webp"
+ },
+ {
+  "name": "Pharaoh Mask",
+  "coins": 399,
+  "image": "gifts/pharaoh-mask.webp"
+ },
+ {
+  "name": "Pull Rod",
+  "coins": 399,
+  "image": "gifts/pull-rod.webp"
+ },
+ {
+  "name": "Pumpkin head",
+  "coins": 399,
+  "image": "gifts/pumpkin-head.webp"
+ },
+ {
+  "name": "Ramadan Gift Box",
+  "coins": 399,
+  "image": "gifts/ramadan-gift-box.webp"
+ },
+ {
+  "name": "Relaxed Goose",
+  "coins": 399,
+  "image": "gifts/relaxed-goose.webp"
+ },
+ {
+  "name": "Rocket Game",
+  "coins": 399,
+  "image": "gifts/rocket-game.webp"
+ },
+ {
+  "name": "Rocky the Rock Bean",
+  "coins": 399,
+  "image": "gifts/rocky-the-rock-bean.webp"
+ },
+ {
+  "name": "Rosie the Rose Bean",
+  "coins": 399,
+  "image": "gifts/rosie-the-rose-bean.webp"
+ },
+ {
+  "name": "Rosie&#39;s Concert",
+  "coins": 399,
+  "image": "gifts/rosie-39-s-concert.webp"
+ },
+ {
+  "name": "Sage the Smart Bean",
+  "coins": 399,
+  "image": "gifts/sage-the-smart-bean.webp"
+ },
+ {
+  "name": "Sage&#39;s Slash",
+  "coins": 399,
+  "image": "gifts/sage-39-s-slash.webp"
+ },
+ {
+  "name": "Santa Owl Surprise",
+  "coins": 399,
+  "image": "gifts/santa-owl-surprise.webp"
+ },
+ {
+  "name": "Sending luck",
+  "coins": 399,
+  "image": "gifts/sending-luck.webp"
+ },
+ {
+  "name": "Shoot the Apple",
+  "coins": 399,
+  "image": "gifts/shoot-the-apple.webp"
+ },
+ {
+  "name": "Sing in Sync",
+  "coins": 399,
+  "image": "gifts/sing-in-sync.webp"
+ },
+ {
+  "name": "Singing Mic",
+  "coins": 399,
+  "image": "gifts/singing-mic.webp"
+ },
+ {
+  "name": "Singing Sax",
+  "coins": 399,
+  "image": "gifts/singing-sax.webp"
+ },
+ {
+  "name": "Tiger Lift",
+  "coins": 399,
+  "image": "gifts/tiger-lift.webp"
+ },
+ {
+  "name": "Tom&#39;s Hug",
+  "coins": 399,
+  "image": "gifts/tom-39-s-hug.webp"
+ },
+ {
+  "name": "Vocal Bear",
+  "coins": 399,
+  "image": "gifts/vocal-bear.webp"
+ },
+ {
+  "name": "Wind on Kemenche",
+  "coins": 399,
+  "image": "gifts/wind-on-kemenche.webp"
+ },
+ {
+  "name": "You Are Loved",
+  "coins": 399,
+  "image": "gifts/you-are-loved.webp"
+ },
+ {
+  "name": "Bear with Rose",
+  "coins": 400,
+  "image": "gifts/bear-with-rose.webp"
+ },
+ {
+  "name": "Bounce Speakers",
+  "coins": 400,
+  "image": "gifts/bounce-speakers.webp"
+ },
+ {
+  "name": "Ceramic",
+  "coins": 400,
+  "image": "gifts/ceramic.webp"
+ },
+ {
+  "name": "Cheeky Pup",
+  "coins": 400,
+  "image": "gifts/cheeky-pup.webp"
+ },
+ {
+  "name": "Cornucopia",
+  "coins": 400,
+  "image": "gifts/cornucopia.webp"
+ },
+ {
+  "name": "Crystal Dreams",
+  "coins": 400,
+  "image": "gifts/crystal-dreams.webp"
+ },
+ {
+  "name": "DJ Wave",
+  "coins": 400,
+  "image": "gifts/dj-wave.webp"
+ },
+ {
+  "name": "FANDOM Fever",
+  "coins": 400,
+  "image": "gifts/fandom-fever.webp"
+ },
+ {
+  "name": "Glorious Chef",
+  "coins": 400,
+  "image": "gifts/glorious-chef.webp"
+ },
+ {
+  "name": "Heartbeat Keys",
+  "coins": 400,
+  "image": "gifts/heartbeat-keys.webp"
+ },
+ {
+  "name": "Magic Accordion",
+  "coins": 400,
+  "image": "gifts/magic-accordion.webp"
+ },
+ {
+  "name": "Mic Champ",
+  "coins": 400,
+  "image": "gifts/mic-champ.webp"
+ },
+ {
+  "name": "Moped",
+  "coins": 400,
+  "image": "gifts/moped.webp"
+ },
+ {
+  "name": "Neon Rockstar",
+  "coins": 400,
+  "image": "gifts/neon-rockstar.webp"
+ },
+ {
+  "name": "Pop Parrot",
+  "coins": 400,
+  "image": "gifts/pop-parrot.webp"
+ },
+ {
+  "name": "Punch Cuddle",
+  "coins": 400,
+  "image": "gifts/punch-cuddle.webp"
+ },
+ {
+  "name": "Reindeer Milk",
+  "coins": 400,
+  "image": "gifts/reindeer-milk.webp"
+ },
+ {
+  "name": "Rock Cats",
+  "coins": 400,
+  "image": "gifts/rock-cats.webp"
+ },
+ {
+  "name": "Rock Idol",
+  "coins": 400,
+  "image": "gifts/rock-idol.webp"
+ },
+ {
+  "name": "Siren&#39;s Echo",
+  "coins": 400,
+  "image": "gifts/siren-39-s-echo.webp"
+ },
+ {
+  "name": "Snowfall",
+  "coins": 400,
+  "image": "gifts/snowfall.webp"
+ },
+ {
+  "name": "Starry Sax",
+  "coins": 400,
+  "image": "gifts/starry-sax.webp"
+ },
+ {
+  "name": "Super Dad",
+  "coins": 400,
+  "image": "gifts/super-dad.webp"
+ },
+ {
+  "name": "Taraxacum Corgi",
+  "coins": 400,
+  "image": "gifts/taraxacum-corgi.webp"
+ },
+ {
+  "name": "The Mrazhemian",
+  "coins": 400,
+  "image": "gifts/the-mrazhemian.webp"
+ },
+ {
+  "name": "Wishing Cake",
+  "coins": 400,
+  "image": "gifts/wishing-cake.webp"
+ },
+ {
+  "name": "Batting Cutie",
+  "coins": 449,
+  "image": "gifts/batting-cutie.webp"
+ },
+ {
+  "name": "Beating Heart",
+  "coins": 449,
+  "image": "gifts/beating-heart.webp"
+ },
+ {
+  "name": "Candy Loot",
+  "coins": 449,
+  "image": "gifts/candy-loot.webp"
+ },
+ {
+  "name": "Captured Vocals",
+  "coins": 449,
+  "image": "gifts/captured-vocals.webp"
+ },
+ {
+  "name": "Clown Boogie",
+  "coins": 449,
+  "image": "gifts/clown-boogie.webp"
+ },
+ {
+  "name": "Cyber Strings",
+  "coins": 449,
+  "image": "gifts/cyber-strings.webp"
+ },
+ {
+  "name": "Electronic Love Song",
+  "coins": 449,
+  "image": "gifts/electronic-love-song.webp"
+ },
+ {
+  "name": "Encore Clap",
+  "coins": 449,
+  "image": "gifts/encore-clap.webp"
+ },
+ {
+  "name": "Lightning Look",
+  "coins": 449,
+  "image": "gifts/lightning-look.webp"
+ },
+ {
+  "name": "Lucky Hat",
+  "coins": 449,
+  "image": "gifts/lucky-hat.webp"
+ },
+ {
+  "name": "Magic Knight",
+  "coins": 449,
+  "image": "gifts/magic-knight.webp"
+ },
+ {
+  "name": "Meowsic Trumpet",
+  "coins": 449,
+  "image": "gifts/meowsic-trumpet.webp"
+ },
+ {
+  "name": "Pirate&#39;s Treasure",
+  "coins": 449,
+  "image": "gifts/pirate-39-s-treasure.webp"
+ },
+ {
+  "name": "Rock and Roll",
+  "coins": 449,
+  "image": "gifts/rock-and-roll.webp"
+ },
+ {
+  "name": "Space Love",
+  "coins": 449,
+  "image": "gifts/space-love.webp"
+ },
+ {
+  "name": "Terminator Face",
+  "coins": 449,
+  "image": "gifts/terminator-face.webp"
+ },
+ {
+  "name": "Xmas Tree Hat",
+  "coins": 449,
+  "image": "gifts/xmas-tree-hat.webp"
+ },
+ {
+  "name": "Celebration Hat",
+  "coins": 450,
+  "image": "gifts/celebration-hat.webp"
+ },
+ {
+  "name": "City Pop",
+  "coins": 450,
+  "image": "gifts/city-pop.webp"
+ },
+ {
+  "name": "Clover Hat",
+  "coins": 450,
+  "image": "gifts/clover-hat.webp"
+ },
+ {
+  "name": "Cupid Koala",
+  "coins": 450,
+  "image": "gifts/cupid-koala.webp"
+ },
+ {
+  "name": "Diva Feathers",
+  "coins": 450,
+  "image": "gifts/diva-feathers.webp"
+ },
+ {
+  "name": "Fairy Mask",
+  "coins": 450,
+  "image": "gifts/fairy-mask.webp"
+ },
+ {
+  "name": "Fortune Kitty",
+  "coins": 450,
+  "image": "gifts/fortune-kitty.webp"
+ },
+ {
+  "name": "Glow Chant",
+  "coins": 450,
+  "image": "gifts/glow-chant.webp"
+ },
+ {
+  "name": "Groove Straw",
+  "coins": 450,
+  "image": "gifts/groove-straw.webp"
+ },
+ {
+  "name": "Halloween Fun Hat",
+  "coins": 450,
+  "image": "gifts/halloween-fun-hat.webp"
+ },
+ {
+  "name": "Hat of Joy",
+  "coins": 450,
+  "image": "gifts/hat-of-joy.webp"
+ },
+ {
+  "name": "Music Conductor",
+  "coins": 450,
+  "image": "gifts/music-conductor.webp"
+ },
+ {
+  "name": "Office Penguin",
+  "coins": 450,
+  "image": "gifts/office-penguin.webp"
+ },
+ {
+  "name": "Paw Call",
+  "coins": 450,
+  "image": "gifts/paw-call.webp"
+ },
+ {
+  "name": "Pink Cowboy",
+  "coins": 450,
+  "image": "gifts/pink-cowboy.webp"
+ },
+ {
+  "name": "Powerful Mind",
+  "coins": 450,
+  "image": "gifts/powerful-mind.webp"
+ },
+ {
+  "name": "Sloth Peek",
+  "coins": 450,
+  "image": "gifts/sloth-peek.webp"
+ },
+ {
+  "name": "Steady on the Beam",
+  "coins": 450,
+  "image": "gifts/steady-on-the-beam.webp"
+ },
+ {
+  "name": "Superwoman",
+  "coins": 450,
+  "image": "gifts/superwoman.webp"
+ },
+ {
+  "name": "Winning Wednesday",
+  "coins": 450,
+  "image": "gifts/winning-wednesday-2.webp"
+ },
+ {
+  "name": "Azura red card",
+  "coins": 499,
+  "image": "gifts/azura-red-card.webp"
+ },
+ {
+  "name": "Basket of Spring",
+  "coins": 499,
+  "image": "gifts/basket-of-spring.webp"
+ },
+ {
+  "name": "Coral",
+  "coins": 499,
+  "image": "gifts/coral.webp"
+ },
+ {
+  "name": "Crystal Heart",
+  "coins": 499,
+  "image": "gifts/crystal-heart.webp"
+ },
+ {
+  "name": "Eye on the Ball",
+  "coins": 499,
+  "image": "gifts/eye-on-the-ball.webp"
+ },
+ {
+  "name": "Fuzzy Drum",
+  "coins": 499,
+  "image": "gifts/fuzzy-drum.webp"
+ },
+ {
+  "name": "Gold Microphone",
+  "coins": 499,
+  "image": "gifts/gold-microphone.webp"
+ },
+ {
+  "name": "Hands Up",
+  "coins": 499,
+  "image": "gifts/hands-up.webp"
+ },
+ {
+  "name": "Im Just a Hamster",
+  "coins": 499,
+  "image": "gifts/im-just-a-hamster.webp"
+ },
+ {
+  "name": "Island Uke",
+  "coins": 499,
+  "image": "gifts/island-uke.webp"
+ },
+ {
+  "name": "Key Master",
+  "coins": 499,
+  "image": "gifts/key-master.webp"
+ },
+ {
+  "name": "Kitty Tea Time",
+  "coins": 499,
+  "image": "gifts/kitty-tea-time.webp"
+ },
+ {
+  "name": "Lollipop Gift Box",
+  "coins": 499,
+  "image": "gifts/lollipop-gift-box.webp"
+ },
+ {
+  "name": "Music",
+  "coins": 499,
+  "image": "gifts/music.webp"
+ },
+ {
+  "name": "Panda Hug",
+  "coins": 499,
+  "image": "gifts/panda-hug.webp"
+ },
+ {
+  "name": "Pink Dress",
+  "coins": 499,
+  "image": "gifts/pink-dress.webp"
+ },
+ {
+  "name": "Rose Soundwave",
+  "coins": 499,
+  "image": "gifts/rose-soundwave.webp"
+ },
+ {
+  "name": "Sakura Corgi",
+  "coins": 499,
+  "image": "gifts/sakura-corgi.webp"
+ },
+ {
+  "name": "Surfing Penguin",
+  "coins": 499,
+  "image": "gifts/surfing-penguin-2.webp"
+ },
+ {
+  "name": "Autumn Dog Camp",
+  "coins": 500,
+  "image": "gifts/autumn-dog-camp.webp"
+ },
+ {
+  "name": "Autumn Leaves",
+  "coins": 500,
+  "image": "gifts/autumn-leaves.webp"
+ },
+ {
+  "name": "Baby Chicks",
+  "coins": 500,
+  "image": "gifts/baby-chicks.webp"
+ },
+ {
+  "name": "Big Potato",
+  "coins": 500,
+  "image": "gifts/big-potato.webp"
+ },
+ {
+  "name": "Bouquet",
+  "coins": 500,
+  "image": "gifts/bouquet-3.webp"
+ },
+ {
+  "name": "Bubbles",
+  "coins": 500,
+  "image": "gifts/bubbles.webp"
+ },
+ {
+  "name": "Bunny Crown",
+  "coins": 500,
+  "image": "gifts/bunny-crown.webp"
+ },
+ {
+  "name": "Cheeky Wiggly",
+  "coins": 500,
+  "image": "gifts/cheeky-wiggly.webp"
+ },
+ {
+  "name": "Chubby Hamster",
+  "coins": 500,
+  "image": "gifts/chubby-hamster.webp"
+ },
+ {
+  "name": "Cosmic DJ",
+  "coins": 500,
+  "image": "gifts/cosmic-dj.webp"
+ },
+ {
+  "name": "Couch Potato",
+  "coins": 500,
+  "image": "gifts/couch-potato.webp"
+ },
+ {
+  "name": "Cozy Xmas Set",
+  "coins": 500,
+  "image": "gifts/cozy-xmas-set.webp"
+ },
+ {
+  "name": "Cuddle with Me",
+  "coins": 500,
+  "image": "gifts/cuddle-with-me.webp"
+ },
+ {
+  "name": "Diamond Microphone",
+  "coins": 500,
+  "image": "gifts/diamond-microphone.webp"
+ },
+ {
+  "name": "DJ Glasses",
+  "coins": 500,
+  "image": "gifts/dj-glasses.webp"
+ },
+ {
+  "name": "Do Not Blow",
+  "coins": 500,
+  "image": "gifts/do-not-blow.webp"
+ },
+ {
+  "name": "Dragon Crown",
+  "coins": 500,
+  "image": "gifts/dragon-crown.webp"
+ },
+ {
+  "name": "Dream Team",
+  "coins": 500,
+  "image": "gifts/dream-team-2.webp"
+ },
+ {
+  "name": "Drum Genius",
+  "coins": 500,
+  "image": "gifts/drum-genius.webp"
+ },
+ {
+  "name": "Drum Pop",
+  "coins": 500,
+  "image": "gifts/drum-pop.webp"
+ },
+ {
+  "name": "Durian Best Friends",
+  "coins": 500,
+  "image": "gifts/durian-best-friends.webp"
+ },
+ {
+  "name": "F1 Austin M",
+  "coins": 500,
+  "image": "gifts/f1-austin-m.webp"
+ },
+ {
+  "name": "Fish and Chips",
+  "coins": 500,
+  "image": "gifts/fish-and-chips.webp"
+ },
+ {
+  "name": "Flower Show",
+  "coins": 500,
+  "image": "gifts/flower-show.webp"
+ },
+ {
+  "name": "Gem Gun",
+  "coins": 500,
+  "image": "gifts/gem-gun.webp"
+ },
+ {
+  "name": "Go Galaxy",
+  "coins": 500,
+  "image": "gifts/go-galaxy.webp"
+ },
+ {
+  "name": "Goldfish Scooping",
+  "coins": 500,
+  "image": "gifts/goldfish-scooping.webp"
+ },
+ {
+  "name": "Halloween Ghost",
+  "coins": 500,
+  "image": "gifts/halloween-ghost.webp"
+ },
+ {
+  "name": "Heart Guitar",
+  "coins": 500,
+  "image": "gifts/heart-guitar.webp"
+ },
+ {
+  "name": "Heart It Out",
+  "coins": 500,
+  "image": "gifts/heart-it-out.webp"
+ },
+ {
+  "name": "HeartBeats",
+  "coins": 500,
+  "image": "gifts/heartbeats.webp"
+ },
+ {
+  "name": "Hena Aura",
+  "coins": 500,
+  "image": "gifts/hena-aura.webp"
+ },
+ {
+  "name": "Honey Strummer",
+  "coins": 500,
+  "image": "gifts/honey-strummer.webp"
+ },
+ {
+  "name": "Iron Anchor",
+  "coins": 500,
+  "image": "gifts/iron-anchor.webp"
+ },
+ {
+  "name": "Jingle It Out",
+  "coins": 500,
+  "image": "gifts/jingle-it-out.webp"
+ },
+ {
+  "name": "Jungle Blitzy",
+  "coins": 500,
+  "image": "gifts/jungle-blitzy.webp"
+ },
+ {
+  "name": "Jungle Cooper",
+  "coins": 500,
+  "image": "gifts/jungle-cooper.webp"
+ },
+ {
+  "name": "Jungle Diny",
+  "coins": 500,
+  "image": "gifts/jungle-diny.webp"
+ },
+ {
+  "name": "Jungle Nyota",
+  "coins": 500,
+  "image": "gifts/jungle-nyota.webp"
+ },
+ {
+  "name": "Jungle Tom",
+  "coins": 500,
+  "image": "gifts/jungle-tom.webp"
+ },
+ {
+  "name": "Lion’s Mane",
+  "coins": 500,
+  "image": "gifts/lion-s-mane.webp"
+ },
+ {
+  "name": "Lost in Your Music",
+  "coins": 500,
+  "image": "gifts/lost-in-your-music.webp"
+ },
+ {
+  "name": "Love Balloon",
+  "coins": 500,
+  "image": "gifts/love-balloon.webp"
+ },
+ {
+  "name": "Magic Prop",
+  "coins": 500,
+  "image": "gifts/magic-prop.webp"
+ },
+ {
+  "name": "Make it rain",
+  "coins": 500,
+  "image": "gifts/make-it-rain.webp"
+ },
+ {
+  "name": "Manifesting",
+  "coins": 500,
+  "image": "gifts/manifesting.webp"
+ },
+ {
+  "name": "Match Master",
+  "coins": 500,
+  "image": "gifts/match-master.webp"
+ },
+ {
+  "name": "Mermaid",
+  "coins": 500,
+  "image": "gifts/mermaid.webp"
+ },
+ {
+  "name": "Mic Drop",
+  "coins": 500,
+  "image": "gifts/mic-drop.webp"
+ },
+ {
+  "name": "Money Gun",
+  "coins": 500,
+  "image": "gifts/money-gun.webp"
+ },
+ {
+  "name": "Monster Box!",
+  "coins": 500,
+  "image": "gifts/monster-box.webp"
+ },
+ {
+  "name": "Mystery Box",
+  "coins": 500,
+  "image": "gifts/mystery-box.webp"
+ },
+ {
+  "name": "Out Pops Jollie!",
+  "coins": 500,
+  "image": "gifts/out-pops-jollie.webp"
+ },
+ {
+  "name": "Oyen Kebaya",
+  "coins": 500,
+  "image": "gifts/oyen-kebaya.webp"
+ },
+ {
+  "name": "Pelita",
+  "coins": 500,
+  "image": "gifts/pelita.webp"
+ },
+ {
+  "name": "Polaris",
+  "coins": 500,
+  "image": "gifts/polaris.webp"
+ },
+ {
+  "name": "Prairie Blitzy",
+  "coins": 500,
+  "image": "gifts/prairie-blitzy.webp"
+ },
+ {
+  "name": "Prairie Cooper",
+  "coins": 500,
+  "image": "gifts/prairie-cooper.webp"
+ },
+ {
+  "name": "Prairie Diny",
+  "coins": 500,
+  "image": "gifts/prairie-diny.webp"
+ },
+ {
+  "name": "Prairie Nyota",
+  "coins": 500,
+  "image": "gifts/prairie-nyota.webp"
+ },
+ {
+  "name": "Prairie Tom",
+  "coins": 500,
+  "image": "gifts/prairie-tom.webp"
+ },
+ {
+  "name": "Prince",
+  "coins": 500,
+  "image": "gifts/prince.webp"
+ },
+ {
+  "name": "Puyo Shower!",
+  "coins": 500,
+  "image": "gifts/puyo-shower.webp"
+ },
+ {
+  "name": "Racing Helmet",
+  "coins": 500,
+  "image": "gifts/racing-helmet.webp"
+ },
+ {
+  "name": "Red Carpet Star Pup",
+  "coins": 500,
+  "image": "gifts/red-carpet-star-pup.webp"
+ },
+ {
+  "name": "Roo Mother",
+  "coins": 500,
+  "image": "gifts/roo-mother.webp"
+ },
+ {
+  "name": "Roses",
+  "coins": 500,
+  "image": "gifts/roses.webp"
+ },
+ {
+  "name": "Shell of a Warrior",
+  "coins": 500,
+  "image": "gifts/shell-of-a-warrior.webp"
+ },
+ {
+  "name": "Sound Spell",
+  "coins": 500,
+  "image": "gifts/sound-spell.webp"
+ },
+ {
+  "name": "Spark Ring Earth",
+  "coins": 500,
+  "image": "gifts/spark-ring-earth.webp"
+ },
+ {
+  "name": "Spark Ring Fire",
+  "coins": 500,
+  "image": "gifts/spark-ring-fire.webp"
+ },
+ {
+  "name": "Star Map Polaris",
+  "coins": 500,
+  "image": "gifts/star-map-polaris.webp"
+ },
+ {
+  "name": "Starry Fluff",
+  "coins": 500,
+  "image": "gifts/starry-fluff.webp"
+ },
+ {
+  "name": "Summer of LIVE",
+  "coins": 500,
+  "image": "gifts/summer-of-live.webp"
+ },
+ {
+  "name": "Symphony",
+  "coins": 500,
+  "image": "gifts/symphony.webp"
+ },
+ {
+  "name": "Trick or Treat!?",
+  "coins": 500,
+  "image": "gifts/trick-or-treat-2.webp"
+ },
+ {
+  "name": "Trick or Treats",
+  "coins": 500,
+  "image": "gifts/trick-or-treats.webp"
+ },
+ {
+  "name": "Tricycle",
+  "coins": 500,
+  "image": "gifts/tricycle.webp"
+ },
+ {
+  "name": "Trophy",
+  "coins": 500,
+  "image": "gifts/trophy.webp"
+ },
+ {
+  "name": "VR Goggles",
+  "coins": 500,
+  "image": "gifts/vr-goggles.webp"
+ },
+ {
+  "name": "Window basket",
+  "coins": 500,
+  "image": "gifts/window-basket.webp"
+ },
+ {
+  "name": "XXXL Flowers",
+  "coins": 500,
+  "image": "gifts/xxxl-flowers.webp"
+ },
+ {
+  "name": "You’re Amazing",
+  "coins": 500,
+  "image": "gifts/you-re-amazing.webp"
+ },
+ {
+  "name": "Bubbly Kiss",
+  "coins": 530,
+  "image": "gifts/bubbly-kiss.webp"
+ },
+ {
+  "name": "Drum Hamster",
+  "coins": 549,
+  "image": "gifts/drum-hamster.webp"
+ },
+ {
+  "name": "Hive Escape",
+  "coins": 549,
+  "image": "gifts/hive-escape.webp"
+ },
+ {
+  "name": "Money Magnet",
+  "coins": 549,
+  "image": "gifts/money-magnet.webp"
+ },
+ {
+  "name": "Purrfect Pitch",
+  "coins": 550,
+  "image": "gifts/purrfect-pitch.webp"
+ },
+ {
+  "name": "Fruit Box",
+  "coins": 599,
+  "image": "gifts/fruit-box.webp"
+ },
+ {
+  "name": "Fully Bloomed Sakura",
+  "coins": 599,
+  "image": "gifts/fully-bloomed-sakura.webp"
+ },
+ {
+  "name": "League Trophy",
+  "coins": 599,
+  "image": "gifts/league-trophy.webp"
+ },
+ {
+  "name": "Rookie King",
+  "coins": 599,
+  "image": "gifts/rookie-king.webp"
+ },
+ {
+  "name": "Shining Stars",
+  "coins": 599,
+  "image": "gifts/shining-stars.webp"
+ },
+ {
+  "name": "Soccer Holo",
+  "coins": 599,
+  "image": "gifts/soccer-holo.webp"
+ },
+ {
+  "name": "Join Butterflies",
+  "coins": 600,
+  "image": "gifts/join-butterflies.webp"
+ },
+ {
+  "name": "Record Player",
+  "coins": 600,
+  "image": "gifts/record-player.webp"
+ },
+ {
+  "name": "Sakura Flute",
+  "coins": 600,
+  "image": "gifts/sakura-flute.webp"
+ },
+ {
+  "name": "Sakura-style DJ",
+  "coins": 600,
+  "image": "gifts/sakura-style-dj.webp"
+ },
+ {
+  "name": "Seahorse Pop",
+  "coins": 649,
+  "image": "gifts/seahorse-pop.webp"
+ },
+ {
+  "name": "Swan",
+  "coins": 699,
+  "image": "gifts/swan.webp"
+ },
+ {
+  "name": "Basketball Trophy",
+  "coins": 700,
+  "image": "gifts/basketball-trophy.webp"
+ },
+ {
+  "name": "Cafe Racer",
+  "coins": 700,
+  "image": "gifts/cafe-racer.webp"
+ },
+ {
+  "name": "Centre Stage",
+  "coins": 700,
+  "image": "gifts/centre-stage.webp"
+ },
+ {
+  "name": "Colorful Wings",
+  "coins": 700,
+  "image": "gifts/colorful-wings.webp"
+ },
+ {
+  "name": "Cotton Candy",
+  "coins": 700,
+  "image": "gifts/cotton-candy.webp"
+ },
+ {
+  "name": "Hello Shaun",
+  "coins": 700,
+  "image": "gifts/hello-shaun.webp"
+ },
+ {
+  "name": "Sax Appeal",
+  "coins": 700,
+  "image": "gifts/sax-appeal.webp"
+ },
+ {
+  "name": "Cute Cat",
+  "coins": 799,
+  "image": "gifts/cute-cat-2.webp"
+ },
+ {
+  "name": "Sunset in Bali",
+  "coins": 799,
+  "image": "gifts/sunset-in-bali.webp"
+ },
+ {
+  "name": "The Van Cat",
+  "coins": 799,
+  "image": "gifts/the-van-cat.webp"
+ },
+ {
+  "name": "Which Bro?",
+  "coins": 799,
+  "image": "gifts/which-bro.webp"
+ },
+ {
+  "name": "Bear Blind Box",
+  "coins": 800,
+  "image": "gifts/bear-blind-box.webp"
+ },
+ {
+  "name": "Claw machine",
+  "coins": 800,
+  "image": "gifts/claw-machine.webp"
+ },
+ {
+  "name": "Epic Pianist",
+  "coins": 800,
+  "image": "gifts/epic-pianist.webp"
+ },
+ {
+  "name": "Love Flight",
+  "coins": 800,
+  "image": "gifts/love-flight.webp"
+ },
+ {
+  "name": "Penguin",
+  "coins": 800,
+  "image": "gifts/penguin.webp"
+ },
+ {
+  "name": "Suncatcher",
+  "coins": 800,
+  "image": "gifts/suncatcher.webp"
+ },
+ {
+  "name": "Beach Date",
+  "coins": 899,
+  "image": "gifts/beach-date.webp"
+ },
+ {
+  "name": "Box of destiny",
+  "coins": 899,
+  "image": "gifts/box-of-destiny.webp"
+ },
+ {
+  "name": "Crescent Lanterns",
+  "coins": 899,
+  "image": "gifts/crescent-lanterns-2.webp"
+ },
+ {
+  "name": "Desert Camp",
+  "coins": 899,
+  "image": "gifts/desert-camp.webp"
+ },
+ {
+  "name": "Kindom of Night",
+  "coins": 899,
+  "image": "gifts/kindom-of-night.webp"
+ },
+ {
+  "name": "LOVE U",
+  "coins": 899,
+  "image": "gifts/love-u.webp"
+ },
+ {
+  "name": "Ramadan Blessings",
+  "coins": 899,
+  "image": "gifts/ramadan-blessings.webp"
+ },
+ {
+  "name": "Sakura Crown",
+  "coins": 899,
+  "image": "gifts/sakura-crown.webp"
+ },
+ {
+  "name": "Shadow Theatre",
+  "coins": 899,
+  "image": "gifts/shadow-theatre.webp"
+ },
+ {
+  "name": "Sheep Joy",
+  "coins": 899,
+  "image": "gifts/sheep-joy.webp"
+ },
+ {
+  "name": "Stage Wiggle",
+  "coins": 899,
+  "image": "gifts/stage-wiggle.webp"
+ },
+ {
+  "name": "Train",
+  "coins": 899,
+  "image": "gifts/train.webp"
+ },
+ {
+  "name": "Funky Hatter",
+  "coins": 900,
+  "image": "gifts/funky-hatter.webp"
+ },
+ {
+  "name": "Infinity Surge",
+  "coins": 900,
+  "image": "gifts/infinity-surge.webp"
+ },
+ {
+  "name": "Medium Fandom",
+  "coins": 900,
+  "image": "gifts/medium-fandom.webp"
+ },
+ {
+  "name": "Superstar",
+  "coins": 900,
+  "image": "gifts/superstar.webp"
+ },
+ {
+  "name": "Autumn Leaves",
+  "coins": 999,
+  "image": "gifts/autumn-leaves-2.webp"
+ },
+ {
+  "name": "Brave Wing",
+  "coins": 999,
+  "image": "gifts/brave-wing.webp"
+ },
+ {
+  "name": "Divine Flame",
+  "coins": 999,
+  "image": "gifts/divine-flame.webp"
+ },
+ {
+  "name": "Enchanted Guitar",
+  "coins": 999,
+  "image": "gifts/enchanted-guitar.webp"
+ },
+ {
+  "name": "Flamingo Floaty",
+  "coins": 999,
+  "image": "gifts/flamingo-floaty.webp"
+ },
+ {
+  "name": "Grand show",
+  "coins": 999,
+  "image": "gifts/grand-show.webp"
+ },
+ {
+  "name": "Hot Air Balloon",
+  "coins": 999,
+  "image": "gifts/hot-air-balloon.webp"
+ },
+ {
+  "name": "Kuromi Stage",
+  "coins": 999,
+  "image": "gifts/kuromi-stage.webp"
+ },
+ {
+  "name": "Lucky Airdrop Box",
+  "coins": 999,
+  "image": "gifts/lucky-airdrop-box.webp"
+ },
+ {
+  "name": "Music Burst",
+  "coins": 999,
+  "image": "gifts/music-burst.webp"
+ },
+ {
+  "name": "Puyo Shuffle!",
+  "coins": 999,
+  "image": "gifts/puyo-shuffle.webp"
+ },
+ {
+  "name": "Raining gifts",
+  "coins": 999,
+  "image": "gifts/raining-gifts.webp"
+ },
+ {
+  "name": "Rising Dragon",
+  "coins": 999,
+  "image": "gifts/rising-dragon.webp"
+ },
+ {
+  "name": "Superstriker Sage",
+  "coins": 999,
+  "image": "gifts/superstriker-sage.webp"
+ },
+ {
+  "name": "Travel with You",
+  "coins": 999,
+  "image": "gifts/travel-with-you.webp"
+ },
+ {
+  "name": "Trending Figure",
+  "coins": 999,
+  "image": "gifts/trending-figure.webp"
+ },
+ {
+  "name": "Uniform",
+  "coins": 999,
+  "image": "gifts/uniform.webp"
+ },
+ {
+  "name": "A Garden Yonder",
+  "coins": 1000,
+  "image": "gifts/a-garden-yonder.webp"
+ },
+ {
+  "name": "Accelerator Crown",
+  "coins": 1000,
+  "image": "gifts/accelerator-crown.webp"
+ },
+ {
+  "name": "Behind the Clouds",
+  "coins": 1000,
+  "image": "gifts/behind-the-clouds.webp"
+ },
+ {
+  "name": "Blooming Ribbons",
+  "coins": 1000,
+  "image": "gifts/blooming-ribbons.webp"
+ },
+ {
+  "name": "Dance with me",
+  "coins": 1000,
+  "image": "gifts/dance-with-me.webp"
+ },
+ {
+  "name": "Desert Blitzy",
+  "coins": 1000,
+  "image": "gifts/desert-blitzy.webp"
+ },
+ {
+  "name": "Desert Cooper",
+  "coins": 1000,
+  "image": "gifts/desert-cooper.webp"
+ },
+ {
+  "name": "Desert Diny",
+  "coins": 1000,
+  "image": "gifts/desert-diny.webp"
+ },
+ {
+  "name": "Desert Nyota",
+  "coins": 1000,
+  "image": "gifts/desert-nyota.webp"
+ },
+ {
+  "name": "Desert Tom",
+  "coins": 1000,
+  "image": "gifts/desert-tom.webp"
+ },
+ {
+  "name": "dinosaur",
+  "coins": 1000,
+  "image": "gifts/dinosaur.webp"
+ },
+ {
+  "name": "Dinosaur",
+  "coins": 1000,
+  "image": "gifts/dinosaur-2.webp"
+ },
+ {
+  "name": "Disco ball",
+  "coins": 1000,
+  "image": "gifts/disco-ball.webp"
+ },
+ {
+  "name": "Disco Dinosaur",
+  "coins": 1000,
+  "image": "gifts/disco-dinosaur.webp"
+ },
+ {
+  "name": "Drums",
+  "coins": 1000,
+  "image": "gifts/drums.webp"
+ },
+ {
+  "name": "Fairy Wings",
+  "coins": 1000,
+  "image": "gifts/fairy-wings-2.webp"
+ },
+ {
+  "name": "Feather Flock",
+  "coins": 1000,
+  "image": "gifts/feather-flock.webp"
+ },
+ {
+  "name": "Firepit Blitzy",
+  "coins": 1000,
+  "image": "gifts/firepit-blitzy.webp"
+ },
+ {
+  "name": "Firepit Cooper",
+  "coins": 1000,
+  "image": "gifts/firepit-cooper.webp"
+ },
+ {
+  "name": "Firepit Diny",
+  "coins": 1000,
+  "image": "gifts/firepit-diny.webp"
+ },
+ {
+  "name": "Firepit Nyota",
+  "coins": 1000,
+  "image": "gifts/firepit-nyota.webp"
+ },
+ {
+  "name": "Firepit Tom",
+  "coins": 1000,
+  "image": "gifts/firepit-tom.webp"
+ },
+ {
+  "name": "Flamingo Groove",
+  "coins": 1000,
+  "image": "gifts/flamingo-groove.webp"
+ },
+ {
+  "name": "Frozen",
+  "coins": 1000,
+  "image": "gifts/frozen.webp"
+ },
+ {
+  "name": "Galaxy",
+  "coins": 1000,
+  "image": "gifts/galaxy.webp"
+ },
+ {
+  "name": "Gerry the Giraffe",
+  "coins": 1000,
+  "image": "gifts/gerry-the-giraffe.webp"
+ },
+ {
+  "name": "Giraffe",
+  "coins": 1000,
+  "image": "gifts/giraffe.webp"
+ },
+ {
+  "name": "Glowing Jellyfish",
+  "coins": 1000,
+  "image": "gifts/glowing-jellyfish.webp"
+ },
+ {
+  "name": "Gold Mine",
+  "coins": 1000,
+  "image": "gifts/gold-mine.webp"
+ },
+ {
+  "name": "Hunting Dog",
+  "coins": 1000,
+  "image": "gifts/hunting-dog.webp"
+ },
+ {
+  "name": "Infinity Gold",
+  "coins": 1000,
+  "image": "gifts/infinity-gold.webp"
+ },
+ {
+  "name": "Iron Rod",
+  "coins": 1000,
+  "image": "gifts/iron-rod.webp"
+ },
+ {
+  "name": "Lightning your world",
+  "coins": 1000,
+  "image": "gifts/lightning-your-world.webp"
+ },
+ {
+  "name": "LIVE Pro Badge",
+  "coins": 1000,
+  "image": "gifts/live-pro-badge.webp"
+ },
+ {
+  "name": "Magic Cat",
+  "coins": 1000,
+  "image": "gifts/magic-cat.webp"
+ },
+ {
+  "name": "Magic Potion",
+  "coins": 1000,
+  "image": "gifts/magic-potion.webp"
+ },
+ {
+  "name": "Match Drum",
+  "coins": 1000,
+  "image": "gifts/match-drum.webp"
+ },
+ {
+  "name": "Matchtacular!",
+  "coins": 1000,
+  "image": "gifts/matchtacular.webp"
+ },
+ {
+  "name": "Picnic basket",
+  "coins": 1000,
+  "image": "gifts/picnic-basket.webp"
+ },
+ {
+  "name": "Shiny Air Balloon",
+  "coins": 1000,
+  "image": "gifts/shiny-air-balloon.webp"
+ },
+ {
+  "name": "Silver Sports Car",
+  "coins": 1000,
+  "image": "gifts/silver-sports-car.webp"
+ },
+ {
+  "name": "Space",
+  "coins": 1000,
+  "image": "gifts/space.webp"
+ },
+ {
+  "name": "Sparkle Dance",
+  "coins": 1000,
+  "image": "gifts/sparkle-dance.webp"
+ },
+ {
+  "name": "Spring Picnic",
+  "coins": 1000,
+  "image": "gifts/spring-picnic.webp"
+ },
+ {
+  "name": "Summer Picnic",
+  "coins": 1000,
+  "image": "gifts/summer-picnic.webp"
+ },
+ {
+  "name": "Super LIVE Star",
+  "coins": 1000,
+  "image": "gifts/super-live-star.webp"
+ },
+ {
+  "name": "Super Star",
+  "coins": 1000,
+  "image": "gifts/super-star.webp"
+ },
+ {
+  "name": "The Magic Lamp",
+  "coins": 1000,
+  "image": "gifts/the-magic-lamp.webp"
+ },
+ {
+  "name": "Tundra Blitzy",
+  "coins": 1000,
+  "image": "gifts/tundra-blitzy.webp"
+ },
+ {
+  "name": "Tundra Cooper",
+  "coins": 1000,
+  "image": "gifts/tundra-cooper.webp"
+ },
+ {
+  "name": "Tundra Diny",
+  "coins": 1000,
+  "image": "gifts/tundra-diny.webp"
+ },
+ {
+  "name": "Tundra Nyota",
+  "coins": 1000,
+  "image": "gifts/tundra-nyota.webp"
+ },
+ {
+  "name": "Tundra Tom",
+  "coins": 1000,
+  "image": "gifts/tundra-tom.webp"
+ },
+ {
+  "name": "Watermelon Love",
+  "coins": 1000,
+  "image": "gifts/watermelon-love.webp"
+ },
+ {
+  "name": "Watermelon Party",
+  "coins": 1000,
+  "image": "gifts/watermelon-party.webp"
+ },
+ {
+  "name": "Waterslide",
+  "coins": 1000,
+  "image": "gifts/waterslide.webp"
+ },
+ {
+  "name": "Worship Me",
+  "coins": 1000,
+  "image": "gifts/worship-me.webp"
+ },
+ {
+  "name": "Candy Puffs",
+  "coins": 1030,
+  "image": "gifts/candy-puffs.webp"
+ },
+ {
+  "name": "Joy Floats",
+  "coins": 1030,
+  "image": "gifts/joy-floats.webp"
+ },
+ {
+  "name": "Pumpkin Carriage",
+  "coins": 1031,
+  "image": "gifts/pumpkin-carriage.webp"
+ },
+ {
+  "name": "Diamond Tree",
+  "coins": 1088,
+  "image": "gifts/diamond-tree.webp"
+ },
+ {
+  "name": "Fireworks",
+  "coins": 1088,
+  "image": "gifts/fireworks.webp"
+ },
+ {
+  "name": "Magic Role",
+  "coins": 1088,
+  "image": "gifts/magic-role.webp"
+ },
+ {
+  "name": "Diamond",
+  "coins": 1099,
+  "image": "gifts/diamond.webp"
+ },
+ {
+  "name": "Exclusive Spark",
+  "coins": 1099,
+  "image": "gifts/exclusive-spark.webp"
+ },
+ {
+  "name": "Golden Stars",
+  "coins": 1099,
+  "image": "gifts/golden-stars.webp"
+ },
+ {
+  "name": "Arcade Game",
+  "coins": 1200,
+  "image": "gifts/arcade-game.webp"
+ },
+ {
+  "name": "Bunny DJ",
+  "coins": 1200,
+  "image": "gifts/bunny-dj.webp"
+ },
+ {
+  "name": "Epic GG",
+  "coins": 1200,
+  "image": "gifts/epic-gg.webp"
+ },
+ {
+  "name": "Fountain",
+  "coins": 1200,
+  "image": "gifts/fountain.webp"
+ },
+ {
+  "name": "Gaming Chair",
+  "coins": 1200,
+  "image": "gifts/gaming-chair.webp"
+ },
+ {
+  "name": "Gingerbread Party",
+  "coins": 1200,
+  "image": "gifts/gingerbread-party.webp"
+ },
+ {
+  "name": "Paddington Snow",
+  "coins": 1200,
+  "image": "gifts/paddington-snow.webp"
+ },
+ {
+  "name": "Spooky Cat",
+  "coins": 1200,
+  "image": "gifts/spooky-cat.webp"
+ },
+ {
+  "name": "Starlight Sceptre",
+  "coins": 1200,
+  "image": "gifts/starlight-sceptre.webp"
+ },
+ {
+  "name": "Take a Drive",
+  "coins": 1200,
+  "image": "gifts/take-a-drive.webp"
+ },
+ {
+  "name": "Travel in the US",
+  "coins": 1200,
+  "image": "gifts/travel-in-the-us.webp"
+ },
+ {
+  "name": "Umbrella of Love",
+  "coins": 1200,
+  "image": "gifts/umbrella-of-love.webp"
+ },
+ {
+  "name": "Frozen Magic",
+  "coins": 1299,
+  "image": "gifts/frozen-magic.webp"
+ },
+ {
+  "name": "Halloween Drink",
+  "coins": 1299,
+  "image": "gifts/halloween-drink.webp"
+ },
+ {
+  "name": "Hydrangea Sea",
+  "coins": 1299,
+  "image": "gifts/hydrangea-sea.webp"
+ },
+ {
+  "name": "Autumn Picnic",
+  "coins": 1300,
+  "image": "gifts/autumn-picnic.webp"
+ },
+ {
+  "name": "Party Laser",
+  "coins": 1300,
+  "image": "gifts/party-laser.webp"
+ },
+ {
+  "name": "Let them Cook!",
+  "coins": 1400,
+  "image": "gifts/let-them-cook.webp"
+ },
+ {
+  "name": "Moonlight flower",
+  "coins": 1400,
+  "image": "gifts/moonlight-flower.webp"
+ },
+ {
+  "name": "Secret Society",
+  "coins": 1400,
+  "image": "gifts/secret-society.webp"
+ },
+ {
+  "name": "Streamer’s Setup",
+  "coins": 1400,
+  "image": "gifts/streamer-s-setup.webp"
+ },
+ {
+  "name": "Vibrant Stage",
+  "coins": 1400,
+  "image": "gifts/vibrant-stage.webp"
+ },
+ {
+  "name": "Diamond Crown",
+  "coins": 1499,
+  "image": "gifts/diamond-crown.webp"
+ },
+ {
+  "name": "Anybody Home?",
+  "coins": 1500,
+  "image": "gifts/anybody-home.webp"
+ },
+ {
+  "name": "Astrobear",
+  "coins": 1500,
+  "image": "gifts/astrobear.webp"
+ },
+ {
+  "name": "Champions&#39; Cup",
+  "coins": 1500,
+  "image": "gifts/champions-39-cup.webp"
+ },
+ {
+  "name": "Chasing the Dream",
+  "coins": 1500,
+  "image": "gifts/chasing-the-dream.webp"
+ },
+ {
+  "name": "Cherry Blossoms",
+  "coins": 1500,
+  "image": "gifts/cherry-blossoms.webp"
+ },
+ {
+  "name": "Costumey Christmas",
+  "coins": 1500,
+  "image": "gifts/costumey-christmas.webp"
+ },
+ {
+  "name": "Diamond Ring",
+  "coins": 1500,
+  "image": "gifts/diamond-ring.webp"
+ },
+ {
+  "name": "EWC Trophy",
+  "coins": 1500,
+  "image": "gifts/ewc-trophy.webp"
+ },
+ {
+  "name": "Future Encounter",
+  "coins": 1500,
+  "image": "gifts/future-encounter.webp"
+ },
+ {
+  "name": "Galaxy Globe",
+  "coins": 1500,
+  "image": "gifts/galaxy-globe.webp"
+ },
+ {
+  "name": "Good Auspices",
+  "coins": 1500,
+  "image": "gifts/good-auspices.webp"
+ },
+ {
+  "name": "Greeting Card",
+  "coins": 1500,
+  "image": "gifts/greeting-card.webp"
+ },
+ {
+  "name": "Ignition Check",
+  "coins": 1500,
+  "image": "gifts/ignition-check.webp"
+ },
+ {
+  "name": "Level Ship",
+  "coins": 1500,
+  "image": "gifts/level-ship.webp"
+ },
+ {
+  "name": "Love Explosion",
+  "coins": 1500,
+  "image": "gifts/love-explosion.webp"
+ },
+ {
+  "name": "Lover’s Lock",
+  "coins": 1500,
+  "image": "gifts/lover-s-lock.webp"
+ },
+ {
+  "name": "Merry Spongemas",
+  "coins": 1500,
+  "image": "gifts/merry-spongemas.webp"
+ },
+ {
+  "name": "Pim Bear",
+  "coins": 1500,
+  "image": "gifts/pim-bear.webp"
+ },
+ {
+  "name": "Potato eating spaghetti",
+  "coins": 1500,
+  "image": "gifts/potato-eating-spaghetti.webp"
+ },
+ {
+  "name": "Potato floating",
+  "coins": 1500,
+  "image": "gifts/potato-floating.webp"
+ },
+ {
+  "name": "Racing Debut",
+  "coins": 1500,
+  "image": "gifts/racing-debut.webp"
+ },
+ {
+  "name": "Raya Gift Card",
+  "coins": 1500,
+  "image": "gifts/raya-gift-card.webp"
+ },
+ {
+  "name": "Space Cat",
+  "coins": 1500,
+  "image": "gifts/space-cat.webp"
+ },
+ {
+  "name": "Time Warp",
+  "coins": 1500,
+  "image": "gifts/time-warp.webp"
+ },
+ {
+  "name": "Treasure Chest",
+  "coins": 1500,
+  "image": "gifts/treasure-chest.webp"
+ },
+ {
+  "name": "Under Control",
+  "coins": 1500,
+  "image": "gifts/under-control.webp"
+ },
+ {
+  "name": "Viking Hammer",
+  "coins": 1500,
+  "image": "gifts/viking-hammer.webp"
+ },
+ {
+  "name": "Wedding",
+  "coins": 1500,
+  "image": "gifts/wedding.webp"
+ },
+ {
+  "name": "Wild Mic",
+  "coins": 1500,
+  "image": "gifts/wild-mic.webp"
+ },
+ {
+  "name": "You&#39;re So Fly",
+  "coins": 1500,
+  "image": "gifts/you-39-re-so-fly.webp"
+ },
+ {
+  "name": "Shooting Stars",
+  "coins": 1580,
+  "image": "gifts/shooting-stars.webp"
+ },
+ {
+  "name": "ASMR Starter Kit",
+  "coins": 1599,
+  "image": "gifts/asmr-starter-kit.webp"
+ },
+ {
+  "name": "Blooming Heart",
+  "coins": 1599,
+  "image": "gifts/blooming-heart.webp"
+ },
+ {
+  "name": "Penlight",
+  "coins": 1599,
+  "image": "gifts/penlight-2.webp"
+ },
+ {
+  "name": "Hug It Better",
+  "coins": 1600,
+  "image": "gifts/hug-it-better.webp"
+ },
+ {
+  "name": "Lovely Ride",
+  "coins": 1600,
+  "image": "gifts/lovely-ride.webp"
+ },
+ {
+  "name": "Winning Wednesday",
+  "coins": 1600,
+  "image": "gifts/winning-wednesday-3.webp"
+ },
+ {
+  "name": "Here We Go",
+  "coins": 1799,
+  "image": "gifts/here-we-go.webp"
+ },
+ {
+  "name": "Magic Box",
+  "coins": 1799,
+  "image": "gifts/magic-box.webp"
+ },
+ {
+  "name": "Fox Legend",
+  "coins": 1800,
+  "image": "gifts/fox-legend.webp"
+ },
+ {
+  "name": "Freestyle",
+  "coins": 1800,
+  "image": "gifts/freestyle-2.webp"
+ },
+ {
+  "name": "Full Steam Ahead",
+  "coins": 1800,
+  "image": "gifts/full-steam-ahead.webp"
+ },
+ {
+  "name": "Jeepney",
+  "coins": 1800,
+  "image": "gifts/jeepney.webp"
+ },
+ {
+  "name": "Love Drop",
+  "coins": 1800,
+  "image": "gifts/love-drop.webp"
+ },
+ {
+  "name": "Potato to Fries",
+  "coins": 1800,
+  "image": "gifts/potato-to-fries.webp"
+ },
+ {
+  "name": "Watch out",
+  "coins": 1800,
+  "image": "gifts/watch-out.webp"
+ },
+ {
+  "name": "Airship",
+  "coins": 1999,
+  "image": "gifts/airship.webp"
+ },
+ {
+  "name": "Beach Cabin",
+  "coins": 1999,
+  "image": "gifts/beach-cabin.webp"
+ },
+ {
+  "name": "Cable Car",
+  "coins": 1999,
+  "image": "gifts/cable-car.webp"
+ },
+ {
+  "name": "Carousel",
+  "coins": 1999,
+  "image": "gifts/carousel.webp"
+ },
+ {
+  "name": "Catch the Harvest",
+  "coins": 1999,
+  "image": "gifts/catch-the-harvest.webp"
+ },
+ {
+  "name": "Cooper Flies Home",
+  "coins": 1999,
+  "image": "gifts/cooper-flies-home.webp"
+ },
+ {
+  "name": "Doll New Year Greeting",
+  "coins": 1999,
+  "image": "gifts/doll-new-year-greeting.webp"
+ },
+ {
+  "name": "Getting Ready",
+  "coins": 1999,
+  "image": "gifts/getting-ready.webp"
+ },
+ {
+  "name": "Gift Box",
+  "coins": 1999,
+  "image": "gifts/gift-box.webp"
+ },
+ {
+  "name": "Let Us Dance",
+  "coins": 1999,
+  "image": "gifts/let-us-dance.webp"
+ },
+ {
+  "name": "Mystery Firework",
+  "coins": 1999,
+  "image": "gifts/mystery-firework.webp"
+ },
+ {
+  "name": "Puppy Sleepover",
+  "coins": 1999,
+  "image": "gifts/puppy-sleepover.webp"
+ },
+ {
+  "name": "Ramadan Blessing Box",
+  "coins": 1999,
+  "image": "gifts/ramadan-blessing-box.webp"
+ },
+ {
+  "name": "Ramadan Gift Box",
+  "coins": 1999,
+  "image": "gifts/ramadan-gift-box-2.webp"
+ },
+ {
+  "name": "Ramadan Lantern",
+  "coins": 1999,
+  "image": "gifts/ramadan-lantern.webp"
+ },
+ {
+  "name": "Rilakkuma Dance",
+  "coins": 1999,
+  "image": "gifts/rilakkuma-dance.webp"
+ },
+ {
+  "name": "Speaker Wall",
+  "coins": 1999,
+  "image": "gifts/speaker-wall.webp"
+ },
+ {
+  "name": "Spooktacular",
+  "coins": 1999,
+  "image": "gifts/spooktacular.webp"
+ },
+ {
+  "name": "Star of Red Carpet",
+  "coins": 1999,
+  "image": "gifts/star-of-red-carpet.webp"
+ },
+ {
+  "name": "Azura figurine",
+  "coins": 2000,
+  "image": "gifts/azura-figurine.webp"
+ },
+ {
+  "name": "Baby Dragon",
+  "coins": 2000,
+  "image": "gifts/baby-dragon.webp"
+ },
+ {
+  "name": "Christmas Carousel",
+  "coins": 2000,
+  "image": "gifts/christmas-carousel.webp"
+ },
+ {
+  "name": "Club",
+  "coins": 2000,
+  "image": "gifts/club.webp"
+ },
+ {
+  "name": "Club Music",
+  "coins": 2000,
+  "image": "gifts/club-music.webp"
+ },
+ {
+  "name": "Cooper Picnic",
+  "coins": 2000,
+  "image": "gifts/cooper-picnic.webp"
+ },
+ {
+  "name": "Crystal Crown",
+  "coins": 2000,
+  "image": "gifts/crystal-crown.webp"
+ },
+ {
+  "name": "Hot Churrasco",
+  "coins": 2000,
+  "image": "gifts/hot-churrasco.webp"
+ },
+ {
+  "name": "Maple Fireworks",
+  "coins": 2000,
+  "image": "gifts/maple-fireworks.webp"
+ },
+ {
+  "name": "Power Couple",
+  "coins": 2000,
+  "image": "gifts/power-couple.webp"
+ },
+ {
+  "name": "Ribbit Ribbit",
+  "coins": 2000,
+  "image": "gifts/ribbit-ribbit.webp"
+ },
+ {
+  "name": "Shuri Castle Illumination",
+  "coins": 2000,
+  "image": "gifts/shuri-castle-illumination.webp"
+ },
+ {
+  "name": "Sky Drift",
+  "coins": 2000,
+  "image": "gifts/sky-drift.webp"
+ },
+ {
+  "name": "Take My Rose!",
+  "coins": 2000,
+  "image": "gifts/take-my-rose.webp"
+ },
+ {
+  "name": "Vacation LIVE",
+  "coins": 2000,
+  "image": "gifts/vacation-live.webp"
+ },
+ {
+  "name": "Celebrate 2025",
+  "coins": 2025,
+  "image": "gifts/celebrate-2025.webp"
+ },
+ {
+  "name": "Extravaganza 2025",
+  "coins": 2025,
+  "image": "gifts/extravaganza-2025.webp"
+ },
+ {
+  "name": "Whale Diving",
+  "coins": 2150,
+  "image": "gifts/whale-diving.webp"
+ },
+ {
+  "name": "Blow Rosie Kisses",
+  "coins": 2199,
+  "image": "gifts/blow-rosie-kisses.webp"
+ },
+ {
+  "name": "Jetski",
+  "coins": 2199,
+  "image": "gifts/jetski.webp"
+ },
+ {
+  "name": "Jollie&#39;s Heartland",
+  "coins": 2199,
+  "image": "gifts/jollie-39-s-heartland.webp"
+ },
+ {
+  "name": "Lemon Love Booth",
+  "coins": 2199,
+  "image": "gifts/lemon-love-booth.webp"
+ },
+ {
+  "name": "Rocky&#39;s Punch",
+  "coins": 2199,
+  "image": "gifts/rocky-39-s-punch.webp"
+ },
+ {
+  "name": "Sage&#39;s Coinbot",
+  "coins": 2199,
+  "image": "gifts/sage-39-s-coinbot.webp"
+ },
+ {
+  "name": "Dancing Capybaras",
+  "coins": 2200,
+  "image": "gifts/dancing-capybaras.webp"
+ },
+ {
+  "name": "Haunted house",
+  "coins": 2200,
+  "image": "gifts/haunted-house.webp"
+ },
+ {
+  "name": "Haunted House",
+  "coins": 2200,
+  "image": "gifts/haunted-house-2.webp"
+ },
+ {
+  "name": "Romanian train",
+  "coins": 2200,
+  "image": "gifts/romanian-train.webp"
+ },
+ {
+  "name": "SKI STAR",
+  "coins": 2200,
+  "image": "gifts/ski-star.webp"
+ },
+ {
+  "name": "Spooky Rock",
+  "coins": 2200,
+  "image": "gifts/spooky-rock.webp"
+ },
+ {
+  "name": "Stargazing",
+  "coins": 2200,
+  "image": "gifts/stargazing.webp"
+ },
+ {
+  "name": "Wave Lights",
+  "coins": 2200,
+  "image": "gifts/wave-lights.webp"
+ },
+ {
+  "name": "By the Glaziers",
+  "coins": 2380,
+  "image": "gifts/by-the-glaziers.webp"
+ },
+ {
+  "name": "Hit The Buzzer",
+  "coins": 2488,
+  "image": "gifts/hit-the-buzzer.webp"
+ },
+ {
+  "name": "Chopper Bike",
+  "coins": 2499,
+  "image": "gifts/chopper-bike.webp"
+ },
+ {
+  "name": "Summer Pass L",
+  "coins": 2499,
+  "image": "gifts/summer-pass-l.webp"
+ },
+ {
+  "name": "Tom Thunderfoot",
+  "coins": 2499,
+  "image": "gifts/tom-thunderfoot.webp"
+ },
+ {
+  "name": "Unicorn",
+  "coins": 2499,
+  "image": "gifts/unicorn.webp"
+ },
+ {
+  "name": "Animal Band",
+  "coins": 2500,
+  "image": "gifts/animal-band.webp"
+ },
+ {
+  "name": "FANDOM Cheer",
+  "coins": 2500,
+  "image": "gifts/fandom-cheer.webp"
+ },
+ {
+  "name": "Space Dog",
+  "coins": 2500,
+  "image": "gifts/space-dog.webp"
+ },
+ {
+  "name": "Starship Tunnel",
+  "coins": 2500,
+  "image": "gifts/starship-tunnel.webp"
+ },
+ {
+  "name": "Aerobic Dacne",
+  "coins": 2599,
+  "image": "gifts/aerobic-dacne.webp"
+ },
+ {
+  "name": "Magic Stage",
+  "coins": 2599,
+  "image": "gifts/magic-stage.webp"
+ },
+ {
+  "name": "Wanted a Treat?",
+  "coins": 2599,
+  "image": "gifts/wanted-a-treat.webp"
+ },
+ {
+  "name": "Brown Bear",
+  "coins": 2800,
+  "image": "gifts/brown-bear.webp"
+ },
+ {
+  "name": "Celebration Tape",
+  "coins": 2800,
+  "image": "gifts/celebration-tape.webp"
+ },
+ {
+  "name": "Crownfish",
+  "coins": 2800,
+  "image": "gifts/crownfish.webp"
+ },
+ {
+  "name": "Hiking Oyen",
+  "coins": 2800,
+  "image": "gifts/hiking-oyen.webp"
+ },
+ {
+  "name": "Stroke Me",
+  "coins": 2800,
+  "image": "gifts/stroke-me.webp"
+ },
+ {
+  "name": "Your Little Buddy",
+  "coins": 2800,
+  "image": "gifts/your-little-buddy.webp"
+ },
+ {
+  "name": "Samfaring Tom",
+  "coins": 2850,
+  "image": "gifts/samfaring-tom.webp"
+ },
+ {
+  "name": "Cupid",
+  "coins": 2888,
+  "image": "gifts/cupid.webp"
+ },
+ {
+  "name": "Bobo the Clownfish",
+  "coins": 2988,
+  "image": "gifts/bobo-the-clownfish.webp"
+ },
+ {
+  "name": "Ice Cream Truck",
+  "coins": 2988,
+  "image": "gifts/ice-cream-truck.webp"
+ },
+ {
+  "name": "Motorcycle",
+  "coins": 2988,
+  "image": "gifts/motorcycle.webp"
+ },
+ {
+  "name": "Pink Dream",
+  "coins": 2988,
+  "image": "gifts/pink-dream.webp"
+ },
+ {
+  "name": "Beach Day",
+  "coins": 2999,
+  "image": "gifts/beach-day.webp"
+ },
+ {
+  "name": "Beacon",
+  "coins": 2999,
+  "image": "gifts/beacon.webp"
+ },
+ {
+  "name": "Bull",
+  "coins": 2999,
+  "image": "gifts/bull.webp"
+ },
+ {
+  "name": "Community Rally",
+  "coins": 2999,
+  "image": "gifts/community-rally.webp"
+ },
+ {
+  "name": "Fame Stairs",
+  "coins": 2999,
+  "image": "gifts/fame-stairs.webp"
+ },
+ {
+  "name": "Fest Party",
+  "coins": 2999,
+  "image": "gifts/fest-party.webp"
+ },
+ {
+  "name": "Grand Prix Stage",
+  "coins": 2999,
+  "image": "gifts/grand-prix-stage.webp"
+ },
+ {
+  "name": "Heart Balloon",
+  "coins": 2999,
+  "image": "gifts/heart-balloon.webp"
+ },
+ {
+  "name": "Houdini",
+  "coins": 2999,
+  "image": "gifts/houdini.webp"
+ },
+ {
+  "name": "Jacaranda Season",
+  "coins": 2999,
+  "image": "gifts/jacaranda-season.webp"
+ },
+ {
+  "name": "Legends Scroll",
+  "coins": 2999,
+  "image": "gifts/legends-scroll.webp"
+ },
+ {
+  "name": "lenossa&#39;s Community Cake",
+  "coins": 2999,
+  "image": "gifts/lenossa-39-s-community-cake.webp"
+ },
+ {
+  "name": "Level-up Spotlight",
+  "coins": 2999,
+  "image": "gifts/level-up-spotlight.webp"
+ },
+ {
+  "name": "LIVE Ranking Medal",
+  "coins": 2999,
+  "image": "gifts/live-ranking-medal.webp"
+ },
+ {
+  "name": "Love in Sunset",
+  "coins": 2999,
+  "image": "gifts/love-in-sunset.webp"
+ },
+ {
+  "name": "Love Lake",
+  "coins": 2999,
+  "image": "gifts/love-lake.webp"
+ },
+ {
+  "name": "Lovely Surprise",
+  "coins": 2999,
+  "image": "gifts/lovely-surprise.webp"
+ },
+ {
+  "name": "Match Maniac",
+  "coins": 2999,
+  "image": "gifts/match-maniac.webp"
+ },
+ {
+  "name": "Ocelot Chase",
+  "coins": 2999,
+  "image": "gifts/ocelot-chase.webp"
+ },
+ {
+  "name": "Old Famous Car",
+  "coins": 2999,
+  "image": "gifts/old-famous-car.webp"
+ },
+ {
+  "name": "Party Bus",
+  "coins": 2999,
+  "image": "gifts/party-bus.webp"
+ },
+ {
+  "name": "Ray Serenade",
+  "coins": 2999,
+  "image": "gifts/ray-serenade.webp"
+ },
+ {
+  "name": "Rhythmic Bear",
+  "coins": 2999,
+  "image": "gifts/rhythmic-bear.webp"
+ },
+ {
+  "name": "Ring Of Honor-Cube",
+  "coins": 2999,
+  "image": "gifts/ring-of-honor-cube.webp"
+ },
+ {
+  "name": "Rosie on Stage",
+  "coins": 2999,
+  "image": "gifts/rosie-on-stage.webp"
+ },
+ {
+  "name": "Surprise Baby Mob",
+  "coins": 2999,
+  "image": "gifts/surprise-baby-mob.webp"
+ },
+ {
+  "name": "Autumn Feast",
+  "coins": 3000,
+  "image": "gifts/autumn-feast.webp"
+ },
+ {
+  "name": "Balik Kampung",
+  "coins": 3000,
+  "image": "gifts/balik-kampung.webp"
+ },
+ {
+  "name": "Car Drifting",
+  "coins": 3000,
+  "image": "gifts/car-drifting.webp"
+ },
+ {
+  "name": "Dancing Bears",
+  "coins": 3000,
+  "image": "gifts/dancing-bears.webp"
+ },
+ {
+  "name": "Meteor Shower",
+  "coins": 3000,
+  "image": "gifts/meteor-shower.webp"
+ },
+ {
+  "name": "Potluck",
+  "coins": 3000,
+  "image": "gifts/potluck.webp"
+ },
+ {
+  "name": "Pumpkin patch",
+  "coins": 3000,
+  "image": "gifts/pumpkin-patch.webp"
+ },
+ {
+  "name": "Rainbow Combining",
+  "coins": 3000,
+  "image": "gifts/rainbow-combining.webp"
+ },
+ {
+  "name": "Rotary Backpack",
+  "coins": 3000,
+  "image": "gifts/rotary-backpack.webp"
+ },
+ {
+  "name": "Summoning Horn",
+  "coins": 3000,
+  "image": "gifts/summoning-horn.webp"
+ },
+ {
+  "name": "Sea Blitzy",
+  "coins": 3088,
+  "image": "gifts/sea-blitzy.webp"
+ },
+ {
+  "name": "Sea Cooper",
+  "coins": 3088,
+  "image": "gifts/sea-cooper.webp"
+ },
+ {
+  "name": "Sea Diny",
+  "coins": 3088,
+  "image": "gifts/sea-diny.webp"
+ },
+ {
+  "name": "Sea Nyota",
+  "coins": 3088,
+  "image": "gifts/sea-nyota.webp"
+ },
+ {
+  "name": "Sea Tom",
+  "coins": 3088,
+  "image": "gifts/sea-tom.webp"
+ },
+ {
+  "name": "Summer Vibes",
+  "coins": 3188,
+  "image": "gifts/summer-vibes.webp"
+ },
+ {
+  "name": "Halloween Idol",
+  "coins": 3200,
+  "image": "gifts/halloween-idol.webp"
+ },
+ {
+  "name": "Hip-Hop Hen",
+  "coins": 3200,
+  "image": "gifts/hip-hop-hen.webp"
+ },
+ {
+  "name": "Dream Big",
+  "coins": 3350,
+  "image": "gifts/dream-big.webp"
+ },
+ {
+  "name": "Look Up",
+  "coins": 3350,
+  "image": "gifts/look-up.webp"
+ },
+ {
+  "name": "Jingle Ball Stage",
+  "coins": 3499,
+  "image": "gifts/jingle-ball-stage.webp"
+ },
+ {
+  "name": "Candy Party",
+  "coins": 3999,
+  "image": "gifts/candy-party.webp"
+ },
+ {
+  "name": "DJ Stage",
+  "coins": 3999,
+  "image": "gifts/dj-stage.webp"
+ },
+ {
+  "name": "Giant",
+  "coins": 3999,
+  "image": "gifts/giant.webp"
+ },
+ {
+  "name": "Gift Box",
+  "coins": 3999,
+  "image": "gifts/gift-box-2.webp"
+ },
+ {
+  "name": "Go Home",
+  "coins": 3999,
+  "image": "gifts/go-home.webp"
+ },
+ {
+  "name": "LIVE Ranking Party",
+  "coins": 3999,
+  "image": "gifts/live-ranking-party.webp"
+ },
+ {
+  "name": "Soaring Spirit",
+  "coins": 3999,
+  "image": "gifts/soaring-spirit.webp"
+ },
+ {
+  "name": "Spark Stage Earth",
+  "coins": 3999,
+  "image": "gifts/spark-stage-earth.webp"
+ },
+ {
+  "name": "Sumo Cat",
+  "coins": 3999,
+  "image": "gifts/sumo-cat.webp"
+ },
+ {
+  "name": "City of Dreams",
+  "coins": 4000,
+  "image": "gifts/city-of-dreams.webp"
+ },
+ {
+  "name": "Compact EV",
+  "coins": 4000,
+  "image": "gifts/compact-ev.webp"
+ },
+ {
+  "name": "Firelight Beast",
+  "coins": 4000,
+  "image": "gifts/firelight-beast.webp"
+ },
+ {
+  "name": "Gaming Keyboard",
+  "coins": 4000,
+  "image": "gifts/gaming-keyboard.webp"
+ },
+ {
+  "name": "Island of Love",
+  "coins": 4000,
+  "image": "gifts/island-of-love.webp"
+ },
+ {
+  "name": "Midsummer Fest",
+  "coins": 4000,
+  "image": "gifts/midsummer-fest.webp"
+ },
+ {
+  "name": "Nightshade Beast",
+  "coins": 4000,
+  "image": "gifts/nightshade-beast.webp"
+ },
+ {
+  "name": "TikTok Volcano",
+  "coins": 4000,
+  "image": "gifts/tiktok-volcano.webp"
+ },
+ {
+  "name": "Tiny Diny on the Drums",
+  "coins": 4000,
+  "image": "gifts/tiny-diny-on-the-drums.webp"
+ },
+ {
+  "name": "Vase",
+  "coins": 4000,
+  "image": "gifts/vase.webp"
+ },
+ {
+  "name": "Whitewind Beast",
+  "coins": 4000,
+  "image": "gifts/whitewind-beast.webp"
+ },
+ {
+  "name": "Cooper’s Curry",
+  "coins": 4088,
+  "image": "gifts/cooper-s-curry.webp"
+ },
+ {
+  "name": "Gorilla Explorer",
+  "coins": 4088,
+  "image": "gifts/gorilla-explorer.webp"
+ },
+ {
+  "name": "Knight",
+  "coins": 4088,
+  "image": "gifts/knight.webp"
+ },
+ {
+  "name": "Magic World",
+  "coins": 4088,
+  "image": "gifts/magic-world.webp"
+ },
+ {
+  "name": "Neon Caravan",
+  "coins": 4088,
+  "image": "gifts/neon-caravan.webp"
+ },
+ {
+  "name": "Pride Superstar",
+  "coins": 4088,
+  "image": "gifts/pride-superstar.webp"
+ },
+ {
+  "name": "Rugby Pim bear",
+  "coins": 4088,
+  "image": "gifts/rugby-pim-bear.webp"
+ },
+ {
+  "name": "Shine Bright",
+  "coins": 4088,
+  "image": "gifts/shine-bright.webp"
+ },
+ {
+  "name": "Next Level",
+  "coins": 4099,
+  "image": "gifts/next-level.webp"
+ },
+ {
+  "name": "Tractor",
+  "coins": 4099,
+  "image": "gifts/tractor.webp"
+ },
+ {
+  "name": "Your Concert",
+  "coins": 4500,
+  "image": "gifts/your-concert.webp"
+ },
+ {
+  "name": "Dynamic Music",
+  "coins": 4888,
+  "image": "gifts/dynamic-music.webp"
+ },
+ {
+  "name": "Fiery Dragon",
+  "coins": 4888,
+  "image": "gifts/fiery-dragon.webp"
+ },
+ {
+  "name": "Leon the Kitten",
+  "coins": 4888,
+  "image": "gifts/leon-the-kitten.webp"
+ },
+ {
+  "name": "Private Jet",
+  "coins": 4888,
+  "image": "gifts/private-jet.webp"
+ },
+ {
+  "name": "Signature Jet",
+  "coins": 4888,
+  "image": "gifts/signature-jet.webp"
+ },
+ {
+  "name": "Sugar Whiskers",
+  "coins": 4918,
+  "image": "gifts/sugar-whiskers.webp"
+ },
+ {
+  "name": "Benny the Calf",
+  "coins": 4999,
+  "image": "gifts/benny-the-calf.webp"
+ },
+ {
+  "name": "Camel&#39;s Love",
+  "coins": 4999,
+  "image": "gifts/camel-39-s-love.webp"
+ },
+ {
+  "name": "ChairSwing",
+  "coins": 4999,
+  "image": "gifts/chairswing.webp"
+ },
+ {
+  "name": "Eid Ma&#39;amoul",
+  "coins": 4999,
+  "image": "gifts/eid-ma-39-amoul.webp"
+ },
+ {
+  "name": "Guardian&#39;s Pledge",
+  "coins": 4999,
+  "image": "gifts/guardian-39-s-pledge.webp"
+ },
+ {
+  "name": "Hero Space Ship",
+  "coins": 4999,
+  "image": "gifts/hero-space-ship.webp"
+ },
+ {
+  "name": "Knockout",
+  "coins": 4999,
+  "image": "gifts/knockout.webp"
+ },
+ {
+  "name": "Mirror of Magic",
+  "coins": 4999,
+  "image": "gifts/mirror-of-magic.webp"
+ },
+ {
+  "name": "Owl",
+  "coins": 4999,
+  "image": "gifts/owl.webp"
+ },
+ {
+  "name": "Pot of gold",
+  "coins": 4999,
+  "image": "gifts/pot-of-gold.webp"
+ },
+ {
+  "name": "Sage’s Venture",
+  "coins": 4999,
+  "image": "gifts/sage-s-venture.webp"
+ },
+ {
+  "name": "Sports Car",
+  "coins": 4999,
+  "image": "gifts/sports-car.webp"
+ },
+ {
+  "name": "Squitchy Morph",
+  "coins": 4999,
+  "image": "gifts/squitchy-morph.webp"
+ },
+ {
+  "name": "Stage of ring",
+  "coins": 4999,
+  "image": "gifts/stage-of-ring.webp"
+ },
+ {
+  "name": "The Trial of Sea",
+  "coins": 4999,
+  "image": "gifts/the-trial-of-sea.webp"
+ },
+ {
+  "name": "Tom&#39;s Love",
+  "coins": 4999,
+  "image": "gifts/tom-39-s-love.webp"
+ },
+ {
+  "name": "1st Anniversary",
+  "coins": 5000,
+  "image": "gifts/1st-anniversary.webp"
+ },
+ {
+  "name": "Arcane Card",
+  "coins": 5000,
+  "image": "gifts/arcane-card.webp"
+ },
+ {
+  "name": "Beach Hut",
+  "coins": 5000,
+  "image": "gifts/beach-hut.webp"
+ },
+ {
+  "name": "Burger Truck",
+  "coins": 5000,
+  "image": "gifts/burger-truck.webp"
+ },
+ {
+  "name": "Chopin&#39;s Nocturne",
+  "coins": 5000,
+  "image": "gifts/chopin-39-s-nocturne.webp"
+ },
+ {
+  "name": "Community Power",
+  "coins": 5000,
+  "image": "gifts/community-power.webp"
+ },
+ {
+  "name": "Crowd Cheering",
+  "coins": 5000,
+  "image": "gifts/crowd-cheering.webp"
+ },
+ {
+  "name": "Desert Wolf",
+  "coins": 5000,
+  "image": "gifts/desert-wolf.webp"
+ },
+ {
+  "name": "Diamond Gun",
+  "coins": 5000,
+  "image": "gifts/diamond-gun.webp"
+ },
+ {
+  "name": "DJ Alien",
+  "coins": 5000,
+  "image": "gifts/dj-alien.webp"
+ },
+ {
+  "name": "Ellie the Elephant",
+  "coins": 5000,
+  "image": "gifts/ellie-the-elephant.webp"
+ },
+ {
+  "name": "Flying Jets",
+  "coins": 5000,
+  "image": "gifts/flying-jets.webp"
+ },
+ {
+  "name": "Four King",
+  "coins": 5000,
+  "image": "gifts/four-king.webp"
+ },
+ {
+  "name": "Gamer&#39;s EVE",
+  "coins": 5000,
+  "image": "gifts/gamer-39-s-eve.webp"
+ },
+ {
+  "name": "League Cup",
+  "coins": 5000,
+  "image": "gifts/league-cup.webp"
+ },
+ {
+  "name": "League Fandom",
+  "coins": 5000,
+  "image": "gifts/league-fandom.webp"
+ },
+ {
+  "name": "Leon&#39;s Sigil Cape",
+  "coins": 5000,
+  "image": "gifts/leon-39-s-sigil-cape.webp"
+ },
+ {
+  "name": "LIVE on holiday",
+  "coins": 5000,
+  "image": "gifts/live-on-holiday.webp"
+ },
+ {
+  "name": "LIVE Pro Trophy",
+  "coins": 5000,
+  "image": "gifts/live-pro-trophy.webp"
+ },
+ {
+  "name": "Mystic Rod",
+  "coins": 5000,
+  "image": "gifts/mystic-rod.webp"
+ },
+ {
+  "name": "Raya Vibes",
+  "coins": 5000,
+  "image": "gifts/raya-vibes.webp"
+ },
+ {
+  "name": "Scarecrow",
+  "coins": 5000,
+  "image": "gifts/scarecrow.webp"
+ },
+ {
+  "name": "Seaside Romance",
+  "coins": 5000,
+  "image": "gifts/seaside-romance.webp"
+ },
+ {
+  "name": "Silver Sports Car",
+  "coins": 5000,
+  "image": "gifts/silver-sports-car-2.webp"
+ },
+ {
+  "name": "Unicorn Fantasy",
+  "coins": 5000,
+  "image": "gifts/unicorn-fantasy.webp"
+ },
+ {
+  "name": "Victory Wing",
+  "coins": 5000,
+  "image": "gifts/victory-wing.webp"
+ },
+ {
+  "name": "Wanda the Witch",
+  "coins": 5000,
+  "image": "gifts/wanda-the-witch.webp"
+ },
+ {
+  "name": "Water Lantern Fest",
+  "coins": 5000,
+  "image": "gifts/water-lantern-fest.webp"
+ },
+ {
+  "name": "Witch",
+  "coins": 5000,
+  "image": "gifts/witch.webp"
+ },
+ {
+  "name": "Yurt",
+  "coins": 5000,
+  "image": "gifts/yurt.webp"
+ },
+ {
+  "name": "Ice Cream Machine",
+  "coins": 5288,
+  "image": "gifts/ice-cream-machine.webp"
+ },
+ {
+  "name": "Fluffy Buddies",
+  "coins": 5388,
+  "image": "gifts/fluffy-buddies.webp"
+ },
+ {
+  "name": "Desert Wolf",
+  "coins": 5500,
+  "image": "gifts/desert-wolf-2.webp"
+ },
+ {
+  "name": "Wolf",
+  "coins": 5500,
+  "image": "gifts/wolf.webp"
+ },
+ {
+  "name": "Cub on Clouds",
+  "coins": 5888,
+  "image": "gifts/cub-on-clouds.webp"
+ },
+ {
+  "name": "Valiant Odyssey",
+  "coins": 5888,
+  "image": "gifts/valiant-odyssey.webp"
+ },
+ {
+  "name": "Devoted Heart",
+  "coins": 5999,
+  "image": "gifts/devoted-heart.webp"
+ },
+ {
+  "name": "My Dream Stage",
+  "coins": 5999,
+  "image": "gifts/my-dream-stage.webp"
+ },
+ {
+  "name": "Sword of Maiden",
+  "coins": 5999,
+  "image": "gifts/sword-of-maiden.webp"
+ },
+ {
+  "name": "Chick Stampede",
+  "coins": 6000,
+  "image": "gifts/chick-stampede.webp"
+ },
+ {
+  "name": "Down We Squish!",
+  "coins": 6000,
+  "image": "gifts/down-we-squish.webp"
+ },
+ {
+  "name": "Elephant Nature Reserve",
+  "coins": 6000,
+  "image": "gifts/elephant-nature-reserve.webp"
+ },
+ {
+  "name": "Future City",
+  "coins": 6000,
+  "image": "gifts/future-city.webp"
+ },
+ {
+  "name": "Goal Highlight",
+  "coins": 6000,
+  "image": "gifts/goal-highlight.webp"
+ },
+ {
+  "name": "Hands up High",
+  "coins": 6000,
+  "image": "gifts/hands-up-high.webp"
+ },
+ {
+  "name": "Lovely to Have You",
+  "coins": 6000,
+  "image": "gifts/lovely-to-have-you.webp"
+ },
+ {
+  "name": "Moonlight Pond",
+  "coins": 6000,
+  "image": "gifts/moonlight-pond.webp"
+ },
+ {
+  "name": "Night of Yokai",
+  "coins": 6000,
+  "image": "gifts/night-of-yokai.webp"
+ },
+ {
+  "name": "Patrick&#39;s Prezzie",
+  "coins": 6000,
+  "image": "gifts/patrick-39-s-prezzie.webp"
+ },
+ {
+  "name": "Rust Reforged",
+  "coins": 6000,
+  "image": "gifts/rust-reforged.webp"
+ },
+ {
+  "name": "Sam in New City",
+  "coins": 6000,
+  "image": "gifts/sam-in-new-city.webp"
+ },
+ {
+  "name": "Strike a Pose",
+  "coins": 6000,
+  "image": "gifts/strike-a-pose.webp"
+ },
+ {
+  "name": "Strong Finish",
+  "coins": 6000,
+  "image": "gifts/strong-finish.webp"
+ },
+ {
+  "name": "We Have a Guest!",
+  "coins": 6000,
+  "image": "gifts/we-have-a-guest.webp"
+ },
+ {
+  "name": "With you",
+  "coins": 6000,
+  "image": "gifts/with-you.webp"
+ },
+ {
+  "name": "Work Hard Play Harder",
+  "coins": 6000,
+  "image": "gifts/work-hard-play-harder.webp"
+ },
+ {
+  "name": "Zombie Swarm",
+  "coins": 6000,
+  "image": "gifts/zombie-swarm.webp"
+ },
+ {
+  "name": "Lili the Leopard",
+  "coins": 6599,
+  "image": "gifts/lili-the-leopard.webp"
+ },
+ {
+  "name": "TikTok Red Carpet",
+  "coins": 6600,
+  "image": "gifts/tiktok-red-carpet.webp"
+ },
+ {
+  "name": "Birthday Party",
+  "coins": 6999,
+  "image": "gifts/birthday-party.webp"
+ },
+ {
+  "name": "Celebration Time",
+  "coins": 6999,
+  "image": "gifts/celebration-time.webp"
+ },
+ {
+  "name": "Crescent Sighting",
+  "coins": 6999,
+  "image": "gifts/crescent-sighting.webp"
+ },
+ {
+  "name": "Happy Party",
+  "coins": 6999,
+  "image": "gifts/happy-party.webp"
+ },
+ {
+  "name": "Last Riff Roar",
+  "coins": 6999,
+  "image": "gifts/last-riff-roar.webp"
+ },
+ {
+  "name": "Merry Crust-mas",
+  "coins": 6999,
+  "image": "gifts/merry-crust-mas.webp"
+ },
+ {
+  "name": "Ramadan Night",
+  "coins": 6999,
+  "image": "gifts/ramadan-night.webp"
+ },
+ {
+  "name": "2nd Anniversary",
+  "coins": 7000,
+  "image": "gifts/2nd-anniversary.webp"
+ },
+ {
+  "name": "Black Swan",
+  "coins": 7000,
+  "image": "gifts/black-swan.webp"
+ },
+ {
+  "name": "Illumination",
+  "coins": 7000,
+  "image": "gifts/illumination.webp"
+ },
+ {
+  "name": "Rally Car",
+  "coins": 7000,
+  "image": "gifts/rally-car.webp"
+ },
+ {
+  "name": "Sports Car",
+  "coins": 7000,
+  "image": "gifts/sports-car-2.webp"
+ },
+ {
+  "name": "Majestic Hearts",
+  "coins": 7238,
+  "image": "gifts/majestic-hearts.webp"
+ },
+ {
+  "name": "Dubai",
+  "coins": 7499,
+  "image": "gifts/dubai.webp"
+ },
+ {
+  "name": "Dune Car",
+  "coins": 7700,
+  "image": "gifts/dune-car.webp"
+ },
+ {
+  "name": "Go Big Alpha Drifter",
+  "coins": 7700,
+  "image": "gifts/go-big-alpha-drifter.webp"
+ },
+ {
+  "name": "Alishan Train",
+  "coins": 7999,
+  "image": "gifts/alishan-train.webp"
+ },
+ {
+  "name": "Diamond Shield",
+  "coins": 7999,
+  "image": "gifts/diamond-shield.webp"
+ },
+ {
+  "name": "Jack-o&#39; Morph",
+  "coins": 7999,
+  "image": "gifts/jack-o-39-morph.webp"
+ },
+ {
+  "name": "Leon in Gondola",
+  "coins": 7999,
+  "image": "gifts/leon-in-gondola.webp"
+ },
+ {
+  "name": "Leon’s Journey",
+  "coins": 7999,
+  "image": "gifts/leon-s-journey.webp"
+ },
+ {
+  "name": "Lily and Hydrangea",
+  "coins": 7999,
+  "image": "gifts/lily-and-hydrangea.webp"
+ },
+ {
+  "name": "Star Throne",
+  "coins": 7999,
+  "image": "gifts/star-throne.webp"
+ },
+ {
+  "name": "Summer Fuji Mountain",
+  "coins": 7999,
+  "image": "gifts/summer-fuji-mountain.webp"
+ },
+ {
+  "name": "Bird of Paradise",
+  "coins": 8000,
+  "image": "gifts/bird-of-paradise.webp"
+ },
+ {
+  "name": "Maiden Tower",
+  "coins": 8000,
+  "image": "gifts/maiden-tower.webp"
+ },
+ {
+  "name": "Safari Park",
+  "coins": 8000,
+  "image": "gifts/safari-park.webp"
+ },
+ {
+  "name": "Ultimate FANDOM",
+  "coins": 8000,
+  "image": "gifts/ultimate-fandom.webp"
+ },
+ {
+  "name": "Stormwave Armor",
+  "coins": 8999,
+  "image": "gifts/stormwave-armor.webp"
+ },
+ {
+  "name": "Saxophone",
+  "coins": 9000,
+  "image": "gifts/saxophone.webp"
+ },
+ {
+  "name": "Space Jet",
+  "coins": 9000,
+  "image": "gifts/space-jet.webp"
+ },
+ {
+  "name": "Wealth Haven",
+  "coins": 9000,
+  "image": "gifts/wealth-haven.webp"
+ },
+ {
+  "name": "Leon and Lili",
+  "coins": 9699,
+  "image": "gifts/leon-and-lili.webp"
+ },
+ {
+  "name": "Desert Glory",
+  "coins": 9999,
+  "image": "gifts/desert-glory.webp"
+ },
+ {
+  "name": "Santa Town",
+  "coins": 9999,
+  "image": "gifts/santa-town.webp"
+ },
+ {
+  "name": "Scorpio Star Sign",
+  "coins": 9999,
+  "image": "gifts/scorpio-star-sign.webp"
+ },
+ {
+  "name": "You Are Wanted!",
+  "coins": 9999,
+  "image": "gifts/you-are-wanted.webp"
+ },
+ {
+  "name": "Big Guy&#39;s Ride",
+  "coins": 10000,
+  "image": "gifts/big-guy-39-s-ride.webp"
+ },
+ {
+  "name": "Crystal Rod",
+  "coins": 10000,
+  "image": "gifts/crystal-rod.webp"
+ },
+ {
+  "name": "Festival Flags",
+  "coins": 10000,
+  "image": "gifts/festival-flags.webp"
+ },
+ {
+  "name": "Henry",
+  "coins": 10000,
+  "image": "gifts/henry.webp"
+ },
+ {
+  "name": "Interstellar",
+  "coins": 10000,
+  "image": "gifts/interstellar.webp"
+ },
+ {
+  "name": "Luxury Yacht",
+  "coins": 10000,
+  "image": "gifts/luxury-yacht.webp"
+ },
+ {
+  "name": "Octopus",
+  "coins": 10000,
+  "image": "gifts/octopus.webp"
+ },
+ {
+  "name": "Polar Bear",
+  "coins": 10000,
+  "image": "gifts/polar-bear.webp"
+ },
+ {
+  "name": "Sunset Speedway",
+  "coins": 10000,
+  "image": "gifts/sunset-speedway.webp"
+ },
+ {
+  "name": "Falcon",
+  "coins": 10999,
+  "image": "gifts/falcon.webp"
+ },
+ {
+  "name": "Holiday Leon",
+  "coins": 10999,
+  "image": "gifts/holiday-leon.webp"
+ },
+ {
+  "name": "Verified Glider",
+  "coins": 10999,
+  "image": "gifts/verified-glider.webp"
+ },
+ {
+  "name": "Dubai Fireworks",
+  "coins": 11999,
+  "image": "gifts/dubai-fireworks.webp"
+ },
+ {
+  "name": "Fangster Morph",
+  "coins": 11999,
+  "image": "gifts/fangster-morph.webp"
+ },
+ {
+  "name": "Glampire Morph",
+  "coins": 11999,
+  "image": "gifts/glampire-morph.webp"
+ },
+ {
+  "name": "Hall of Legend",
+  "coins": 11999,
+  "image": "gifts/hall-of-legend.webp"
+ },
+ {
+  "name": "3rd Anniversary",
+  "coins": 12000,
+  "image": "gifts/3rd-anniversary.webp"
+ },
+ {
+  "name": "Aurora",
+  "coins": 12000,
+  "image": "gifts/aurora.webp"
+ },
+ {
+  "name": "Aurora Borealis",
+  "coins": 12000,
+  "image": "gifts/aurora-borealis.webp"
+ },
+ {
+  "name": "Black Bear",
+  "coins": 12000,
+  "image": "gifts/black-bear.webp"
+ },
+ {
+  "name": "Convertible",
+  "coins": 12000,
+  "image": "gifts/convertible.webp"
+ },
+ {
+  "name": "Convertible Car",
+  "coins": 12000,
+  "image": "gifts/convertible-car.webp"
+ },
+ {
+  "name": "Emerald Prince",
+  "coins": 12000,
+  "image": "gifts/emerald-prince.webp"
+ },
+ {
+  "name": "Falcon",
+  "coins": 12000,
+  "image": "gifts/falcon-2.webp"
+ },
+ {
+  "name": "Gimme The Mic",
+  "coins": 12000,
+  "image": "gifts/gimme-the-mic.webp"
+ },
+ {
+  "name": "Hot Rods",
+  "coins": 12000,
+  "image": "gifts/hot-rods.webp"
+ },
+ {
+  "name": "Hub Race Car",
+  "coins": 12000,
+  "image": "gifts/hub-race-car.webp"
+ },
+ {
+  "name": "Keeper of the Stars",
+  "coins": 12000,
+  "image": "gifts/keeper-of-the-stars.webp"
+ },
+ {
+  "name": "Lili and Sakura",
+  "coins": 12000,
+  "image": "gifts/lili-and-sakura.webp"
+ },
+ {
+  "name": "Maple World",
+  "coins": 12000,
+  "image": "gifts/maple-world.webp"
+ },
+ {
+  "name": "Prime Power 2025",
+  "coins": 12000,
+  "image": "gifts/prime-power-2025.webp"
+ },
+ {
+  "name": "Race Car",
+  "coins": 12000,
+  "image": "gifts/race-car.webp"
+ },
+ {
+  "name": "Red Lightning",
+  "coins": 12000,
+  "image": "gifts/red-lightning-2.webp"
+ },
+ {
+  "name": "Rilakkuma&#39;s summer vacation",
+  "coins": 12000,
+  "image": "gifts/rilakkuma-39-s-summer-vacation.webp"
+ },
+ {
+  "name": "Star Hunt",
+  "coins": 12000,
+  "image": "gifts/star-hunt.webp"
+ },
+ {
+  "name": "Superstar",
+  "coins": 12000,
+  "image": "gifts/superstar-2.webp"
+ },
+ {
+  "name": "Tiny Diny Show",
+  "coins": 12000,
+  "image": "gifts/tiny-diny-show.webp"
+ },
+ {
+  "name": "White Wolf",
+  "coins": 12000,
+  "image": "gifts/white-wolf.webp"
+ },
+ {
+  "name": "Legend Rider",
+  "coins": 12999,
+  "image": "gifts/legend-rider.webp"
+ },
+ {
+  "name": "Level-up Spectacle",
+  "coins": 12999,
+  "image": "gifts/level-up-spectacle.webp"
+ },
+ {
+  "name": "Kangaroo",
+  "coins": 13500,
+  "image": "gifts/kangaroo.webp"
+ },
+ {
+  "name": "Summer Pass XL",
+  "coins": 13500,
+  "image": "gifts/summer-pass-xl.webp"
+ },
+ {
+  "name": "Anniversary Cake",
+  "coins": 13999,
+  "image": "gifts/anniversary-cake-2.webp"
+ },
+ {
+  "name": "Corgi and Night Cherry",
+  "coins": 13999,
+  "image": "gifts/corgi-and-night-cherry.webp"
+ },
+ {
+  "name": "Daylight Debut",
+  "coins": 13999,
+  "image": "gifts/daylight-debut.webp"
+ },
+ {
+  "name": "Spaceship",
+  "coins": 13999,
+  "image": "gifts/spaceship.webp"
+ },
+ {
+  "name": "Monster Truck",
+  "coins": 14000,
+  "image": "gifts/monster-truck.webp"
+ },
+ {
+  "name": "Chrono Rewinder",
+  "coins": 14999,
+  "image": "gifts/chrono-rewinder.webp"
+ },
+ {
+  "name": "Crown World",
+  "coins": 14999,
+  "image": "gifts/crown-world.webp"
+ },
+ {
+  "name": "Crystal Heart",
+  "coins": 14999,
+  "image": "gifts/crystal-heart-2.webp"
+ },
+ {
+  "name": "Fate Sphere",
+  "coins": 14999,
+  "image": "gifts/fate-sphere.webp"
+ },
+ {
+  "name": "Holy Arc",
+  "coins": 14999,
+  "image": "gifts/holy-arc.webp"
+ },
+ {
+  "name": "Interstellar Trek",
+  "coins": 14999,
+  "image": "gifts/interstellar-trek.webp"
+ },
+ {
+  "name": "Invincible Hammer",
+  "coins": 14999,
+  "image": "gifts/invincible-hammer.webp"
+ },
+ {
+  "name": "Iron Resolve",
+  "coins": 14999,
+  "image": "gifts/iron-resolve.webp"
+ },
+ {
+  "name": "Lucky Crown",
+  "coins": 14999,
+  "image": "gifts/lucky-crown.webp"
+ },
+ {
+  "name": "Proof of the King",
+  "coins": 14999,
+  "image": "gifts/proof-of-the-king.webp"
+ },
+ {
+  "name": "Scythe of Justice",
+  "coins": 14999,
+  "image": "gifts/scythe-of-justice.webp"
+ },
+ {
+  "name": "Snowmoon Parasol",
+  "coins": 14999,
+  "image": "gifts/snowmoon-parasol.webp"
+ },
+ {
+  "name": "Storm Blade",
+  "coins": 14999,
+  "image": "gifts/storm-blade.webp"
+ },
+ {
+  "name": "Tidecaller Trident",
+  "coins": 14999,
+  "image": "gifts/tidecaller-trident.webp"
+ },
+ {
+  "name": "A Fun House",
+  "coins": 15000,
+  "image": "gifts/a-fun-house.webp"
+ },
+ {
+  "name": "Alpha Wolves Scepter",
+  "coins": 15000,
+  "image": "gifts/alpha-wolves-scepter.webp"
+ },
+ {
+  "name": "Arabian Cheetah",
+  "coins": 15000,
+  "image": "gifts/arabian-cheetah.webp"
+ },
+ {
+  "name": "Arabian Stallion",
+  "coins": 15000,
+  "image": "gifts/arabian-stallion.webp"
+ },
+ {
+  "name": "Battle Champion",
+  "coins": 15000,
+  "image": "gifts/battle-champion.webp"
+ },
+ {
+  "name": "Black Wolf",
+  "coins": 15000,
+  "image": "gifts/black-wolf.webp"
+ },
+ {
+  "name": "Boo&#39;s Town",
+  "coins": 15000,
+  "image": "gifts/boo-39-s-town.webp"
+ },
+ {
+  "name": "Bran Castle",
+  "coins": 15000,
+  "image": "gifts/bran-castle.webp"
+ },
+ {
+  "name": "Carpathian Deer",
+  "coins": 15000,
+  "image": "gifts/carpathian-deer.webp"
+ },
+ {
+  "name": "Community Support",
+  "coins": 15000,
+  "image": "gifts/community-support.webp"
+ },
+ {
+  "name": "Corgi&#39;s Happy Chuseok",
+  "coins": 15000,
+  "image": "gifts/corgi-39-s-happy-chuseok.webp"
+ },
+ {
+  "name": "Crocodile",
+  "coins": 15000,
+  "image": "gifts/crocodile.webp"
+ },
+ {
+  "name": "Diamond Stage",
+  "coins": 15000,
+  "image": "gifts/diamond-stage.webp"
+ },
+ {
+  "name": "DJ Peak",
+  "coins": 15000,
+  "image": "gifts/dj-peak.webp"
+ },
+ {
+  "name": "Dream Ride",
+  "coins": 15000,
+  "image": "gifts/dream-ride.webp"
+ },
+ {
+  "name": "F1 Austin L",
+  "coins": 15000,
+  "image": "gifts/f1-austin-l.webp"
+ },
+ {
+  "name": "Firelight Kingdom",
+  "coins": 15000,
+  "image": "gifts/firelight-kingdom.webp"
+ },
+ {
+  "name": "Flame Towers",
+  "coins": 15000,
+  "image": "gifts/flame-towers.webp"
+ },
+ {
+  "name": "Food Fair",
+  "coins": 15000,
+  "image": "gifts/food-fair.webp"
+ },
+ {
+  "name": "Future Journey",
+  "coins": 15000,
+  "image": "gifts/future-journey.webp"
+ },
+ {
+  "name": "Gaming Console",
+  "coins": 15000,
+  "image": "gifts/gaming-console.webp"
+ },
+ {
+  "name": "Go Big Sky Rush",
+  "coins": 15000,
+  "image": "gifts/go-big-sky-rush.webp"
+ },
+ {
+  "name": "Go Big Stallion",
+  "coins": 15000,
+  "image": "gifts/go-big-stallion.webp"
+ },
+ {
+  "name": "Gobble Grab",
+  "coins": 15000,
+  "image": "gifts/gobble-grab.webp"
+ },
+ {
+  "name": "Golden Falcons Scepter",
+  "coins": 15000,
+  "image": "gifts/golden-falcons-scepter.webp"
+ },
+ {
+  "name": "Golden Gallop",
+  "coins": 15000,
+  "image": "gifts/golden-gallop.webp"
+ },
+ {
+  "name": "Great Barrier Reef",
+  "coins": 15000,
+  "image": "gifts/great-barrier-reef.webp"
+ },
+ {
+  "name": "Harbour Bridge",
+  "coins": 15000,
+  "image": "gifts/harbour-bridge.webp"
+ },
+ {
+  "name": "iHeart SuperStage",
+  "coins": 15000,
+  "image": "gifts/iheart-superstage.webp"
+ },
+ {
+  "name": "Infinity Hall",
+  "coins": 15000,
+  "image": "gifts/infinity-hall.webp"
+ },
+ {
+  "name": "Keeper of Atlantis",
+  "coins": 15000,
+  "image": "gifts/keeper-of-atlantis.webp"
+ },
+ {
+  "name": "Legendary Aegis",
+  "coins": 15000,
+  "image": "gifts/legendary-aegis.webp"
+ },
+ {
+  "name": "Leopard",
+  "coins": 15000,
+  "image": "gifts/leopard.webp"
+ },
+ {
+  "name": "LIVE NATIONS CUP",
+  "coins": 15000,
+  "image": "gifts/live-nations-cup.webp"
+ },
+ {
+  "name": "Look! Meteor Shower",
+  "coins": 15000,
+  "image": "gifts/look-meteor-shower.webp"
+ },
+ {
+  "name": "Madrid",
+  "coins": 15000,
+  "image": "gifts/madrid.webp"
+ },
+ {
+  "name": "Mammoth",
+  "coins": 15000,
+  "image": "gifts/mammoth.webp"
+ },
+ {
+  "name": "Match star",
+  "coins": 15000,
+  "image": "gifts/match-star-2.webp"
+ },
+ {
+  "name": "Mystery Stalker",
+  "coins": 15000,
+  "image": "gifts/mystery-stalker.webp"
+ },
+ {
+  "name": "Nightshade Kingdom",
+  "coins": 15000,
+  "image": "gifts/nightshade-kingdom.webp"
+ },
+ {
+  "name": "Noble Stallions Scepter",
+  "coins": 15000,
+  "image": "gifts/noble-stallions-scepter.webp"
+ },
+ {
+  "name": "Paris",
+  "coins": 15000,
+  "image": "gifts/paris.webp"
+ },
+ {
+  "name": "Party On&amp;On",
+  "coins": 15000,
+  "image": "gifts/party-on-amp-on.webp"
+ },
+ {
+  "name": "Philippine Eagle",
+  "coins": 15000,
+  "image": "gifts/philippine-eagle.webp"
+ },
+ {
+  "name": "Pirate’s Ship",
+  "coins": 15000,
+  "image": "gifts/pirate-s-ship.webp"
+ },
+ {
+  "name": "Pyramids",
+  "coins": 15000,
+  "image": "gifts/pyramids.webp"
+ },
+ {
+  "name": "Riyadh",
+  "coins": 15000,
+  "image": "gifts/riyadh.webp"
+ },
+ {
+  "name": "Rollercoaster",
+  "coins": 15000,
+  "image": "gifts/rollercoaster.webp"
+ },
+ {
+  "name": "Rome",
+  "coins": 15000,
+  "image": "gifts/rome.webp"
+ },
+ {
+  "name": "Rosa Nebula",
+  "coins": 15000,
+  "image": "gifts/rosa-nebula.webp"
+ },
+ {
+  "name": "Royal Lions Scepter",
+  "coins": 15000,
+  "image": "gifts/royal-lions-scepter.webp"
+ },
+ {
+  "name": "Singapore Skyline",
+  "coins": 15000,
+  "image": "gifts/singapore-skyline.webp"
+ },
+ {
+  "name": "Sneaky Jockey",
+  "coins": 15000,
+  "image": "gifts/sneaky-jockey.webp"
+ },
+ {
+  "name": "Snow Leopard",
+  "coins": 15000,
+  "image": "gifts/snow-leopard.webp"
+ },
+ {
+  "name": "Stallion",
+  "coins": 15000,
+  "image": "gifts/stallion.webp"
+ },
+ {
+  "name": "Taiwan Night Market",
+  "coins": 15000,
+  "image": "gifts/taiwan-night-market.webp"
+ },
+ {
+  "name": "The Dreamy Night",
+  "coins": 15000,
+  "image": "gifts/the-dreamy-night.webp"
+ },
+ {
+  "name": "Time for Family",
+  "coins": 15000,
+  "image": "gifts/time-for-family.webp"
+ },
+ {
+  "name": "To the Space",
+  "coins": 15000,
+  "image": "gifts/to-the-space.webp"
+ },
+ {
+  "name": "Ultimate Match",
+  "coins": 15000,
+  "image": "gifts/ultimate-match.webp"
+ },
+ {
+  "name": "Vintage Car",
+  "coins": 15000,
+  "image": "gifts/vintage-car.webp"
+ },
+ {
+  "name": "Whitewind Kingdom",
+  "coins": 15000,
+  "image": "gifts/whitewind-kingdom.webp"
+ },
+ {
+  "name": "Malayan Tiger",
+  "coins": 15999,
+  "image": "gifts/malayan-tiger.webp"
+ },
+ {
+  "name": "Racing Legend",
+  "coins": 15999,
+  "image": "gifts/racing-legend.webp"
+ },
+ {
+  "name": "Stadium",
+  "coins": 15999,
+  "image": "gifts/stadium.webp"
+ },
+ {
+  "name": "White Tiger",
+  "coins": 15999,
+  "image": "gifts/white-tiger.webp"
+ },
+ {
+  "name": "Amusement Park",
+  "coins": 17000,
+  "image": "gifts/amusement-park.webp"
+ },
+ {
+  "name": "Jet Car",
+  "coins": 17000,
+  "image": "gifts/jet-car.webp"
+ },
+ {
+  "name": "Diamond flight",
+  "coins": 18000,
+  "image": "gifts/diamond-flight.webp"
+ },
+ {
+  "name": "Diamond Flight",
+  "coins": 18000,
+  "image": "gifts/diamond-flight-2.webp"
+ },
+ {
+  "name": "Golden Hall",
+  "coins": 18000,
+  "image": "gifts/golden-hall.webp"
+ },
+ {
+  "name": "Shell Castle",
+  "coins": 18000,
+  "image": "gifts/shell-castle.webp"
+ },
+ {
+  "name": "Legendary DemonGod",
+  "coins": 18500,
+  "image": "gifts/legendary-demongod.webp"
+ },
+ {
+  "name": "Rust vs World",
+  "coins": 18999,
+  "image": "gifts/rust-vs-world.webp"
+ },
+ {
+  "name": "Super Car",
+  "coins": 19000,
+  "image": "gifts/super-car.webp"
+ },
+ {
+  "name": "Fantastic Fly Love",
+  "coins": 19999,
+  "image": "gifts/fantastic-fly-love.webp"
+ },
+ {
+  "name": "Fly Love",
+  "coins": 19999,
+  "image": "gifts/fly-love.webp"
+ },
+ {
+  "name": "Masquerade",
+  "coins": 19999,
+  "image": "gifts/masquerade-2.webp"
+ },
+ {
+  "name": "Mount Olympus",
+  "coins": 19999,
+  "image": "gifts/mount-olympus.webp"
+ },
+ {
+  "name": "Party Boat",
+  "coins": 19999,
+  "image": "gifts/party-boat.webp"
+ },
+ {
+  "name": "Ramadan Celebration",
+  "coins": 19999,
+  "image": "gifts/ramadan-celebration.webp"
+ },
+ {
+  "name": "Tiger",
+  "coins": 19999,
+  "image": "gifts/tiger.webp"
+ },
+ {
+  "name": "Castle Fantasy",
+  "coins": 20000,
+  "image": "gifts/castle-fantasy.webp"
+ },
+ {
+  "name": "Dolphin",
+  "coins": 20000,
+  "image": "gifts/dolphin-2.webp"
+ },
+ {
+  "name": "Gyeongbokgung",
+  "coins": 20000,
+  "image": "gifts/gyeongbokgung.webp"
+ },
+ {
+  "name": "Premium Shuttle",
+  "coins": 20000,
+  "image": "gifts/premium-shuttle.webp"
+ },
+ {
+  "name": "Red Devil Corgi",
+  "coins": 20000,
+  "image": "gifts/red-devil-corgi.webp"
+ },
+ {
+  "name": "Spark",
+  "coins": 20000,
+  "image": "gifts/spark.webp"
+ },
+ {
+  "name": "TikTok Shuttle",
+  "coins": 20000,
+  "image": "gifts/tiktok-shuttle.webp"
+ },
+ {
+  "name": "Winter Magic",
+  "coins": 20000,
+  "image": "gifts/winter-magic.webp"
+ },
+ {
+  "name": "Yacht",
+  "coins": 20000,
+  "image": "gifts/yacht.webp"
+ },
+ {
+  "name": "Legacy in Bloom",
+  "coins": 21000,
+  "image": "gifts/legacy-in-bloom.webp"
+ },
+ {
+  "name": "Level Ship",
+  "coins": 21000,
+  "image": "gifts/level-ship-2.webp"
+ },
+ {
+  "name": "Pop Out",
+  "coins": 21000,
+  "image": "gifts/pop-out.webp"
+ },
+ {
+  "name": "Black Tiger",
+  "coins": 22000,
+  "image": "gifts/black-tiger.webp"
+ },
+ {
+  "name": "Siren&#39;s Aria",
+  "coins": 22500,
+  "image": "gifts/siren-39-s-aria.webp"
+ },
+ {
+  "name": "Infinite Heart",
+  "coins": 23999,
+  "image": "gifts/infinite-heart.webp"
+ },
+ {
+  "name": "Rose Carriage",
+  "coins": 25000,
+  "image": "gifts/rose-carriage.webp"
+ },
+ {
+  "name": "Adam’s Dream",
+  "coins": 25999,
+  "image": "gifts/adam-s-dream.webp"
+ },
+ {
+  "name": "Chasing Glory",
+  "coins": 25999,
+  "image": "gifts/chasing-glory.webp"
+ },
+ {
+  "name": "Cyber Roar",
+  "coins": 25999,
+  "image": "gifts/cyber-roar.webp"
+ },
+ {
+  "name": "Flamenco dancers",
+  "coins": 25999,
+  "image": "gifts/flamenco-dancers.webp"
+ },
+ {
+  "name": "Gate of Trial",
+  "coins": 25999,
+  "image": "gifts/gate-of-trial.webp"
+ },
+ {
+  "name": "Greatsword Temple",
+  "coins": 25999,
+  "image": "gifts/greatsword-temple.webp"
+ },
+ {
+  "name": "Griffin",
+  "coins": 25999,
+  "image": "gifts/griffin.webp"
+ },
+ {
+  "name": "Light Castle",
+  "coins": 25999,
+  "image": "gifts/light-castle.webp"
+ },
+ {
+  "name": "Phoenix",
+  "coins": 25999,
+  "image": "gifts/phoenix.webp"
+ },
+ {
+  "name": "Rin the Snowborn",
+  "coins": 25999,
+  "image": "gifts/rin-the-snowborn.webp"
+ },
+ {
+  "name": "Skyforge Citadel",
+  "coins": 25999,
+  "image": "gifts/skyforge-citadel.webp"
+ },
+ {
+  "name": "Solar Temple",
+  "coins": 25999,
+  "image": "gifts/solar-temple.webp"
+ },
+ {
+  "name": "Stellar Ark",
+  "coins": 25999,
+  "image": "gifts/stellar-ark.webp"
+ },
+ {
+  "name": "T-rex",
+  "coins": 25999,
+  "image": "gifts/t-rex.webp"
+ },
+ {
+  "name": "Undersea Kingdom",
+  "coins": 25999,
+  "image": "gifts/undersea-kingdom.webp"
+ },
+ {
+  "name": "Villainy Slain",
+  "coins": 25999,
+  "image": "gifts/villainy-slain.webp"
+ },
+ {
+  "name": "Vulcan",
+  "coins": 25999,
+  "image": "gifts/vulcan.webp"
+ },
+ {
+  "name": "Dragon Flame",
+  "coins": 26999,
+  "image": "gifts/dragon-flame.webp"
+ },
+ {
+  "name": "Fantasy Castle",
+  "coins": 28888,
+  "image": "gifts/fantasy-castle.webp"
+ },
+ {
+  "name": "Towards Future",
+  "coins": 28888,
+  "image": "gifts/towards-future.webp"
+ },
+ {
+  "name": "Go Big LIVE Legends",
+  "coins": 29999,
+  "image": "gifts/go-big-live-legends.webp"
+ },
+ {
+  "name": "Golden sports car",
+  "coins": 29999,
+  "image": "gifts/golden-sports-car.webp"
+ },
+ {
+  "name": "Knee Sliding",
+  "coins": 29999,
+  "image": "gifts/knee-sliding.webp"
+ },
+ {
+  "name": "Lion",
+  "coins": 29999,
+  "image": "gifts/lion.webp"
+ },
+ {
+  "name": "LIVE Legends",
+  "coins": 29999,
+  "image": "gifts/live-legends.webp"
+ },
+ {
+  "name": "Community Legends",
+  "coins": 30000,
+  "image": "gifts/community-legends.webp"
+ },
+ {
+  "name": "Gorilla",
+  "coins": 30000,
+  "image": "gifts/gorilla.webp"
+ },
+ {
+  "name": "LIVE Pro Face-Off",
+  "coins": 30000,
+  "image": "gifts/live-pro-face-off.webp"
+ },
+ {
+  "name": "Magic Rod",
+  "coins": 30000,
+  "image": "gifts/magic-rod.webp"
+ },
+ {
+  "name": "Sam the Whale",
+  "coins": 30000,
+  "image": "gifts/sam-the-whale.webp"
+ },
+ {
+  "name": "Superhero fight",
+  "coins": 30000,
+  "image": "gifts/superhero-fight.webp"
+ },
+ {
+  "name": "TikTok Houses Glory",
+  "coins": 30000,
+  "image": "gifts/tiktok-houses-glory.webp"
+ },
+ {
+  "name": "Crescent Lion",
+  "coins": 30999,
+  "image": "gifts/crescent-lion.webp"
+ },
+ {
+  "name": "Guardian Rhino",
+  "coins": 30999,
+  "image": "gifts/guardian-rhino.webp"
+ },
+ {
+  "name": "Leon and Lion",
+  "coins": 34000,
+  "image": "gifts/leon-and-lion.webp"
+ },
+ {
+  "name": "Zeus",
+  "coins": 34000,
+  "image": "gifts/zeus.webp"
+ },
+ {
+  "name": "Seal and Whale",
+  "coins": 34500,
+  "image": "gifts/seal-and-whale.webp"
+ },
+ {
+  "name": "TikTok Universe+",
+  "coins": 34999,
+  "image": "gifts/tiktok-universe.webp"
+ },
+ {
+  "name": "Holiday Lion",
+  "coins": 39999,
+  "image": "gifts/holiday-lion.webp"
+ },
+ {
+  "name": "Thunder Falcon",
+  "coins": 39999,
+  "image": "gifts/thunder-falcon.webp"
+ },
+ {
+  "name": "TikTok Stars",
+  "coins": 39999,
+  "image": "gifts/tiktok-stars.webp"
+ },
+ {
+  "name": "Miracle ss",
+  "coins": 40000,
+  "image": "gifts/miracle-ss.webp"
+ },
+ {
+  "name": "Fire Phoenix",
+  "coins": 41999,
+  "image": "gifts/fire-phoenix.webp"
+ },
+ {
+  "name": "Arnold the Warrior",
+  "coins": 42999,
+  "image": "gifts/arnold-the-warrior.webp"
+ },
+ {
+  "name": "Julius the Champion",
+  "coins": 42999,
+  "image": "gifts/julius-the-champion.webp"
+ },
+ {
+  "name": "King Leonardo",
+  "coins": 42999,
+  "image": "gifts/king-leonardo.webp"
+ },
+ {
+  "name": "King of Legends",
+  "coins": 42999,
+  "image": "gifts/king-of-legends.webp"
+ },
+ {
+  "name": "Legend Marcellus",
+  "coins": 42999,
+  "image": "gifts/legend-marcellus.webp"
+ },
+ {
+  "name": "Lord Marcellus",
+  "coins": 42999,
+  "image": "gifts/lord-marcellus.webp"
+ },
+ {
+  "name": "Magic Marcia",
+  "coins": 42999,
+  "image": "gifts/magic-marcia.webp"
+ },
+ {
+  "name": "Pegasus",
+  "coins": 42999,
+  "image": "gifts/pegasus.webp"
+ },
+ {
+  "name": "The Fair King",
+  "coins": 42999,
+  "image": "gifts/the-fair-king.webp"
+ },
+ {
+  "name": "Valerian&#39;s Oath",
+  "coins": 42999,
+  "image": "gifts/valerian-39-s-oath.webp"
+ },
+ {
+  "name": "Yuki&#39;s Vigilance",
+  "coins": 42999,
+  "image": "gifts/yuki-39-s-vigilance.webp"
+ },
+ {
+  "name": "Julius the Champion",
+  "coins": 43999,
+  "image": "gifts/julius-the-champion-2.webp"
+ },
+ {
+  "name": "Valerian&#39;s Oath",
+  "coins": 43999,
+  "image": "gifts/valerian-39-s-oath-2.webp"
+ },
+ {
+  "name": "TikTok Universe",
+  "coins": 44999,
+  "image": "gifts/tiktok-universe-2.webp"
+ },
+ {
+  "name": "Holiday Universe",
+  "coins": 60999,
+  "image": "gifts/holiday-universe.webp"
+ }
+]

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Пульт управления</title>
+<style>
+  :root {
+    --bg:#0b0f0a; --panel:#141a10; --panel2:#1a2214; --line:#2a361c;
+    --lime:#a3e635; --lime2:#84cc16; --red:#f87171; --red2:#7f1d1d;
+    --txt:#ecfccb; --dim:#8a9a6a;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { height:100%; overflow:hidden; background:var(--bg); color:var(--txt);
+    font-family:'Segoe UI',system-ui,sans-serif; user-select:none; }
+  #app { display:flex; flex-direction:column; height:100vh; }
+  .titlebar { height:34px; display:flex; align-items:center; gap:8px; padding:0 10px;
+    background:var(--panel); border-bottom:1px solid var(--line); cursor:move; }
+  .titlebar b { flex:1; font-size:13px; letter-spacing:.5px; }
+  .tbtn { width:26px; height:22px; border:0; border-radius:5px; color:#fff;
+    cursor:pointer; font-size:13px; line-height:1; }
+  .clock { padding:18px 14px 10px; text-align:center; }
+  .clock .t { font-family:'Consolas',monospace; font-size:56px; font-weight:800;
+    color:var(--lime); text-shadow:0 0 26px rgba(163,230,53,.45);
+    font-variant-numeric:tabular-nums; letter-spacing:2px; }
+  .badges { display:flex; gap:6px; justify-content:center; margin-top:6px; min-height:20px; }
+  .badge { font-size:11px; padding:2px 8px; border-radius:10px; background:var(--panel2);
+    border:1px solid var(--line); color:var(--dim); }
+  .badge.on { color:#0b0f0a; background:var(--lime); border-color:var(--lime); font-weight:700; }
+  .body { flex:1; overflow-y:auto; padding:10px 14px 14px; }
+  .likes { margin:4px 0 12px; }
+  .likes .row { display:flex; justify-content:space-between; font-size:12px; color:var(--dim); }
+  .likes .row b { color:#fb7185; }
+  .bar { height:8px; border-radius:4px; background:var(--panel2); margin-top:5px; overflow:hidden; }
+  .bar i { display:block; height:100%; background:linear-gradient(90deg,#f43f5e,#fb7185);
+    box-shadow:0 0 10px #f43f5e; transition:width .4s; }
+  h4 { font-size:11px; letter-spacing:1.5px; color:var(--dim); margin:12px 0 7px; }
+  .grid4 { display:grid; grid-template-columns:repeat(4,1fr); gap:7px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:7px; }
+  button.act { border:1px solid var(--line); border-radius:9px; padding:9px 4px;
+    font-size:14px; font-weight:700; cursor:pointer; color:var(--txt); background:var(--panel2); }
+  button.act:hover { filter:brightness(1.2); }
+  button.plus { background:#22300f; border-color:#3f6212; color:var(--lime); }
+  button.minus { background:#2b1010; border-color:#7f1d1d; color:var(--red); }
+  button.main { width:100%; padding:12px; border-radius:10px; border:0; font-size:15px;
+    font-weight:800; cursor:pointer; }
+  button.lime { background:var(--lime); color:#0b0f0a; box-shadow:0 0 18px rgba(163,230,53,.35); }
+  button.dark { background:var(--panel2); color:var(--txt); border:1px solid var(--line); }
+  .rowbtns { display:flex; gap:7px; margin-top:7px; }
+  .custom { display:flex; gap:7px; align-items:center; }
+  .custom input { flex:1; height:38px; text-align:center; font-size:20px; font-weight:800;
+    border-radius:9px; border:1px solid var(--line); background:var(--panel2); color:var(--txt); }
+  .cards { display:flex; gap:7px; flex-wrap:wrap; }
+  .cardpick { flex:1; min-width:52px; padding:12px 4px; border-radius:10px; border:2px solid var(--lime2);
+    background:var(--panel2); color:var(--lime); font-size:18px; font-weight:800; cursor:pointer; }
+  .cardpick:hover { background:var(--lime); color:#0b0f0a; }
+  .rlt { display:flex; flex-direction:column; gap:7px; }
+  .rlt button { padding:10px; border-radius:9px; border:1px solid var(--line); cursor:pointer;
+    font-weight:700; font-size:13px; background:var(--panel2); color:var(--txt); }
+  .top { font-size:12px; color:var(--dim); }
+  .top div { display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid var(--panel2); }
+  .top b { color:var(--lime); }
+  ::-webkit-scrollbar { width:6px; } ::-webkit-scrollbar-thumb { background:var(--line); border-radius:3px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="titlebar" data-tauri-drag-region style="display:none">
+    <b data-tauri-drag-region>🎛 Пульт управления</b>
+    <span style="font-size:11px;color:var(--dim)" data-tauri-drag-region>ТАЙМЕР</span>
+    <button class="tbtn" id="tbMin" style="background:var(--panel2)">—</button>
+    <button class="tbtn" id="tbClose" style="background:var(--red2)">✕</button>
+  </div>
+  <div class="clock">
+    <div class="t" id="clock">00:00:00</div>
+    <div class="badges" id="badges"></div>
+  </div>
+  <div class="body">
+    <div class="rowbtns">
+      <button class="main lime" id="btnStart">▶ ЗАПУСК</button>
+      <button class="main dark" id="btnPause" style="flex:.6">⏸</button>
+      <button class="main dark" id="btnStop" style="flex:.6;color:var(--red)">⏹</button>
+    </div>
+    <div class="likes">
+      <div class="row"><span>❤ ЗА ЛАЙКИ</span><b id="likesGoal"></b></div>
+      <div class="bar"><i id="likesBar" style="width:0%"></i></div>
+      <div class="row" style="margin-top:3px"><span>Текущие: <b id="likesNow">0</b></span><span>Цель: <b id="likesMax">0</b></span></div>
+    </div>
+    <div id="cardBlock" style="display:none">
+      <h4>🂠 ХОД СУДЬБЫ — <span id="cardUser"></span></h4>
+      <div class="cards" id="cardPick"></div>
+    </div>
+    <h4>БЫСТРЫЕ КНОПКИ (МИН)</h4>
+    <div class="grid4" id="quick"></div>
+    <button class="main lime" id="btn5min" style="margin-top:8px">= Остаётся 5 мин</button>
+    <h4>КАСТОМНОЕ ВРЕМЯ (СЕК)</h4>
+    <div class="custom"><input id="customSecs" type="number" value="60"></div>
+    <div class="grid2" style="margin-top:7px">
+      <button class="act plus" id="btnAdd">＋ Добавить</button>
+      <button class="act minus" id="btnSub">－ Убавить</button>
+    </div>
+    <div class="grid2" style="margin-top:7px">
+      <button class="act" id="btnShield" style="color:#67e8f9">🛡 ＋ Щит</button>
+      <button class="act" id="btnUnshield">⏳ − Снять щит</button>
+    </div>
+    <button class="main dark" id="btnReverse" style="margin-top:7px">🔄 Развернуть время</button>
+    <h4>РУЛЕТКИ</h4>
+    <div class="rlt" id="rlts"></div>
+    <div class="grid2" style="margin-top:7px">
+      <button class="act" id="btnRuiner" style="color:#fbbf24">💣 Руинер</button>
+      <button class="act" id="btnSave" style="color:#4ade80">✚ Сейв</button>
+    </div>
+    <h4>ТОП КОШЕЛЬКОВ</h4>
+    <div class="top" id="topWallets"><div><span>—</span><b>0</b></div></div>
+  </div>
+</div>
+<script>
+(function(){
+  const Q = new URLSearchParams(location.search);
+  const token = Q.get('t') || '';
+  // Управление — POST /timer/cmd на оверлей-сервере (внешняя страница,
+  // __TAURI__ тут недоступен; в Tauri-окне и в OBS работает одинаково).
+  const cmd = (action, extra) =>
+    fetch('/timer/cmd?t=' + encodeURIComponent(token), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ action }, extra || {})),
+    }).catch(() => {});
+  const el = id => document.getElementById(id);
+  const fmtT = s => { s=Math.max(0,Math.floor(s));
+    return String(Math.floor(s/3600)).padStart(2,'0')+':'+
+           String(Math.floor(s/60)%60).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); };
+  const fmtK = n => n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1)+'K':String(n);
+
+  let state=null, cfg=null;
+  const manual = (action,secs,rouletteId)=>cmd(action,{secs,rouletteId});
+
+  // ---- titlebar (только если окно без рамки и __TAURI__ есть) ----
+  if (window.__TAURI__){
+    const tb = document.querySelector('.titlebar');
+    tb.style.display = 'flex';
+    el('tbClose').onclick = ()=>window.__TAURI__.window.getCurrentWindow().close();
+    el('tbMin').onclick = ()=>window.__TAURI__.window.getCurrentWindow().minimize();
+    tb.addEventListener('mousedown',e=>{
+      if(e.target.tagName==='BUTTON')return;
+      try{window.__TAURI__.window.getCurrentWindow().startDragging();}catch(_){}
+    });
+  }
+
+  // ---- controls ----
+  el('btnStart').onclick = ()=>cmd('start',{durS:(cfg&&cfg.initialTime)||300});
+  el('btnPause').onclick = ()=>cmd('pause');
+  el('btnStop').onclick  = ()=>cmd('stop');
+  [[1,'+1'],[5,'+5'],[10,'+10'],[30,'+30']].forEach(([m,t])=>{
+    const b=document.createElement('button');b.className='act plus';b.textContent=t;
+    b.onclick=()=>manual('add',m*60);el('quick').appendChild(b);});
+  [[1,'-1'],[5,'-5'],[10,'-10'],[30,'-30']].forEach(([m,t])=>{
+    const b=document.createElement('button');b.className='act minus';b.textContent=t;
+    b.onclick=()=>manual('sub',m*60);el('quick').appendChild(b);});
+  el('btn5min').onclick   = ()=>manual('set',300);
+  el('btnAdd').onclick    = ()=>manual('add',+el('customSecs').value||0);
+  el('btnSub').onclick    = ()=>manual('sub',+el('customSecs').value||0);
+  el('btnShield').onclick = ()=>manual('freeze');
+  el('btnUnshield').onclick=()=>manual('unfreeze');
+  el('btnReverse').onclick= ()=>manual('reverse');
+  el('btnRuiner').onclick = ()=>manual('ruiner');
+  el('btnSave').onclick   = ()=>manual('save');
+
+  // ---- render ----
+  function render(){
+    const s = state||{};
+    el('clock').textContent = fmtT(s.timeLeft||0);
+    el('clock').style.color = s.isFrozen ? '#67e8f9' : s.isReversed ? '#f0abfc' : 'var(--lime)';
+    const b=[];
+    if(s.isRunning) b.push(['ON AIR',true]); else b.push(['СТОП',false]);
+    if(s.isFrozen) b.push(['ЩИТ '+fmtT(s.freezeTimeLeft||0),true]);
+    if(s.isReversed) b.push(['РЕВЕРС',true]);
+    if(s.multiplier&&s.multiplier.active) b.push([s.multiplier.type+' x'+s.multiplier.value,true]);
+    if(s.ruiner&&s.ruiner.active) b.push(['РУИНЕР '+fmtT(s.ruiner.timeLeft||0),true]);
+    if(s.isVictory) b.push(['ПОБЕДА',true]);
+    if(s.isBonusPhase) b.push(['БОНУС',true]);
+    el('badges').innerHTML=b.map(([t,on])=>`<span class="badge${on?' on':''}">${t}</span>`).join('');
+    // лайки → цель: ближайший like-майлстоун рулеток или likeThreshold
+    const goal = (cfg&&cfg.likeThreshold)||0;
+    const likes = s.currentTotalLikes||0;
+    el('likesNow').textContent = fmtK(likes);
+    el('likesMax').textContent = fmtK(goal||0);
+    el('likesGoal').textContent = goal? fmtK(Math.max(0,goal-(likes%goal||goal)))+' до цели' : '';
+    el('likesBar').style.width = goal? Math.min(100,100*(likes%goal)/goal)+'%' : '0%';
+    // кошельки
+    const w = s.wallets||[];
+    el('topWallets').innerHTML = w.length
+      ? w.slice(0,6).map(x=>`<div><span>${x.user}</span><b>${fmtK(x.balance)}</b></div>`).join('')
+      : '<div><span>—</span><b>0</b></div>';
+    // карты
+    const card = s.__card;
+    if (card && card.phase==='waiting'){
+      el('cardBlock').style.display='block';
+      el('cardUser').textContent = (card.user&&card.user.username)||'';
+      el('cardPick').innerHTML = (card.cards||[]).map((c,i)=>
+        `<button class="cardpick" data-i="${i}">${i+1}</button>`).join('');
+      el('cardPick').querySelectorAll('button').forEach(b=>
+        b.onclick=()=>cmd('card',{index:+b.dataset.i}));
+    } else el('cardBlock').style.display='none';
+  }
+  setInterval(render,300);
+
+  function renderRlts(){
+    el('rlts').innerHTML='';
+    ((cfg&&cfg.roulettes)||[]).filter(r=>r.isEnabled&&r.showInRemote!==false).forEach(r=>{
+      const b=document.createElement('button');
+      b.textContent=(r.mode==='cards'?'🂠 ':'🎡 ')+(r.name||'Рулетка');
+      if(r.remoteButtonColor){b.style.borderColor=r.remoteButtonColor;b.style.color=r.remoteButtonColor;}
+      b.onclick=()=>manual('spin',undefined,r.id);
+      el('rlts').appendChild(b);
+    });
+  }
+
+  function onFrame(v){
+    if(v.type==='snapshot'){cfg=v.cfg||cfg;state=v.state||state;state.__card=v.card||null;renderRlts();}
+    else if(v.type==='settings'){cfg=v.cfg||cfg;renderRlts();}
+    else if(v.type==='tick'){state=v.state||state;}
+    else if(v.type==='card_choice'){if(state)state.__card=(v.phase==='cancel'||v.phase==='commit')?null:v;}
+  }
+  function connect(){
+    const ws=new WebSocket(`ws://${location.host}/ws?t=${encodeURIComponent(token)}`);
+    ws.onopen=()=>ws.send(JSON.stringify({type:'subscribe',channels:['timer']}));
+    ws.onmessage=e=>{try{onFrame(JSON.parse(e.data));}catch(_){}} ;
+    ws.onclose=()=>setTimeout(connect,2000);
+  }
+  connect();
+})();
+</script>
+</body>
+</html>

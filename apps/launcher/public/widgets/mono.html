@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>King of the Gift Widget</title>
+<style>
+  :root{
+    --fd:'DynaPuff'; --fb:'Fredoka';
+    --a1:#ff4fa8; --a2:#c9f74a; --a3:#9a5cff;
+    --ink:#fff; --mut:#e3d1ff;
+    --panel:linear-gradient(165deg, rgba(154,92,255,.92), rgba(84,44,180,.95));
+    --line:#fff;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:transparent; }
+  .stage {
+    position:absolute; left:50%; top:50%;
+    width:1080px; height:1920px;
+    transform-origin:center center;
+    font-family:var(--fb), sans-serif; color:var(--ink);
+  }
+  .wrap { position:absolute; inset:0; padding:200px 60px 0; }
+
+  .title-badge {
+    margin:0 auto; width:max-content; max-width:920px;
+    padding:26px 60px; text-align:center;
+    font-family:var(--fd); font-weight:700; font-size:72px;
+    letter-spacing:2px; color:var(--ink); transform:rotate(-2.5deg);
+    background:linear-gradient(180deg, color-mix(in srgb, var(--a1) 70%, #fff), var(--a1));
+    border-radius:60px;
+    border:5px solid var(--line);
+    box-shadow:0 12px 0 color-mix(in srgb, var(--a1) 55%, #000), 0 22px 40px rgba(0,0,0,.35), inset 0 6px 0 rgba(255,255,255,.55);
+    text-shadow:0 4px 0 rgba(0,0,0,.18);
+    position:relative;
+  }
+  .title-badge::before {
+    content:''; position:absolute; top:8px; left:30px; right:30px; height:26px;
+    background:linear-gradient(180deg, rgba(255,255,255,.75), transparent);
+    border-radius:40px; pointer-events:none;
+  }
+  .sparkle { position:absolute; font-size:52px; animation:twinkle 1.6s ease-in-out infinite; }
+  .sparkle.s1{ left:-30px; top:-30px; }
+  .sparkle.s2{ right:-26px; top:-18px; animation-delay:.4s; }
+  .sparkle.s3{ right:-40px; bottom:-14px; animation-delay:.8s; }
+
+  .gift-zone { position:relative; margin:70px auto 0; width:max-content; }
+  .gift-img {
+    width:380px; height:380px; object-fit:contain;
+    filter:drop-shadow(0 18px 24px rgba(0,0,0,.35)) drop-shadow(0 0 34px color-mix(in srgb, var(--a1) 65%, transparent));
+    animation:bob 2.6s ease-in-out infinite;
+  }
+  .gift-ring {
+    position:absolute; left:50%; bottom:-46px; transform:translateX(-50%);
+    width:340px; height:60px; border-radius:50%;
+    background:radial-gradient(ellipse at center, color-mix(in srgb, var(--a1) 50%, transparent), transparent 70%);
+  }
+  .gift-ph {
+    width:380px; height:380px; border-radius:50%;
+    border:6px dashed color-mix(in srgb, var(--line) 80%, transparent);
+    background:color-mix(in srgb, var(--a1) 15%, transparent);
+    display:flex; align-items:center; justify-content:center;
+    font-size:34px; font-weight:600; color:var(--ink); text-align:center; padding:30px;
+    animation:bob 2.6s ease-in-out infinite;
+  }
+
+  .king-card {
+    margin:110px auto 0; width:820px; padding:50px 40px 56px; text-align:center;
+    background:var(--panel);
+    border-radius:48px; border:5px solid var(--line);
+    box-shadow:0 14px 0 color-mix(in srgb, var(--a3) 60%, #000), 0 26px 50px rgba(0,0,0,.4), inset 0 6px 0 rgba(255,255,255,.4);
+    position:relative;
+  }
+  .king-card::before {
+    content:''; position:absolute; top:10px; left:40px; right:40px; height:30px;
+    background:linear-gradient(180deg, rgba(255,255,255,.55), transparent);
+    border-radius:40px; pointer-events:none;
+  }
+  .king-label {
+    font-family:var(--fd); font-size:36px; letter-spacing:4px; color:var(--a2);
+    text-shadow:0 3px 0 rgba(0,0,0,.25);
+  }
+  .king-ava-wrap { position:relative; width:280px; height:280px; margin:34px auto 0; }
+  .king-ava {
+    width:100%; height:100%; border-radius:50%; object-fit:cover;
+    border:8px solid var(--a2); background:#3a1b70;
+    box-shadow:0 10px 0 color-mix(in srgb, var(--a2) 55%, #000), 0 18px 30px rgba(0,0,0,.35);
+  }
+  .pulse-ring {
+    position:absolute; inset:-26px; border-radius:50%;
+    border:6px solid color-mix(in srgb, var(--a2) 80%, transparent);
+    animation:ringPulse 1.8s ease-out infinite;
+  }
+  .crown-mini { position:absolute; top:-58px; left:50%; transform:translateX(-50%) rotate(-8deg); font-size:84px; filter:drop-shadow(0 6px 8px rgba(0,0,0,.4)); }
+  .king-nick {
+    margin-top:30px; font-family:var(--fd); font-weight:700; font-size:54px;
+    color:var(--ink); text-shadow:0 4px 0 rgba(0,0,0,.25);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .king-none { margin-top:40px; font-size:40px; color:var(--mut); font-weight:500; }
+
+  .mega-count {
+    margin:56px auto 0; width:max-content; padding:30px 90px;
+    font-family:var(--fd); font-weight:700; font-size:170px; line-height:1;
+    color:#5b2a86;
+    background:linear-gradient(180deg,#fdf06e,#ffd23f);
+    border-radius:80px; border:6px solid var(--line);
+    box-shadow:0 14px 0 #d9a40a, 0 26px 46px rgba(0,0,0,.4), inset 0 8px 0 rgba(255,255,255,.7);
+    position:relative; transform:rotate(1.5deg);
+  }
+  .mega-count::before {
+    content:''; position:absolute; top:12px; left:46px; right:46px; height:34px;
+    background:linear-gradient(180deg, rgba(255,255,255,.85), transparent);
+    border-radius:40px; pointer-events:none;
+  }
+  .mega-count .x { font-size:110px; color:var(--a1); text-shadow:0 4px 0 rgba(0,0,0,.15); }
+
+  .dot { position:absolute; border-radius:50%; animation:floaty 4s ease-in-out infinite; }
+
+  @keyframes bob { 0%,100%{transform:translateY(0) rotate(-3deg)} 50%{transform:translateY(-24px) rotate(3deg)} }
+  @keyframes twinkle { 0%,100%{transform:scale(.7) rotate(0); opacity:.7} 50%{transform:scale(1.2) rotate(20deg); opacity:1} }
+  @keyframes ringPulse { 0%{transform:scale(.9); opacity:.9} 100%{transform:scale(1.35); opacity:0} }
+  @keyframes floaty { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-18px)} }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="wrap">
+    <div class="title-badge">
+      <span class="sparkle s1">&#10024;</span>
+      <span class="sparkle s2">&#11088;</span>
+      <span class="sparkle s3">&#10024;</span>
+      <span id="title" class="fx-text">КОРОЛЬ ПОДАРКОВ</span>
+    </div>
+
+    <div class="gift-zone">
+      <img class="gift-img" id="giftImg" src="" alt="" style="display:none">
+      <div class="gift-ph" id="giftPh">ждём<br>подарок…</div>
+      <div class="gift-ring"></div>
+    </div>
+
+    <div class="king-card">
+      <div class="king-label">&#11088; ТЕКУЩИЙ ЧЕМПИОН &#11088;</div>
+      <div class="king-ava-wrap">
+        <div class="pulse-ring"></div>
+        <div class="crown-mini">&#128081;</div>
+        <img class="king-ava" id="kingAva" src="" onerror="this.src='https://api.dicebear.com/9.x/thumbs/png?seed=king'">
+      </div>
+      <div class="king-nick fx-text" id="kingNick"></div>
+      <div class="king-none" id="kingNone">Кто станет первым королём?</div>
+    </div>
+
+    <div class="mega-count"><span class="x">x</span><span id="total">0</span></div>
+  </div>
+</div>
+<script src="bridge.js"></script>
+<script src="themes.js"></script>
+<script>
+  TTW.apply('bubble');
+  const stage = document.getElementById('stage');
+  function fit(){
+    const s = Math.min(innerWidth/1080, innerHeight/1920);
+    stage.style.transform = `translate(-50%,-50%) scale(${s})`;
+  }
+  addEventListener('resize', fit); fit();
+
+  const colors = ['var(--a1)','var(--a2)','#7ee9ff','#fdf06e','var(--a3)'];
+  for (let i=0;i<14;i++){
+    const d = document.createElement('div');
+    d.className='dot';
+    const sz = 14+Math.random()*30;
+    d.style.cssText = `width:${sz}px;height:${sz}px;left:${Math.random()*100}%;top:${5+Math.random()*90}%;background:${colors[i%colors.length]};opacity:.5;animation-delay:${Math.random()*3}s`;
+    stage.appendChild(d);
+  }
+
+  const $ = id => document.getElementById(id);
+  const _q = new URLSearchParams(location.search);
+  const socket = io();
+
+  socket.on('state', s => {
+    const m = s.mono;
+    $('title').textContent = _q.get('title') || m.title || 'КОРОЛЬ ПОДАРКОВ';
+    $('total').textContent = m.total.toLocaleString('ru-RU');
+
+    if (m.image) { $('giftImg').src = m.image; $('giftImg').style.display='block'; $('giftPh').style.display='none'; }
+    else { $('giftImg').style.display='none'; $('giftPh').style.display='flex'; $('giftPh').innerHTML = 'ждём<br>'+m.gift+'…'; }
+
+    if (m.king) {
+      $('kingAva').src = m.king.avatar || 'https://api.dicebear.com/9.x/thumbs/png?seed='+encodeURIComponent(m.king.nickname);
+      $('kingNick').textContent = m.king.nickname;
+      $('kingNone').style.display = 'none';
+    } else {
+      $('kingNick').textContent = '';
+      $('kingNone').style.display = 'block';
+    }
+  });
+</script>
+</body>
+</html>
