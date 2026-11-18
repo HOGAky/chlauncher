@@ -4,10 +4,11 @@
  * coins and subscriptions add seconds, the overlay shows the clock.
  * Rates persist in settings; the running clock is in-memory.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Play, Save, Square, Timer } from 'lucide-react';
 import * as api from '../api';
 import { humanError } from '../errorMessages';
+import { useVisibleInterval } from '../lib/utils';
 import type { SubathonStatus } from '../types';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -30,22 +31,22 @@ export default function SubathonCard() {
   const [maxH, setMaxH] = useState(12);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const cfgLoaded = useRef(false);
 
-  useEffect(() => {
-    const poll = () =>
-      api
-        .subathonStatus()
-        .then((s) => {
-          setSt(s);
+  useVisibleInterval(() => {
+    api
+      .subathonStatus()
+      .then((s) => {
+        setSt(s);
+        if (!cfgLoaded.current) {
+          cfgLoaded.current = true;
           setSecCoin(s.cfg.sec_per_coin);
           setSecSub(s.cfg.sec_per_sub);
           setMaxH(Math.round(s.cfg.max_s / 3600));
-        })
-        .catch(() => {});
-    poll();
-    const t = setInterval(poll, 1000);
-    return () => clearInterval(t);
-  }, []);
+        }
+      })
+      .catch(() => {});
+  }, 2000);
 
   const save = () => {
     setErr('');

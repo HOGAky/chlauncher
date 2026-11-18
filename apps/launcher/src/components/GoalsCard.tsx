@@ -4,10 +4,11 @@
  * once on reaching a target — "300 роз → босс". Live values poll
  * `get_goals` every 3 s; the overlay bar is /overlay/goals.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Plus, RotateCcw, Save, Target, Trash2 } from 'lucide-react';
 import * as api from '../api';
 import { humanError } from '../errorMessages';
+import { useVisibleInterval } from '../lib/utils';
 import type { GoalProgress, StreamGoal } from '../types';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -43,27 +44,21 @@ export default function GoalsCard() {
   const [progress, setProgress] = useState<Map<string, GoalProgress>>(new Map());
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const defsLoaded = useRef(false);
 
-  // Live progress — poll every 3 s (same cadence as the overlay page).
-  useEffect(() => {
-    const poll = () =>
-      api
-        .getGoals()
-        .then((r) => setProgress(new Map(r.goals.map((g) => [g.id, g]))))
-        .catch(() => {});
-    poll();
-    const t = setInterval(poll, 3000);
-    return () => clearInterval(t);
-  }, []);
-
-  // Load definitions once — the editor state is the source of truth
-  // until saved (live rows only carry progress fields).
-  useEffect(() => {
+  // Live progress — poll every 3 s while visible; load defs once on first response.
+  useVisibleInterval(() => {
     api
       .getGoals()
-      .then((r) => setGoals(r.defs))
+      .then((r) => {
+        setProgress(new Map(r.goals.map((g) => [g.id, g])));
+        if (!defsLoaded.current) {
+          defsLoaded.current = true;
+          setGoals(r.defs);
+        }
+      })
       .catch(() => {});
-  }, []);
+  }, 3000);
 
   const patch = (i: number, p: Partial<StreamGoal>) =>
     setGoals((gs) => gs.map((g, j) => (j === i ? { ...g, ...p } : g)));

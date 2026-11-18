@@ -3,6 +3,7 @@
  * Shared UI helpers: `cn` class combiner and sensitive-data masking used by
  * Streamer Mode.
  */
+import { useEffect, useRef } from 'react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -25,4 +26,29 @@ export function maskEmail(email: string | null | undefined): string {
 /** Masks a token/HWID entirely for streamer mode. */
 export function maskSecret(s: string | null | undefined): string {
   return s ? '••••••••••••' : '';
+}
+
+/**
+ * Runs `fn` on an interval only while the window is visible (`!document.hidden`).
+ * Fires immediately on mount (unless `immediate=false`) and again whenever the
+ * window becomes visible (e.g. restored from system tray), eliminating background
+ * IPC/CPU churn while minimized.
+ */
+export function useVisibleInterval(fn: () => void, ms: number, immediate = true): void {
+  const ref = useRef(fn);
+  ref.current = fn;
+  useEffect(() => {
+    if (immediate && !document.hidden) ref.current();
+    const id = setInterval(() => {
+      if (!document.hidden) ref.current();
+    }, ms);
+    const onVis = () => {
+      if (!document.hidden) ref.current();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [ms, immediate]);
 }

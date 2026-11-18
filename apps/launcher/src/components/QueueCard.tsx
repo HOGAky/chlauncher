@@ -5,10 +5,11 @@
  * pipeline so a trigger rule can act (e.g. invite into a Roblox room).
  * List renders on /overlay/queue.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Eraser, ListOrdered, StepForward } from 'lucide-react';
 import * as api from '../api';
 import { humanError } from '../errorMessages';
+import { useVisibleInterval } from '../lib/utils';
 import type { QueueStatus } from '../types';
 import { Button } from './ui/button';
 import { Switch } from './ui/switch';
@@ -18,12 +19,9 @@ export default function QueueCard() {
   const [st, setSt] = useState<QueueStatus | null>(null);
   const [err, setErr] = useState('');
 
-  useEffect(() => {
-    const poll = () => api.queueStatus().then(setSt).catch(() => {});
-    poll();
-    const t = setInterval(poll, 3000);
-    return () => clearInterval(t);
-  }, []);
+  useVisibleInterval(() => {
+    api.queueStatus().then(setSt).catch(() => {});
+  }, 3000);
 
   const next = () =>
     api.queueNext().catch((e) => setErr(humanError(e)));

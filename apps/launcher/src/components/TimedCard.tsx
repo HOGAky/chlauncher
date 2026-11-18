@@ -8,6 +8,7 @@ import React, { useEffect, useState } from 'react';
 import { AlarmClock, Flame, Plus, Save, Trash2 } from 'lucide-react';
 import * as api from '../api';
 import { humanError } from '../errorMessages';
+import { useVisibleInterval } from '../lib/utils';
 import type { HypeStatus, TimedEvent } from '../types';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -32,9 +33,11 @@ export default function TimedCard() {
         setTarget(h.target_coins);
       })
       .catch(() => {});
-    const t = setInterval(() => api.hypeStatus().then(setHype).catch(() => {}), 2000);
-    return () => clearInterval(t);
   }, []);
+
+  useVisibleInterval(() => {
+    api.hypeStatus().then(setHype).catch(() => {});
+  }, 3000, false);
 
   const patch = (i: number, p: Partial<TimedEvent>) =>
     setEvents((es) => es.map((e, j) => (j === i ? { ...e, ...p } : e)));

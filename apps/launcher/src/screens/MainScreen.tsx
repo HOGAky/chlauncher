@@ -3,28 +3,29 @@
  * Main launcher shell: left sidebar navigation + page area.
  * Pages: Library, Subscription, Integrations, Trigger mapper, Simulator.
  */
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { Gamepad2, CreditCard, Radio, SlidersHorizontal, FlaskConical, Wrench, FolderOpen, MonitorPlay, Mic, Dices, Blocks, Timer, LifeBuoy, LayoutGrid } from 'lucide-react';
-import { cn } from '../lib/utils';
+import { cn, useVisibleInterval } from '../lib/utils';
 import * as api from '../api';
 import type { EntitlementsResponse } from '../types';
 import Header from '../components/Header';
 import { useApp } from '../App';
 import LibraryPage from '../pages/LibraryPage';
-import SubscriptionPage from '../pages/SubscriptionPage';
-import IntegrationsPage from '../pages/IntegrationsPage';
-import MapperPage from '../pages/MapperPage';
-import SimulatorPage from '../pages/SimulatorPage';
-import MediaPage from '../pages/MediaPage';
-import OverlaysPage from '../pages/OverlaysPage';
-import WidgetsPage from '../pages/WidgetsPage';
-import GamesPage from '../pages/GamesPage';
-import TimerPage from '../pages/TimerPage';
-import TtsPage from '../pages/TtsPage';
-import SpinnerPage from '../pages/SpinnerPage';
-import MinecraftPage from '../pages/MinecraftPage';
-import AdminPage from '../pages/AdminPage';
-import SupportPage from '../pages/SupportPage';
+
+const SubscriptionPage = lazy(() => import('../pages/SubscriptionPage'));
+const IntegrationsPage = lazy(() => import('../pages/IntegrationsPage'));
+const MapperPage = lazy(() => import('../pages/MapperPage'));
+const SimulatorPage = lazy(() => import('../pages/SimulatorPage'));
+const MediaPage = lazy(() => import('../pages/MediaPage'));
+const OverlaysPage = lazy(() => import('../pages/OverlaysPage'));
+const WidgetsPage = lazy(() => import('../pages/WidgetsPage'));
+const GamesPage = lazy(() => import('../pages/GamesPage'));
+const TimerPage = lazy(() => import('../pages/TimerPage'));
+const TtsPage = lazy(() => import('../pages/TtsPage'));
+const SpinnerPage = lazy(() => import('../pages/SpinnerPage'));
+const MinecraftPage = lazy(() => import('../pages/MinecraftPage'));
+const AdminPage = lazy(() => import('../pages/AdminPage'));
+const SupportPage = lazy(() => import('../pages/SupportPage'));
 
 type Page = 'library' | 'subscription' | 'integrations' | 'mapper' | 'overlays' | 'widgets' | 'games' | 'timer' | 'tts' | 'spinner' | 'media' | 'minecraft' | 'simulator' | 'support' | 'admin';
 
@@ -92,21 +93,23 @@ export default function MainScreen() {
           )}
         </nav>
         <main className="flex-1 min-w-0 overflow-y-auto p-5">
-          {page === 'library' && <LibraryPage />}
-          {page === 'subscription' && <SubscriptionPage />}
-          {page === 'integrations' && <IntegrationsPage />}
-          {page === 'mapper' && <MapperPage />}
-          {page === 'overlays' && <OverlaysPage />}
-          {page === 'widgets' && <WidgetsPage />}
-          {page === 'games' && <GamesPage />}
-          {page === 'timer' && <TimerPage />}
-          {page === 'tts' && <TtsPage />}
-          {page === 'spinner' && <SpinnerPage />}
-          {page === 'media' && <MediaPage />}
-          {page === 'minecraft' && <MinecraftPage />}
-          {page === 'simulator' && <SimulatorPage />}
-          {page === 'support' && <SupportPage />}
-          {page === 'admin' && isAdmin && <AdminPage />}
+          <Suspense fallback={<div className="text-xs text-muted-foreground p-4">Загрузка…</div>}>
+            {page === 'library' && <LibraryPage />}
+            {page === 'subscription' && <SubscriptionPage />}
+            {page === 'integrations' && <IntegrationsPage />}
+            {page === 'mapper' && <MapperPage />}
+            {page === 'overlays' && <OverlaysPage />}
+            {page === 'widgets' && <WidgetsPage />}
+            {page === 'games' && <GamesPage />}
+            {page === 'timer' && <TimerPage />}
+            {page === 'tts' && <TtsPage />}
+            {page === 'spinner' && <SpinnerPage />}
+            {page === 'media' && <MediaPage />}
+            {page === 'minecraft' && <MinecraftPage />}
+            {page === 'simulator' && <SimulatorPage />}
+            {page === 'support' && <SupportPage />}
+            {page === 'admin' && isAdmin && <AdminPage />}
+          </Suspense>
         </main>
       </div>
     </div>
@@ -116,20 +119,9 @@ export default function MainScreen() {
 /** §8.4 — «Лимит месяца исчерпан»: shows when monthly usage ≥ earn limit. */
 function EarnLimitBanner({ onUpgrade }: { onUpgrade: () => void }) {
   const [ent, setEnt] = useState<EntitlementsResponse | null>(null);
-  useEffect(() => {
-    let dead = false;
-    const poll = () =>
-      api
-        .getEntitlements()
-        .then((r) => !dead && setEnt(r))
-        .catch(() => {});
-    poll();
-    const id = setInterval(poll, 30_000);
-    return () => {
-      dead = true;
-      clearInterval(id);
-    };
-  }, []);
+  useVisibleInterval(() => {
+    api.getEntitlements().then(setEnt).catch(() => {});
+  }, 30_000);
   const limit = ent?.entitlements.earn_limit_coins_month;
   if (!limit || !ent || ent.usage.coins < limit) return null;
   return (
