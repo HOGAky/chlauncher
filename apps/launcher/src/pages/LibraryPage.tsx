@@ -13,6 +13,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Switch } from '../components/ui/switch';
+import RobloxCard from '../components/RobloxCard';
 
 import { humanError } from '../errorMessages';
 const RESOLUTIONS: { label: string; w: number; h: number }[] = [
@@ -166,6 +167,9 @@ export default function LibraryPage() {
             </Button>
           </CardFooter>
         </Card>
+        {/* Roblox «Steal the Stream» — production launch for everyone;
+            developer mode adds the embedded Studio bridge controls. */}
+        <RobloxCard />
         {games.map((g) => {
           const isBusy = !!busy[g.slug];
           // §8.3: Free accounts play is_free titles; paid titles need an

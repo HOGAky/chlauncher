@@ -532,9 +532,12 @@ export default function IntegrationsPage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <p className="text-xs text-muted-foreground">
-            События уходят HTTP-POST'ом на облачный релей — внешние серверы
-            забирают их поллингом по ключу. Работает с TikTok и DonationAlerts
-            одинаково. Ключ стримера = пропуск в руму.
+            События уходят на сервер и забираются игрой поллингом. Поле URL
+            пустым = релей на сервере chlauncher (JWT, ничего настраивать не
+            нужно); заполненным = внешний relay со своим admin-секретом.
+            Ключ стримера — пропуск эфира в руму: игра связывает его с
+            одним Roblox-аккаунту и он действует, пока активна подписка.
+            «Играть» передаёт его сам — руками вводить не нужно.
           </p>
           <div className="flex gap-2 items-center">
             <code className="flex-1 text-xs bg-secondary/60 rounded-md px-3 py-2 select-all truncate">
@@ -552,13 +555,17 @@ export default function IntegrationsPage() {
             </Button>
           </div>
           <Input
-            placeholder="URL релея, напр. https://relay.example.com"
+            placeholder="URL внешнего релея (пусто = сервер chlauncher)"
             value={fwdUrl}
             onChange={(e) => setFwdUrl(e.target.value)}
           />
           <Input
             type={streamerMode ? 'password' : 'text'}
-            placeholder={fwd?.has_admin_secret ? 'Admin-секрет (уже сохранён)' : 'Admin-секрет релея'}
+            placeholder={
+              fwd?.has_admin_secret
+                ? 'Admin-секрет внешнего релея (уже сохранён)'
+                : 'Admin-секрет внешнего релея (не нужен для сервера chlauncher)'
+            }
             value={fwdSecret}
             onChange={(e) => setFwdSecret(e.target.value)}
           />
@@ -566,7 +573,7 @@ export default function IntegrationsPage() {
             <div className="flex items-center gap-2">
               <Switch checked={fwdEnabled} onCheckedChange={saveForward} />
               <span className="text-xs text-muted-foreground">
-                Форвардить события + продлевать ключ
+                Форвардить события на сервер
               </span>
             </div>
             {fwdStatus && (
@@ -607,8 +614,9 @@ export default function IntegrationsPage() {
               <div className="flex flex-col gap-1">
                 <span className="text-xs font-medium">Roblox</span>
                 <p className="text-[11px] text-muted-foreground">
-                  Введите ключ стримера в игре — сервер румы сам провалидирует
-                  его через релей и заберёт события.
+                  Нажмите «Играть» на карточке игры в Библиотеке — лаунчер
+                  передаст одноразовый пропуск сам. Запасной способ: ввести
+                  ключ в чате игры командой !key.
                 </p>
               </div>
               <div className="flex flex-col gap-1">

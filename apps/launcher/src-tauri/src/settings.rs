@@ -467,6 +467,13 @@ pub struct ForwardSettings {
     pub relay_admin_secret: Option<String>,
     /// Roblox place ID for the "Запустить игру" deep link.
     pub roblox_place_id: Option<String>,
+    /// Dev mode: serve the relay API from the launcher itself
+    /// (`roblox_bridge.rs`, `localhost:<port>`) — Studio polls it directly.
+    #[serde(default)]
+    pub local_bridge: bool,
+    /// Embedded bridge port; `None` = `roblox_bridge::DEFAULT_PORT` (8790).
+    #[serde(default)]
+    pub local_bridge_port: Option<u16>,
 }
 
 /// File-backed settings store.
@@ -482,8 +489,12 @@ pub struct SettingsStore {
 impl SettingsStore {
     /// Loads settings from `dir/settings.json`; missing/corrupt files fall
     /// back to defaults. Generates `overlay_token` on first launch.
+    /// The first launch of each build snapshots the file to
+    /// `settings.json.bak-<version>` (last 3 kept) so a bad upgrade or a
+    /// migration bug never costs the streamer their config.
     pub fn load(dir: &std::path::Path) -> Self {
         let path = dir.join("settings.json");
+        Self::versioned_backup(&path);
         let mut data: Settings = fs::read_to_string(&path)
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
@@ -500,6 +511,44 @@ impl SettingsStore {
             return store;
         }
         Self::new(path, data)
+    }
+
+    /// Copies `path` to `settings.json.bak-<pkg-version>` once per build
+    /// and prunes older snapshots beyond the newest three.
+    fn versioned_backup(path: &std::path::Path) {
+        if !path.exists() {
+            return;
+        }
+        let bak = path.with_file_name(format!(
+            "settings.json.bak-{}",
+            env!("CARGO_PKG_VERSION")
+        ));
+        if !bak.exists() {
+            let _ = fs::copy(path, &bak);
+        }
+        const KEEP: usize = 3;
+        let Some(dir) = path.parent() else { return };
+        let mut olds: Vec<PathBuf> = fs::read_dir(dir)
+            .map(|rd| {
+                rd.filter_map(|e| e.ok().map(|e| e.path()))
+                    .filter(|p| {
+                        p.file_name()
+                            .and_then(|n| n.to_str())
+                            .is_some_and(|n| n.starts_with("settings.json.bak-"))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        if olds.len() > KEEP {
+            olds.sort_by_key(|p| {
+                fs::metadata(p)
+                    .and_then(|m| m.modified())
+                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+            });
+            for p in olds.iter().take(olds.len() - KEEP) {
+                let _ = fs::remove_file(p);
+            }
+        }
     }
 
     fn new(path: PathBuf, data: Settings) -> Self {

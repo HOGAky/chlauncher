@@ -471,6 +471,38 @@ export interface ForwardStatus {
   registered_until: string | null;
 }
 
+/** Server-side stream state (`GET /api/stream/status`). */
+export interface RobloxStreamStatus {
+  has_key: boolean;
+  /** Roblox account the stream is bound to (first redeem/validate wins). */
+  roblox_user_id: number | null;
+  claimed_job_id: string | null;
+  room: {
+    job_id: string;
+    roblox_user_id: number | null;
+    claimed_at: string;
+    last_seen_at: string;
+  } | null;
+  queued_events: number;
+  subscription: Subscription;
+}
+
+/** Embedded Roblox bridge (`roblox_bridge.rs`, developer mode). */
+export interface RobloxBridgeStatus {
+  running: boolean;
+  port: number | null;
+  /** Value for the game's `Config.RELAY_URL`. */
+  url: string | null;
+  error: string | null;
+  queued: number;
+  cursor: number;
+  served: number;
+  /** Unix ms of the last poll from the place. */
+  last_poll_ms: number | null;
+  claimed_job_id: string | null;
+  bound_user_id: string | null;
+}
+
 /** One uploaded build as seen by the admin API. */
 export interface AdminBuild {
   id: number;
@@ -556,6 +588,8 @@ export interface Bootstrap {
   email: string | null;
   /** 'user' | 'admin' — shows the admin tab; server never trusts it. */
   role: string | null;
+  /** Dev build or admin account — unlocks unreleased cards (Roblox). */
+  dev_mode?: boolean;
   hwid: string | null;
   subscription: Subscription | null;
   streamer_mode: boolean;

@@ -43,6 +43,8 @@ pub struct AppState {
     pub integrations: Arc<IntegrationManager>,
     /// HTTP-forward to the cloud relay (Roblox games).
     pub forwarder: Arc<Forwarder>,
+    /// Embedded relay for Roblox Studio (developer mode).
+    pub roblox: Arc<crate::roblox_bridge::RobloxBridge>,
     /// Ingest channel for raw events (integrations + simulator).
     pub raw_tx: tokio::sync::mpsc::Sender<RawStreamEvent>,
     /// Slug whose trigger profile currently maps events (last played/selected).
@@ -163,6 +165,7 @@ pub async fn get_bootstrap(state: State<'_, AppState>) -> Result<Value, String> 
         "authed": authed,
         "email": settings.email,
         "role": settings.role,
+        "dev_mode": crate::roblox_bridge::dev_mode(settings.role.as_deref()),
         "hwid": state.hwid,
         "subscription": subscription,
         "streamer_mode": settings.streamer_mode,
@@ -2724,7 +2727,10 @@ pub async fn set_forward_config(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let u = forward_url.trim().trim_end_matches('/').to_string();
-    if enabled && !(u.starts_with("http://") || u.starts_with("https://")) {
+    if enabled
+        && !u.is_empty()
+        && !(u.starts_with("http://") || u.starts_with("https://"))
+    {
         return Err("forward_url должен начинаться с http:// или https://".into());
     }
     {
@@ -2755,6 +2761,7 @@ pub async fn regenerate_stream_key(state: State<'_, AppState>) -> Result<String,
         s.data.forward.stream_key = Some(key.clone());
         let _ = s.save();
     }
+    state.roblox.reset_room();
     if state.settings.lock().await.data.forward.enabled {
         state.forwarder.register_now().await;
     }
@@ -2783,15 +2790,226 @@ pub async fn set_roblox_place_id(
     Ok(())
 }
 
+/// RFC-3986 unreserved percent-encoding for the `launchData` deep-link
+/// parameter (`{"t":"<ticket>"}` — the ticket itself is hex).
+fn encode_launch_data(json: &str) -> String {
+    json.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
 /// Launches the Roblox client straight into the configured experience via
-/// the `roblox://` deep link — the room server spins up in Roblox cloud and
-/// claims the stream by the stream_key.
+/// the `roblox://` deep link. While logged in a one-time launch ticket is
+/// fetched from the server and carried in `launchData` — the game redeems
+/// it for a room credential, so the streamer never types the stream key.
+/// Without a session the plain link is opened (manual `!key` fallback).
 #[tauri::command]
 pub async fn roblox_launch(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let place_id = state
+    let (place_id, token) = {
+        let s = state.settings.lock().await;
+        (s.data.forward.roblox_place_id.clone(), s.data.auth_token.clone())
+    };
+    let place_id = place_id.ok_or("Укажите Place ID игры")?;
+    let mut url = format!("roblox://experiences/start?placeId={place_id}");
+    if let Some(t) = token {
+        let v = state
+            .api
+            .stream_ticket(&t)
+            .await
+            .map_err(|e| e.to_client_string())?;
+        if let Some(ticket) = v["ticket"].as_str() {
+            let ld = encode_launch_data(&json!({ "t": ticket }).to_string());
+            url.push_str(&format!("&launchData={ld}"));
+        }
+    }
+    use tauri_plugin_opener::OpenerExt;
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| format!("не удалось запустить Roblox: {e}"))
+}
+
+/// Seeds + activates the `roblox-sts` trigger profile from the
+/// steal-the-stream preset (shared by the dev and production «Играть»).
+async fn ensure_sts_profile(state: &State<'_, AppState>) -> Result<(), String> {
+    use crate::roblox_bridge::{PRESET, PROFILE_SLUG};
+    {
+        let mut s = state.settings.lock().await;
+        if !s.data.trigger_profiles.contains_key(PROFILE_SLUG) {
+            let preset = TriggerMapper::find_preset(PRESET, &s.data.trigger_presets)
+                .ok_or("пресет steal-the-stream не найден")?;
+            s.data.trigger_profiles.insert(
+                PROFILE_SLUG.into(),
+                TriggerMapper::profile_from_preset(PROFILE_SLUG, &preset),
+            );
+            let _ = s.save();
+        }
+    }
+    set_active_trigger_profile(PROFILE_SLUG.into(), state.clone()).await
+}
+
+/// Server-side relay status (claimed room, Roblox id, queued events).
+#[tauri::command]
+pub async fn roblox_stream_status(state: State<'_, AppState>) -> Result<Value, String> {
+    let token = state
+        .settings
+        .lock()
+        .await
+        .data
+        .auth_token
+        .clone()
+        .ok_or("NOT_AUTHENTICATED")?;
+    state
+        .api
+        .stream_status(&token)
+        .await
+        .map_err(|e| e.to_client_string())
+}
+
+/// Makes sure the local `forward.stream_key` copy matches the server:
+/// stores the plaintext when the server just minted it, rotates when the
+/// server has a hidden key but the launcher has none (lost settings).
+#[tauri::command]
+pub async fn roblox_stream_key_sync(state: State<'_, AppState>) -> Result<String, String> {
+    let token = state
+        .settings
+        .lock()
+        .await
+        .data
+        .auth_token
+        .clone()
+        .ok_or("NOT_AUTHENTICATED")?;
+    let v = state
+        .api
+        .stream_key(&token)
+        .await
+        .map_err(|e| e.to_client_string())?;
+    if let Some(key) = v["stream_key"].as_str() {
+        let mut s = state.settings.lock().await;
+        s.data.forward.stream_key = Some(key.to_string());
+        let _ = s.save();
+        return Ok(key.to_string());
+    }
+    // Hidden server-side; the local copy either already matches or is
+    // gone — rotate to hand the launcher a usable key again.
+    let local = state.settings.lock().await.data.forward.stream_key.clone();
+    if let Some(k) = local.filter(|k| !k.is_empty()) {
+        return Ok(k);
+    }
+    let r = state
+        .api
+        .stream_key_rotate(&token)
+        .await
+        .map_err(|e| e.to_client_string())?;
+    let key = r["stream_key"]
+        .as_str()
+        .ok_or("сервер не вернул ключ")?
+        .to_string();
+    let mut s = state.settings.lock().await;
+    s.data.forward.stream_key = Some(key.clone());
+    let _ = s.save();
+    Ok(key)
+}
+
+/// Production «Играть» on the Steal the Stream card: the
+/// `steal-the-stream` profile goes on air, HTTP-forward turns on pointed
+/// at the licensing server (JWT ingest — no admin secret), a one-time
+/// ticket rides the `roblox://` launch and the game self-connects.
+#[tauri::command]
+pub async fn roblox_play(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    if state.settings.lock().await.data.auth_token.is_none() {
+        return Err("Войдите в аккаунт — Roblox запускается по подписке".into());
+    }
+    ensure_sts_profile(&state).await?;
+    {
+        let mut s = state.settings.lock().await;
+        let f = &mut s.data.forward;
+        f.enabled = true;
+        if f.forward_url.as_deref().map(str::trim).unwrap_or("").is_empty() {
+            f.forward_url = None; // empty = the licensing server itself
+        }
+        let _ = s.save();
+    }
+    // Ticket mint + launch fail hard: a Roblox without the ticket can't
+    // redeem and the streamer would wonder why nothing arrives.
+    roblox_launch(app, state.clone()).await?;
+    roblox_stream_status(state).await
+}
+
+/// Errors unless the launcher runs in developer mode (dev build / admin).
+async fn require_dev_mode(state: &AppState) -> Result<(), String> {
+    let role = state.settings.lock().await.data.role.clone();
+    if crate::roblox_bridge::dev_mode(role.as_deref()) {
+        Ok(())
+    } else {
+        Err("Доступно только в режиме разработчика".into())
+    }
+}
+
+/// Embedded Roblox bridge status for the library card.
+#[tauri::command]
+pub async fn roblox_bridge_status(
+    state: State<'_, AppState>,
+) -> Result<crate::roblox_bridge::BridgeStatus, String> {
+    Ok(state.roblox.status().await)
+}
+
+/// Starts/stops the embedded bridge and persists the choice (autostart).
+/// Starting also mints the stream key if there is none yet.
+#[tauri::command]
+pub async fn roblox_bridge_set(
+    enabled: bool,
+    port: Option<u16>,
+    state: State<'_, AppState>,
+) -> Result<crate::roblox_bridge::BridgeStatus, String> {
+    require_dev_mode(&state).await?;
+    let port = {
+        let mut s = state.settings.lock().await;
+        let f = &mut s.data.forward;
+        f.local_bridge = enabled;
+        if port.is_some() {
+            f.local_bridge_port = port.filter(|p| *p != crate::roblox_bridge::DEFAULT_PORT);
+        }
+        if f.stream_key.is_none() {
+            f.stream_key = Some(format!("sk_{}", uuid::Uuid::new_v4().simple()));
+        }
+        let port = f.local_bridge_port.unwrap_or(crate::roblox_bridge::DEFAULT_PORT);
+        let _ = s.save();
+        port
+    };
+    if enabled {
+        state.roblox.start(port).await?;
+    } else {
+        state.roblox.stop().await;
+    }
+    Ok(state.roblox.status().await)
+}
+
+/// «Играть» on the Steal the Stream card: bridge up, the
+/// `steal-the-stream` profile seeded + put on air, and — when a Place ID
+/// is set — the Roblox client opened into the experience. Without a
+/// Place ID the streamer play-tests in Studio (`!key`, `!claim`).
+#[tauri::command]
+pub async fn roblox_dev_play(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<crate::roblox_bridge::BridgeStatus, String> {
+    require_dev_mode(&state).await?;
+    if !state.roblox.status().await.running {
+        roblox_bridge_set(true, None, state.clone()).await?;
+    }
+    ensure_sts_profile(&state).await?;
+    if let Some(place_id) = state
         .settings
         .lock()
         .await
@@ -2799,14 +3017,19 @@ pub async fn roblox_launch(
         .forward
         .roblox_place_id
         .clone()
-        .ok_or("Укажите Place ID игры")?;
-    use tauri_plugin_opener::OpenerExt;
-    app.opener()
-        .open_url(
-            format!("roblox://experiences/start?placeId={place_id}"),
-            None::<&str>,
-        )
-        .map_err(|e| format!("не удалось запустить Roblox: {e}"))
+    {
+        // Studio/dev testing polls the local bridge — a launch ticket is
+        // irrelevant here and must not block when the dev has no
+        // subscription or the licensing server is unreachable.
+        use tauri_plugin_opener::OpenerExt;
+        app.opener()
+            .open_url(
+                format!("roblox://experiences/start?placeId={place_id}"),
+                None::<&str>,
+            )
+            .map_err(|e| format!("не удалось запустить Roblox: {e}"))?;
+    }
+    Ok(state.roblox.status().await)
 }
 
 // ---------------------------------------------------------------------------

@@ -627,6 +627,48 @@ impl ApiClient {
         serde_json::from_value(v["subscription"].clone()).map_err(|_| ApiError::Malformed)
     }
 
+    /// `GET /api/stream/key` — server stream key; plaintext only on first
+    /// creation (`stream_key: null` afterwards).
+    pub async fn stream_key(&self, token: &str) -> Result<Value, ApiError> {
+        self.req(reqwest::Method::GET, "/api/stream/key", Some(token), None)
+            .await
+    }
+
+    /// `POST /api/stream/key/rotate` — leaks response: fresh key, drops
+    /// the Roblox binding and any claimed room.
+    pub async fn stream_key_rotate(&self, token: &str) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::POST,
+            "/api/stream/key/rotate",
+            Some(token),
+            Some(json!({})),
+        )
+        .await
+    }
+
+    /// `POST /api/stream/ticket` — one-time Roblox launch ticket carried
+    /// in `launchData` (402 when the subscription is inactive).
+    pub async fn stream_ticket(&self, token: &str) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::POST,
+            "/api/stream/ticket",
+            Some(token),
+            Some(json!({})),
+        )
+        .await
+    }
+
+    /// `GET /api/stream/status` — key/room/queue snapshot for the card.
+    pub async fn stream_status(&self, token: &str) -> Result<Value, ApiError> {
+        self.req(
+            reqwest::Method::GET,
+            "/api/stream/status",
+            Some(token),
+            None,
+        )
+        .await
+    }
+
     /// `POST /api/license/verify` — pre-launch gate. `game_slug` lets the
     /// server allow `is_free` titles for Free-tier accounts (§8.3).
     pub async fn verify_license(

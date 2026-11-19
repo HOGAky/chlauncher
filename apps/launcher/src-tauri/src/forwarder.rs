@@ -118,6 +118,8 @@ pub struct Forwarder {
     status: Arc<Mutex<ForwardStatus>>,
     /// Wakes the register task immediately (on enable/regenerate).
     register_tx: mpsc::Sender<()>,
+    /// Shared with the worker — the exit flush drains what is left.
+    queue: Arc<EventQueue>,
 }
 
 impl Forwarder {
@@ -158,8 +160,9 @@ impl Forwarder {
             let settings = settings.clone();
             let status = status.clone();
             let queue = queue.clone();
+            let api = api.clone();
             tauri::async_runtime::spawn(async move {
-                Self::ingest_worker(queue, settings, status).await;
+                Self::ingest_worker(queue, settings, api, status).await;
             });
         }
         // Renewal: startup + every 12h + on-demand → POST /api/admin/register.
@@ -172,7 +175,42 @@ impl Forwarder {
         Arc::new(Self {
             status,
             register_tx,
+            queue,
         })
+    }
+
+    /// Exit grace: drains whatever the worker did not deliver, bounded by
+    /// `budget` — undelivered events must not be silently lost on quit.
+    /// The worker keeps racing us for pops; either way the queue empties.
+    pub async fn flush(
+        &self,
+        settings: &Arc<Mutex<SettingsStore>>,
+        api: &ApiClient,
+        budget: Duration,
+    ) {
+        let deadline = std::time::Instant::now() + budget;
+        let http = reqwest::Client::builder()
+            .timeout(REQ_TIMEOUT)
+            .build()
+            .unwrap_or_default();
+        loop {
+            let ev = {
+                let mut dq = self.queue.dq.lock().await;
+                dq.pop_front()
+            };
+            let Some(ev) = ev else { break };
+            if std::time::Instant::now() >= deadline {
+                break;
+            }
+            let (cfg, token) = {
+                let s = settings.lock().await;
+                (s.data.forward.clone(), s.data.auth_token.clone())
+            };
+            if !cfg.enabled {
+                continue;
+            }
+            let _ = Self::send_one(&http, &cfg, token.as_deref(), api, &ev).await;
+        }
     }
 
     /// Current status snapshot for the UI.
@@ -186,9 +224,14 @@ impl Forwarder {
     }
 
     /// Drains the queue: every event → `POST {url}/api/stream/ingest`.
+    /// `forward_url` empty = the licensing server itself hosts the relay
+    /// (routes/stream.js) — then the JWT is the credential and no
+    /// `relay_admin_secret` is ever needed. When a stream key is set it
+    /// is sent too, keeping compatibility with the standalone relay.
     async fn ingest_worker(
         queue: Arc<EventQueue>,
         settings: Arc<Mutex<SettingsStore>>,
+        api: ApiClient,
         status: Arc<Mutex<ForwardStatus>>,
     ) {
         let http = reqwest::Client::builder()
@@ -203,35 +246,56 @@ impl Forwarder {
                 let mut st = status.lock().await;
                 st.queued = st.queued.saturating_sub(1);
             }
-            let cfg = settings.lock().await.data.forward.clone();
-            let (Some(url), Some(key)) = (cfg.forward_url, cfg.stream_key) else {
-                continue;
+            let (cfg, token) = {
+                let s = settings.lock().await;
+                (s.data.forward.clone(), s.data.auth_token.clone())
             };
-            if !cfg.enabled || url.is_empty() || key.is_empty() {
+            if !cfg.enabled {
                 continue;
             }
-            let body = event_body(&ev);
-            let res = http
-                .post(format!("{}/api/stream/ingest", url.trim_end_matches('/')))
-                .header("X-Stream-Key", &key)
-                .json(&body)
-                .send()
-                .await;
             let mut st = status.lock().await;
-            match res {
-                Ok(r) if r.status().is_success() => {
+            match Self::send_one(&http, &cfg, token.as_deref(), &api, &ev).await {
+                Ok(()) => {
                     st.delivered += 1;
                     st.last_error = None;
                 }
-                Ok(r) => {
-                    st.dropped += 1;
-                    st.last_error = Some(format!("relay {}", r.status()));
-                }
                 Err(e) => {
                     st.dropped += 1;
-                    st.last_error = Some(format!("{e}"));
+                    st.last_error = Some(e);
                 }
             }
+        }
+    }
+
+    /// One `POST {url}/api/stream/ingest` attempt. `forward_url` empty =
+    /// the licensing server itself hosts the relay — then the JWT is the
+    /// credential. `X-Stream-Key` rides along when set for standalone-
+    /// relay compatibility (the server prefers the JWT).
+    async fn send_one(
+        http: &reqwest::Client,
+        cfg: &ForwardSettings,
+        token: Option<&str>,
+        api: &ApiClient,
+        ev: &StreamEvent,
+    ) -> Result<(), String> {
+        let url = cfg
+            .forward_url
+            .clone()
+            .filter(|u| !u.trim().is_empty())
+            .unwrap_or_else(|| api.base());
+        let mut req = http
+            .post(format!("{}/api/stream/ingest", url.trim_end_matches('/')))
+            .json(&event_body(ev));
+        if let Some(t) = token {
+            req = req.bearer_auth(t);
+        }
+        if let Some(key) = cfg.stream_key.clone().filter(|k| !k.is_empty()) {
+            req = req.header("X-Stream-Key", key);
+        }
+        match req.send().await {
+            Ok(r) if r.status().is_success() => Ok(()),
+            Ok(r) => Err(format!("relay {}", r.status())),
+            Err(e) => Err(format!("{e}")),
         }
     }
 
@@ -269,12 +333,21 @@ impl Forwarder {
         cfg: &ForwardSettings,
         status: &Arc<Mutex<ForwardStatus>>,
     ) -> Result<(), String> {
-        let (Some(url), Some(key), Some(secret)) = (
-            cfg.forward_url.clone(),
-            cfg.stream_key.clone(),
-            cfg.relay_admin_secret.clone(),
-        ) else {
-            return Err("forward_url / stream_key / admin_secret не заданы".into());
+        // Server-hosted relay needs no admin registration — key validity
+        // derives from the subscription server-side. The standalone
+        // relay still requires the admin secret.
+        let url = cfg
+            .forward_url
+            .clone()
+            .filter(|u| !u.trim().is_empty())
+            .unwrap_or_else(|| api.base());
+        let server_mode = url.trim_end_matches('/') == api.base().trim_end_matches('/');
+        if server_mode {
+            return Ok(());
+        }
+        let (Some(key), Some(secret)) = (cfg.stream_key.clone(), cfg.relay_admin_secret.clone())
+        else {
+            return Err("stream_key / admin_secret не заданы для стороннего релея".into());
         };
         let token = settings
             .lock()
@@ -321,7 +394,7 @@ impl Forwarder {
 }
 
 /// Wire body for `POST /api/stream/ingest`: flat StreamEvent + `"type"`.
-fn event_body(ev: &StreamEvent) -> Value {
+pub(crate) fn event_body(ev: &StreamEvent) -> Value {
     let mut v = serde_json::to_value(ev).unwrap_or_else(|_| json!({}));
     if let Value::Object(ref mut m) = v {
         m.insert("type".into(), json!("event"));

@@ -37,6 +37,7 @@ pub mod points;
 pub mod polls;
 pub mod process;
 pub mod queue;
+pub mod roblox_bridge;
 pub mod scheduler;
 pub mod settings;
 pub mod subathon;
@@ -288,6 +289,27 @@ pub fn run() {
             // Third EventHub consumer: HTTP-forward to the cloud relay
             // (Roblox-side games poll the relay; see docs/roblox-integration.md).
             let forwarder = forwarder::Forwarder::start(&hub, settings.clone(), api.clone());
+            // Dev mode: the same relay API served locally — Roblox Studio
+            // polls `localhost:8790` directly (roblox_bridge.rs).
+            let roblox = roblox_bridge::RobloxBridge::new(&hub, settings.clone());
+            {
+                let (autostart, port) = settings
+                    .try_lock()
+                    .map(|s| {
+                        let f = &s.data.forward;
+                        (
+                            f.local_bridge && roblox_bridge::dev_mode(s.data.role.as_deref()),
+                            f.local_bridge_port.unwrap_or(roblox_bridge::DEFAULT_PORT),
+                        )
+                    })
+                    .unwrap_or((false, roblox_bridge::DEFAULT_PORT));
+                if autostart {
+                    let r = roblox.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let _ = r.start(port).await;
+                    });
+                }
+            }
 
             // Earn-limit meter + entitlements cache (§8) — reports coins
             // every 60 s, refreshes the plan snapshot every 10 min.
@@ -358,6 +380,7 @@ pub fn run() {
                 processes: process::ProcessManager::new(),
                 integrations: integrations.clone(),
                 forwarder: forwarder.clone(),
+                roblox: roblox.clone(),
                 raw_tx,
                 active_game_slug: active_game_slug.clone(),
                 scheduler: scheduler.clone(),
@@ -615,6 +638,12 @@ pub fn run() {
             commands::get_forward_status,
             commands::set_roblox_place_id,
             commands::roblox_launch,
+            commands::roblox_play,
+            commands::roblox_stream_status,
+            commands::roblox_stream_key_sync,
+            commands::roblox_bridge_status,
+            commands::roblox_bridge_set,
+            commands::roblox_dev_play,
             commands::admin_list_games,
             commands::admin_create_game,
             commands::admin_update_game,
@@ -732,6 +761,16 @@ pub fn run() {
                         // Last usage report before exit (§8.4) — bounded
                         // by its own 5 s timeout inside flush().
                         state.usage.flush().await;
+                        // Undelivered relay events get a 2 s grace —
+                        // otherwise they would silently vanish on quit.
+                        state
+                            .forwarder
+                            .flush(
+                                &state.settings,
+                                &state.api,
+                                std::time::Duration::from_secs(2),
+                            )
+                            .await;
                     });
                     state.processes.kill_all();
                 }

@@ -21,6 +21,7 @@ import {
   Zap,
 } from 'lucide-react';
 import * as api from '../api';
+import { useVisibleInterval } from '../lib/utils';
 import type {
   AdapterManifest,
   AlertSpec,
@@ -73,6 +74,7 @@ const ACTIONS = [
   'spawn_chaser', 'invert_controls', 'drop_floor', 'yeet', 'freeze',
   'slow_field', 'camera_spin', 'wall_ahead', 'decoy_clones', 'shield',
   'speed_boost', 'checkpoint', 'coin_rain', 'fireworks',
+  'score_drain', 'execute', 'score_gift', 'start_game:',
 ];
 
 /** Per-game action vocabularies — the command list a game understands
@@ -80,6 +82,8 @@ const ACTIONS = [
  *  free text is always allowed anyway. */
 const GAME_ACTIONS: Record<string, string[]> = {
   'mock-game': ['spawn_enemy', 'spawn_boss', 'heal_player', 'log_only'],
+  // Steal the Stream (Roblox) — Commands.lua whitelist.
+  'roblox-sts': ACTIONS.slice(4),
 };
 
 /** Adapter manifests (§10.3): slug → action ids from the catalog entry's
@@ -162,21 +166,10 @@ export default function MapperPage() {
     volume: number;
   } | null>(null);
 
-  // Scheduler status — polled only while this page is open (§2.6).
-  useEffect(() => {
-    let alive = true;
-    const poll = () =>
-      api
-        .getSchedulerStatus()
-        .then((s) => alive && setSched(s))
-        .catch(() => {});
-    poll();
-    const t = setInterval(poll, 1500);
-    return () => {
-      alive = false;
-      clearInterval(t);
-    };
-  }, []);
+  // Scheduler status — polled only while this page & window are visible (§2.6).
+  useVisibleInterval(() => {
+    api.getSchedulerStatus().then(setSched).catch(() => {});
+  }, 2000);
 
   useEffect(() => {
     api.listSpinners().then(setSpinners).catch(() => {});
@@ -264,6 +257,8 @@ export default function MapperPage() {
       if (s) {
         setActiveSlug(s);
         setSlug(s);
+        // Cloud-only profiles (roblox-sts) aren't catalog games.
+        setGameSlugs((old) => (old.includes(s) ? old : [...old, s]));
       }
     }).catch(() => {});
   }, []);

@@ -24,6 +24,8 @@ import type {
   GameSessionInfo,
   FeedItem,
   ForwardStatus,
+  RobloxBridgeStatus,
+  RobloxStreamStatus,
   LibraryEntry,
   PiperStatus,
   Plan,
@@ -548,6 +550,25 @@ export const setRobloxPlaceId = (placeId: string) =>
 
 /** Opens the Roblox client into the configured experience. */
 export const robloxLaunch = () => cmd<void>('roblox_launch');
+
+/** Embedded Roblox bridge status (developer mode). */
+export const robloxBridgeStatus = () => cmd<RobloxBridgeStatus>('roblox_bridge_status');
+
+/** Starts/stops the embedded bridge (`port` null = keep current). */
+export const robloxBridgeSet = (enabled: boolean, port: number | null = null) =>
+  cmd<RobloxBridgeStatus>('roblox_bridge_set', { enabled, port });
+
+/** Bridge up + steal-the-stream profile on air + Roblox client (if Place ID). */
+export const robloxDevPlay = () => cmd<RobloxBridgeStatus>('roblox_dev_play');
+
+/** Production «Играть»: profile on air + server forward + ticket launch. */
+export const robloxPlay = () => cmd<RobloxStreamStatus>('roblox_play');
+
+/** Server-side stream/room status (claimed room, queued events). */
+export const robloxStreamStatus = () => cmd<RobloxStreamStatus>('roblox_stream_status');
+
+/** Syncs the local stream-key copy with the server (manual `!key` fallback). */
+export const robloxStreamKeySync = () => cmd<string>('roblox_stream_key_sync');
 
 /** Sanitized diagnostics report text (no secrets) — for bug reports. */
 export const getDiagnostics = () => cmd<string>('get_diagnostics');
