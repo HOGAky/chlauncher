@@ -523,6 +523,62 @@ const MIGRATIONS = [
       );
     `);
   },
+  // v14 → v15: Roblox stream relay inside the licensing server
+  // (tg-auth-spec §7b). The standalone relay's JSON file + in-memory
+  // queues become durable tables:
+  //  - stream_keys    — one stream key per user; only the sha256 hash is
+  //    stored. `room_key_hash` is the per-launch credential Roblox gets
+  //    from ticket redemption — the real stream key never leaves the
+  //    launcher. `roblox_user_id` binds on first validate/redeem.
+  //  - stream_tickets — one-time launch tickets carried in Roblox
+  //    launchData (visible in the URL, so never a reusable secret).
+  //  - stream_events  — durable event queue; the AUTOINCREMENT id is the
+  //    poll cursor, so restarts/deploys neither lose queued events nor
+  //    reset the numbering. Rows expire after RELAY_EVENT_TTL_MS and are
+  //    capped per key by the route layer.
+  //  - stream_rooms   — current/last claim per streamer (who holds the
+  //    key, which Roblox job, when the room last polled).
+  (db) => {
+    db.exec(`
+      CREATE TABLE stream_keys (
+        user_id         INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        key_hash        TEXT NOT NULL UNIQUE,
+        room_key_hash   TEXT UNIQUE,
+        roblox_user_id  INTEGER,
+        claimed_job_id  TEXT,
+        created_at      TEXT NOT NULL,
+        rotated_at      TEXT
+      );
+
+      CREATE TABLE stream_tickets (
+        ticket_hash  TEXT PRIMARY KEY,
+        user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        expires_at   TEXT NOT NULL,
+        consumed     INTEGER NOT NULL DEFAULT 0,
+        consumed_by  INTEGER,
+        created_at   TEXT NOT NULL
+      );
+      CREATE INDEX idx_stream_tickets_exp ON stream_tickets(expires_at);
+
+      CREATE TABLE stream_events (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        key_hash    TEXT NOT NULL,
+        payload     TEXT NOT NULL,
+        created_ts  INTEGER NOT NULL
+      );
+      CREATE INDEX idx_stream_events_key ON stream_events(key_hash, id);
+      CREATE INDEX idx_stream_events_ts  ON stream_events(created_ts);
+
+      CREATE TABLE stream_rooms (
+        user_id        INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        job_id         TEXT NOT NULL,
+        roblox_user_id INTEGER,
+        claimed_at     TEXT NOT NULL,
+        released_at    TEXT,
+        last_seen_at   TEXT NOT NULL
+      );
+    `);
+  },
 ];
 
 /** Runs all pending migrations in order. Idempotent via user_version. */

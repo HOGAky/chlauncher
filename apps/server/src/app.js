@@ -31,6 +31,7 @@ import mcRoutes from './routes/mc.js';
 import promoRoutes from './routes/promo.js';
 import supportRoutes from './routes/support.js';
 import pairRoutes from './routes/pair.js';
+import streamRoutes from './routes/stream.js';
 
 /**
  * Builds a configured (but not yet listening) Fastify instance.
@@ -141,6 +142,7 @@ export async function buildApp(opts = {}) {
   await app.register(tiktokBindRoutes, { prefix: '/api/tiktok', ...deps });
   await app.register(promoRoutes, { prefix: '/api', ...deps });
   await app.register(supportRoutes, { prefix: '/api/support', ...deps });
+  await app.register(streamRoutes, { prefix: '/api/stream', ...deps });
   // Root prefix — the plugin serves both /pair/:code (phone page) and
   // its /api/auth/pair-* endpoints.
   await app.register(pairRoutes, deps);

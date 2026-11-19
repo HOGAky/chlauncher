@@ -29,6 +29,7 @@ import {
 import { subscriptionView, recordPayment, refreshSubscription } from '../subscriptions.js';
 import { ipHash } from '../hwid.js';
 import { SLUG_RE, storeGameBuild } from '../build_store.js';
+import { isOwner, makeRequireOwner } from '../auth.js';
 
 /**
  * Registers the admin routes on a Fastify instance.
@@ -38,6 +39,9 @@ import { SLUG_RE, storeGameBuild } from '../build_store.js';
 export default async function adminRoutes(app, { db, requireAdmin }) {
   await app.register(rateLimit, { max: 300, timeWindow: '1 minute' });
   app.addHook('preHandler', requireAdmin);
+  // Money/permission levers are owner-only (OWNER_TG_IDS) — staff
+  // admins keep moderation, support and catalog review.
+  const ownerOnly = { preHandler: makeRequireOwner(db) };
 
   // Raw build uploads arrive as application/octet-stream buffers.
   app.addContentTypeParser(
@@ -387,7 +391,7 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
    * payment row, stacks `days` onto the subscription and audits the action.
    * This is the working "sell by invoice" path until a provider is wired.
    */
-  app.post('/users/:id/grant-days', async (request, reply) => {
+  app.post('/users/:id/grant-days', ownerOnly, async (request, reply) => {
     const user = findUserById(db, Number(request.params.id));
     if (!user) return reply.code(404).send({ error: 'USER_NOT_FOUND' });
     const { days, comment } = request.body || {};
@@ -414,7 +418,7 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
    * Promotes/demotes a publisher or admin. Self-changes are refused so an
    * admin can't accidentally lock themselves out of the panel.
    */
-  app.post('/users/:id/set-role', async (request, reply) => {
+  app.post('/users/:id/set-role', ownerOnly, async (request, reply) => {
     const user = findUserById(db, Number(request.params.id));
     if (!user) return reply.code(404).send({ error: 'USER_NOT_FOUND' });
     if (user.id === request.auth.userId) {
@@ -447,7 +451,7 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
    * Switches the plan code on the user's subscription row; the expiry
    * date is untouched (granting days stays `grant-days`).
    */
-  app.post('/users/:id/set-plan', async (request, reply) => {
+  app.post('/users/:id/set-plan', ownerOnly, async (request, reply) => {
     const user = findUserById(db, Number(request.params.id));
     if (!user) return reply.code(404).send({ error: 'USER_NOT_FOUND' });
     const planCode = String(request.body?.plan_code || '');
@@ -470,7 +474,7 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
   app.get('/plans', async () => ({ plans: listAllPlans(db) }));
 
   /** POST /api/admin/plans — create a plan; entitlements is a JSON object. */
-  app.post('/plans', async (request, reply) => {
+  app.post('/plans', ownerOnly, async (request, reply) => {
     const { code, title, price_minor, period_days = 30, entitlements = {}, sort = 0 } =
       request.body || {};
     if (!/^[a-z0-9_-]{1,32}$/.test(String(code || ''))) {
@@ -498,7 +502,7 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
   });
 
   /** PATCH /api/admin/plans/:code — partial update (title/price/entitlements/active/sort). */
-  app.patch('/plans/:code', async (request, reply) => {
+  app.patch('/plans/:code', ownerOnly, async (request, reply) => {
     const plan = findPlan(db, request.params.code);
     if (!plan) return reply.code(404).send({ error: 'PLAN_NOT_FOUND' });
     const { title, price_minor, period_days, entitlements, active, sort } =
@@ -661,7 +665,7 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
   }));
 
   /** POST /api/admin/promo {code?, days, max_uses?, expires_at?} */
-  app.post('/promo', async (request, reply) => {
+  app.post('/promo', ownerOnly, async (request, reply) => {
     const { days, max_uses, expires_at } = request.body || {};
     let { code } = request.body || {};
     const n = Number(days);
@@ -689,7 +693,7 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
   });
 
   /** DELETE /api/admin/promo/:code — retires a code (keeps redemptions). */
-  app.delete('/promo/:code', async (request, reply) => {
+  app.delete('/promo/:code', ownerOnly, async (request, reply) => {
     const code = String(request.params.code || '').toUpperCase();
     const info = db
       .prepare('UPDATE promo_codes SET max_uses = uses WHERE code = ?')
@@ -919,6 +923,7 @@ function adminUserView(db, u) {
     id: u.id,
     email: u.email,
     role: u.role,
+    owner: isOwner(db, u.id),
     hwid: masked,
     created_at: u.created_at,
     subscription: subscriptionView(sub),

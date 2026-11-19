@@ -134,9 +134,40 @@ export function makeRequirePublisher(db) {
  * @param {object} user - mutable user row (role updated in place)
  */
 export function syncAdminRole(db, user) {
-  if (user.role !== 'admin' && config.adminEmails.has(user.email.toLowerCase())) {
+  if (
+    user.role !== 'admin' &&
+    (config.adminEmails.has(user.email.toLowerCase()) || isOwner(db, user.id))
+  ) {
     db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(user.id);
     user.role = 'admin';
   }
   return user;
+}
+
+/**
+ * Owner = account bound to a Telegram id listed in OWNER_TG_IDS. Read
+ * from the DB + env on every call — never from the JWT or users.role.
+ * @param {import('node:sqlite').DatabaseSync} db
+ * @param {number} userId
+ */
+export function isOwner(db, userId) {
+  if (config.ownerTgIds.size === 0) return false;
+  const row = db
+    .prepare('SELECT telegram_user_id FROM tg_bindings WHERE user_id = ?')
+    .get(userId);
+  return !!row && config.ownerTgIds.has(Number(row.telegram_user_id));
+}
+
+/**
+ * Route preHandler for owner-only admin actions (grants, plans, roles,
+ * promo codes). Must run after `requireAdmin`. Without OWNER_TG_IDS the
+ * legacy rule applies (any admin) — see the startup warning in config.
+ */
+export function makeRequireOwner(db) {
+  return async function requireOwner(request, reply) {
+    if (config.ownerTgIds.size === 0) return;
+    if (!isOwner(db, request.auth.userId)) {
+      return reply.code(403).send({ error: 'OWNER_ONLY' });
+    }
+  };
 }

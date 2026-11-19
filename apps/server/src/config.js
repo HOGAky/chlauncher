@@ -118,6 +118,26 @@ export function loadConfig(env = process.env) {
      */
     tributeApiKey: env.TRIBUTE_API_KEY || '',
     tributeBotUrl: env.TRIBUTE_BOT_URL || '',
+    /**
+     * Deep-link base of the bot used for "sign in with Telegram" / QR
+     * (`https://t.me/<bot>?start=`). Same bot as billing in practice —
+     * falls back to TRIBUTE_BOT_URL so login doesn't depend on billing
+     * naming.
+     */
+    tgBotUrl: env.TG_BOT_URL || env.TRIBUTE_BOT_URL || '',
+    /**
+     * Owner Telegram ids (comma-separated). Accounts bound to these ids
+     * are the only ones allowed to grant subscriptions, switch plans,
+     * assign roles and mint promo codes. Configurable only via env on
+     * the server — never through the admin UI or the DB. Empty → legacy
+     * behaviour (every admin may grant) with a startup warning.
+     */
+    ownerTgIds: new Set(
+      (env.OWNER_TG_IDS || '')
+        .split(',')
+        .map((s) => Number(s.trim()))
+        .filter((n) => Number.isInteger(n) && n > 0)
+    ),
     tributeProductLinks: safeJson(env.TRIBUTE_PRODUCT_LINKS, {}),
     tributePlanMap: safeJson(env.TRIBUTE_PLAN_MAP, {}),
     tgBindSecret: env.TG_BIND_SECRET || '',
@@ -211,6 +231,14 @@ validateProductionConfig(config);
 if (config.jwtSecret === DEV_JWT_SECRET) {
   console.warn(
     '[config] WARNING: using the built-in development JWT secret. Set JWT_SECRET before deploying.'
+  );
+}
+
+if (config.ownerTgIds.size === 0) {
+  console.warn(
+    '[config] WARNING: OWNER_TG_IDS is empty — every admin may grant ' +
+      'subscriptions/plans/roles. Set OWNER_TG_IDS=<your telegram id> ' +
+      '(bot command /whoami shows it).'
   );
 }
 
