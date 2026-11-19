@@ -12,6 +12,7 @@ import asyncio
 import glob
 import io
 import os
+import re
 import tempfile
 import threading
 import time
@@ -94,6 +95,129 @@ EN_SPEAKER_MAP = {
     "xenia": "en_47",
     "random": "en_0",
 }
+
+
+# ---------------------------------------------------------------------------
+# Цифры → слова. Silero не произносит числительные — «15» молча выпадает
+# из речи, поэтому перед синтезом текст нормализуется: «15» → «пятнадцать».
+# ---------------------------------------------------------------------------
+
+_RU_ONES = [
+    "ноль", "один", "два", "три", "четыре",
+    "пять", "шесть", "семь", "восемь", "девять",
+]
+_RU_TEENS = [
+    "десять", "одиннадцать", "двенадцать", "тринадцать", "четырнадцать",
+    "пятнадцать", "шестнадцать", "семнадцать", "восемнадцать", "девятнадцать",
+]
+_RU_TENS = [
+    "", "", "двадцать", "тридцать", "сорок",
+    "пятьдесят", "шестьдесят", "семьдесят", "восемьдесят", "девяносто",
+]
+_RU_HUNDREDS = [
+    "", "сто", "двести", "триста", "четыреста",
+    "пятьсот", "шестьсот", "семьсот", "восемьсот", "девятьсот",
+]
+_EN_ONES = [
+    "zero", "one", "two", "three", "four", "five", "six", "seven",
+    "eight", "nine", "ten", "eleven", "twelve", "thirteen", "fourteen",
+    "fifteen", "sixteen", "seventeen", "eighteen", "nineteen",
+]
+_EN_TENS = [
+    "", "", "twenty", "thirty", "forty", "fifty",
+    "sixty", "seventy", "eighty", "ninety",
+]
+
+
+def _ru_plural(n: int, forms: tuple) -> str:
+    n = abs(n) % 100
+    if 11 <= n <= 19:
+        return forms[2]
+    n %= 10
+    if n == 1:
+        return forms[0]
+    if 2 <= n <= 4:
+        return forms[1]
+    return forms[2]
+
+
+def _ru_tri(n: int, female: bool = False) -> str:
+    parts = []
+    h, rem = divmod(n, 100)
+    t, o = divmod(rem, 10)
+    if h:
+        parts.append(_RU_HUNDREDS[h])
+    if t == 1:
+        parts.append(_RU_TEENS[o])
+    else:
+        if t:
+            parts.append(_RU_TENS[t])
+        if o:
+            if female and o == 1:
+                parts.append("одна")
+            elif female and o == 2:
+                parts.append("две")
+            else:
+                parts.append(_RU_ONES[o])
+    return " ".join(parts)
+
+
+def _num_ru(n: int) -> str:
+    if n < 0:
+        return "минус " + _num_ru(-n)
+    if n == 0:
+        return "ноль"
+    parts = []
+    for scale, female, forms in (
+        (1_000_000, False, ("миллион", "миллиона", "миллионов")),
+        (1_000, True, ("тысяча", "тысячи", "тысяч")),
+    ):
+        q, n = divmod(n, scale)
+        if q:
+            parts.append(_ru_tri(q, female))
+            parts.append(_ru_plural(q, forms))
+    if n:
+        parts.append(_ru_tri(n))
+    return " ".join(p for p in parts if p)
+
+
+def _num_en(n: int) -> str:
+    if n < 0:
+        return "minus " + _num_en(-n)
+    if n < 20:
+        return _EN_ONES[n]
+    if n < 100:
+        t, o = divmod(n, 10)
+        return _EN_TENS[t] + (("-" + _EN_ONES[o]) if o else "")
+    if n < 1000:
+        h, rem = divmod(n, 100)
+        return _EN_ONES[h] + " hundred" + ((" " + _num_en(rem)) if rem else "")
+    for scale, name in ((1_000_000, "million"), (1_000, "thousand")):
+        q, n = divmod(n, scale)
+        if q:
+            return _num_en(q) + f" {name}" + ((" " + _num_en(n)) if n else "")
+    return str(n)
+
+
+_NUM_RE = re.compile(r"\d+(?:[.,]\d+)?")
+
+
+def _normalize_numbers(text: str, lang: str) -> str:
+    conv = _num_en if lang == "en" else _num_ru
+
+    def _rep(m: "re.Match") -> str:
+        tok = m.group(0)
+        for sep in (",", "."):
+            if sep in tok:
+                a, b = tok.split(sep, 1)
+                if b.isdigit():
+                    word = "point" if lang == "en" else "запятая"
+                    return f"{conv(int(a))} {word} {conv(int(b))}"
+        if len(tok) > 9:  # длинные ряды цифр — по одной
+            return " ".join(conv(int(d)) for d in tok)
+        return conv(int(tok))
+
+    return _NUM_RE.sub(_rep, text)
 
 
 def _detect_lang(text: str) -> str:
@@ -181,6 +305,8 @@ async def tts(request: Request, speaker: str = Query(default="aidar")):
         raise HTTPException(400, "пустой текст")
 
     lang = _detect_lang(text)
+    # Silero проглатывает цифры — пишем их словами до синтеза.
+    text = _normalize_numbers(text, lang)
     if lang == "en":
         _silero_en_init()
         if _silero_en is None:

@@ -163,27 +163,48 @@ const avatarOf = (d) => {
   return (Array.isArray(p?.url) ? p.url[0] : p?.url) || p?.uri || '';
 };
 
-// VIP flag — subscriber/moderator/super-fan per the user attributes the
-// connector normalizes. Feeds the points multiplier in the launcher.
+// VIP flag — subscriber/moderator/super-fan. В чате 2.5 реальные флаги
+// лежат в d.userIdentity (isModeratorOfAnchor и т.д.) — userAttributes
+// на chat-событиях приходит null.
 const attrsOf = (d) => d?.user?.userAttributes || d?.userAttributes || {};
+const identityOf = (d) => d?.userIdentity || d?.user?.userIdentity || {};
 const vipOf = (d) => {
   const a = attrsOf(d);
-  return !!(a.isSubscriber || a.isModerator || a.isSuperFan || a.isTopGifter);
+  const i = identityOf(d);
+  return !!(
+    a.isSubscriber || a.isModerator || a.isSuperFan || a.isTopGifter ||
+    i.isModeratorOfAnchor || i.isSubscriberOfAnchor || i.isGiftGiverOfAnchor
+  );
 };
-const isModeratorOf = (d) => !!attrsOf(d).isModerator;
+const isModeratorOf = (d) =>
+  !!(identityOf(d).isModeratorOfAnchor || attrsOf(d).isModerator);
 // «Суперфанат» в правилах озвучки — super-fan, subscriber или top-gifter.
 const isSuperfanOf = (d) => {
   const a = attrsOf(d);
-  return !!(a.isSuperFan || a.isSubscriber || a.isTopGifter);
+  const i = identityOf(d);
+  return !!(
+    a.isSuperFan || a.isSubscriber || a.isTopGifter ||
+    i.isSubscriberOfAnchor || i.isGiftGiverOfAnchor
+  );
 };
 
-// Уровень «команды» (fan club). У коннектора поле бывает в нескольких
-// местах — читаем защитно.
+// Уровень «команды» (fan club). fansClub/fansClubInfo на chat-событиях
+// приходят null — реальный уровень лежит в значке:
+// badgeList[].privilegeLogExtra.level (строчное число).
 const fanLevelOf = (d) => {
   const u = d?.user || d || {};
   const fc =
     u.fansClub?.data || u.fanClub?.data || d?.fansClub?.data || {};
-  const n = Number(fc.level ?? fc.fanLevel ?? fc.fan_level ?? u.fanLevel ?? 0);
+  let n = Number(
+    fc.level ?? fc.fanLevel ?? fc.fan_level ??
+    u.fansClubInfo?.fansLevel ?? d?.fansClubInfo?.fansLevel ??
+    u.fanLevel ?? 0
+  );
+  const badges = u.badgeList || d?.badgeList || [];
+  for (const b of Array.isArray(badges) ? badges : []) {
+    const lv = Number(b?.privilegeLogExtra?.level);
+    if (lv > n) n = lv;
+  }
   return Number.isFinite(n) ? n | 0 : 0;
 };
 

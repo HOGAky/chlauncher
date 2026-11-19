@@ -84755,19 +84755,29 @@ var avatarOf = (d) => {
   return (Array.isArray(p?.url) ? p.url[0] : p?.url) || p?.uri || "";
 };
 var attrsOf = (d) => d?.user?.userAttributes || d?.userAttributes || {};
+var identityOf = (d) => d?.userIdentity || d?.user?.userIdentity || {};
 var vipOf = (d) => {
   const a2 = attrsOf(d);
-  return !!(a2.isSubscriber || a2.isModerator || a2.isSuperFan || a2.isTopGifter);
+  const i2 = identityOf(d);
+  return !!(a2.isSubscriber || a2.isModerator || a2.isSuperFan || a2.isTopGifter || i2.isModeratorOfAnchor || i2.isSubscriberOfAnchor || i2.isGiftGiverOfAnchor);
 };
-var isModeratorOf = (d) => !!attrsOf(d).isModerator;
+var isModeratorOf = (d) => !!(identityOf(d).isModeratorOfAnchor || attrsOf(d).isModerator);
 var isSuperfanOf = (d) => {
   const a2 = attrsOf(d);
-  return !!(a2.isSuperFan || a2.isSubscriber || a2.isTopGifter);
+  const i2 = identityOf(d);
+  return !!(a2.isSuperFan || a2.isSubscriber || a2.isTopGifter || i2.isSubscriberOfAnchor || i2.isGiftGiverOfAnchor);
 };
 var fanLevelOf = (d) => {
   const u2 = d?.user || d || {};
   const fc = u2.fansClub?.data || u2.fanClub?.data || d?.fansClub?.data || {};
-  const n2 = Number(fc.level ?? fc.fanLevel ?? fc.fan_level ?? u2.fanLevel ?? 0);
+  let n2 = Number(
+    fc.level ?? fc.fanLevel ?? fc.fan_level ?? u2.fansClubInfo?.fansLevel ?? d?.fansClubInfo?.fansLevel ?? u2.fanLevel ?? 0
+  );
+  const badges = u2.badgeList || d?.badgeList || [];
+  for (const b of Array.isArray(badges) ? badges : []) {
+    const lv = Number(b?.privilegeLogExtra?.level);
+    if (lv > n2) n2 = lv;
+  }
   return Number.isFinite(n2) ? n2 | 0 : 0;
 };
 var sessionBundle = null;
