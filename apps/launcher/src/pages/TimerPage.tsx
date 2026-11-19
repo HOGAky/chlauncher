@@ -13,6 +13,7 @@ import * as api from '../api';
 import { useApp } from '../App';
 import GiftPicker from '../components/GiftPicker';
 import { humanError } from '../errorMessages';
+import { useVisibleInterval } from '../lib/utils';
 import type { EfirTimerCfg, EfirTimerStatus } from '../types';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -147,11 +148,11 @@ export default function TimerPage() {
     api.efirtimerStatus()
       .then((s) => { setSt(s); setCfg((c) => ({ ...c, ...(s.cfg || {}) })); cfgLoaded.current = true; })
       .catch(() => {});
-    const t = setInterval(() => {
-      api.efirtimerStatus().then(setSt).catch(() => {});
-    }, 1000);
-    return () => clearInterval(t);
   }, []);
+
+  useVisibleInterval(() => {
+    api.efirtimerStatus().then(setSt).catch(() => {});
+  }, 1000, false);
 
   const state = st?.state;
   const save = () => {

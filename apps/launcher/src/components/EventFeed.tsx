@@ -9,6 +9,7 @@ import React, { useEffect, useState } from 'react';
 import * as api from '../api';
 import type { FeedItem } from '../types';
 import { useApp } from '../App';
+import { useVisibleInterval } from '../lib/utils';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 
@@ -33,19 +34,14 @@ export default function EventFeed() {
   const { feed } = useApp();
   const [items, setItems] = useState<FeedItem[]>([]);
 
+  useVisibleInterval(() => {
+    api.getEventFeedItems().then(setItems).catch(() => {});
+  }, 3000, false);
+
   useEffect(() => {
-    let alive = true;
-    const poll = () =>
-      api
-        .getEventFeedItems()
-        .then((r) => alive && setItems(r))
-        .catch(() => {});
-    poll();
-    const t = setInterval(poll, 3000);
-    return () => {
-      alive = false;
-      clearInterval(t);
-    };
+    if (!document.hidden) {
+      api.getEventFeedItems().then(setItems).catch(() => {});
+    }
     // `feed.length` — a new live event triggers an immediate refetch.
   }, [feed.length]);
 

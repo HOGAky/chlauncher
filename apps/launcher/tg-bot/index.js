@@ -212,7 +212,7 @@ async function handleMessage(msg) {
         'Привет! Я <b>chlauncher бот</b> — помогаю привязать аккаунт, входить по QR и получать свежие обновления.\n\n' +
           `📢 <b>Наш официальный канал:</b> ${CHANNEL_URL}\n\n` +
           'Команды:\n' +
-          '• /start <код> — привязка аккаунта из лаунчера\n' +
+          '• /start &lt;код&gt; — привязка аккаунта из лаунчера\n' +
           '• /channel — ссылка на канал обновлений\n' +
           '• /status — статус подписки'
       );
@@ -231,12 +231,12 @@ async function handleMessage(msg) {
   if (text === '/help' || text === '/status@') {
     return send(
       chatId,
-      `Команды: /start <код> — привязка аккаунта, /channel — канал обновлений, /status — статус подписки.\n\n📢 Канал: ${CHANNEL_URL}`
+      `Команды: /start &lt;код&gt; — привязка аккаунта, /channel — канал обновлений, /status — статус подписки.\n\n📢 Канал: ${CHANNEL_URL}`
     );
   }
   await send(
     chatId,
-    `Команды: /start <код> — привязка аккаунта, /channel — канал обновлений, /status — статус подписки.\n\n📢 Канал: ${CHANNEL_URL}`
+    `Команды: /start &lt;код&gt; — привязка аккаунта, /channel — канал обновлений, /status — статус подписки.\n\n📢 Канал: ${CHANNEL_URL}`
   );
 }
 

@@ -5,10 +5,11 @@
  * alerts overlay and re-injected as a `poll` event — so a normal
  * trigger rule can run the action. Live bars: /overlay/poll.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { BarChart3, Play, Plus, Square, Trash2 } from 'lucide-react';
 import * as api from '../api';
 import { humanError } from '../errorMessages';
+import { useVisibleInterval } from '../lib/utils';
 import type { PollStatus } from '../types';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -22,12 +23,9 @@ export default function PollCard() {
   const [st, setSt] = useState<PollStatus | null>(null);
   const [err, setErr] = useState('');
 
-  useEffect(() => {
-    const poll = () => api.pollStatus().then(setSt).catch(() => {});
-    poll();
-    const t = setInterval(poll, 1000);
-    return () => clearInterval(t);
-  }, []);
+  useVisibleInterval(() => {
+    api.pollStatus().then(setSt).catch(() => {});
+  }, 2000);
 
   const start = () => {
     setErr('');
