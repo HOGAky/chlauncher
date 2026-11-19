@@ -96,4 +96,31 @@ share|subscribe`, поля `vip|fan_level|is_moderator|is_superfan|gift_id|coins
 
 - Авторизованный WS (sessionid) требует env WHITELIST_AUTHENTICATED_SESSION_ID_HOST = хост активного SignConfig.basePath — сайдкар выставляет её сам (index.js); при любой ошибке session-auth сайдкар сбрасывает сессию и работает анонимно (не уходит в вечный retry).
 
+## Roblox «Steal the Stream»
+
+- Исходники игры: `D:\roblox\game` (Rojo). Спека:
+  `docs/roblox-integration.md`. Standalone relay `D:\roblox\relay`
+  (не в git) — только совместимость/отладка.
+- Продовый релей — `apps/server/src/routes/stream.js` + таблицы
+  `stream_*` (миграция v15). Форвард идёт по JWT лаунчера, admin-секрет
+  не нужен. Stream key сервер отдаёт plaintext один раз (БД — SHA-256).
+- Запуск: «Играть» → `POST /api/stream/ticket` → тикет в `launchData`
+  deep-link'а → игра `POST /redeem` → комнатный credential (сессионный,
+  не персистится) → claim/poll. Запасной путь — `!key` в чате.
+- Ключ в игре передаётся заголовком `X-Stream-Key` (не query) — иначе
+  попадает в логи прокси. Первый полл после claim только синхронизирует
+  курсор — историю очереди не реплеим.
+- Встроенный мост `src-tauri/src/roblox_bridge.rs` — тот же API на
+  `localhost:8790` для Studio. Dev-режим = `roblox_bridge::dev_mode()`
+  (debug-сборка или role=admin), флаг `dev_mode` в bootstrap.
+  Карточка — `components/RobloxCard.tsx` в Библиотеке (для всех; dev-
+  часть — по флагу); профиль `roblox-sts` ← пресет `steal-the-stream`.
+- Owner-only операции сервера (grant-days/set-plan/set-role/promo) —
+  только для `OWNER_TG_IDS` (Telegram ID через `tg_bindings`); пустой
+  список = legacy-режим любого admin + warning при старте.
+- Следующий этап (не начат): Telegram-идентичность — ТЗ в
+  `docs/tg-auth-spec.md` (подтверждение входа, баги B1-B11).
+- Долгие `cargo test` запускать в фоне/подсессии — первая сборка тестов
+  идёт минуты, пользователь не хочет ждать блокирующий вызов.
+
 - ВАЖНО: tauri.conf.json копирует `tools/tiktok-sidecar/dist` в `<target>/debug|release/tiktok-sidecar/` при tauri build/dev — после пересборки бандла esbuild'ом обновлять и эту копию (или собирать через tauri), иначе лаунчер запускает СТАРЫЙ sidecar.js.

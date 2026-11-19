@@ -1,111 +1,132 @@
-# Требования: интеграция chlauncher ↔ Roblox («Steal the Stream»)
+# Интеграция chlauncher ↔ Roblox («Steal the Stream»)
 
-Документ-заказ для разработки chlauncher. Roblox-игра должна получать
-`StreamEvent`'ы стримера (подарки/лайки → `action_command`), но не может
-подключиться к лаунчеру напрямую:
+Roblox-игра получает `StreamEvent`'ы стримера (подарки/лайки →
+`action_command`), но не может подключиться к лаунчеру напрямую:
 
 - у Roblox **нет WebSocket-клиента** — только исходящий `HttpService`
 - Roblox-сервер живёт в облаке Roblox → `ws://127.0.0.1:9876` недостижим
 - игру нельзя заспавнить лаунчером как .exe
 
-Значит нужен канал «лаунчер → облачный релей → Roblox поллит».
+Канал: «лаунчер → `apps/server` (релей в БД) → Roblox поллит».
 
-## Что требуется от chlauncher
+## A. HTTP-forward событий
 
-### A. HTTP-forward событий (предпочтительно)
+`forwarder.rs` — консьюмер `EventHub.broadcast`:
 
-Новый консьюмер на `EventHub.broadcast` (рядом с game WS и overlay WS):
+- Каждый `StreamEvent` → `POST {forward_url}/api/stream/ingest`
+- Авторизация — **JWT лаунчера** (`Authorization: Bearer`); сервер сам
+  знает подписку и ключ стримера. `X-Stream-Key` шлётся только если
+  задан — совместимость со standalone-релеем
+- `forward_url` пустой → используется базовый URL `apps/server` —
+  отдельный релей в проде не нужен
+- Настройки: `forward.{enabled, forward_url, stream_key,
+  relay_admin_secret, roblox_place_id, local_bridge, local_bridge_port}`
+- Очередь 500 событий, drop-oldest, таймаут 5 с — падение сервера не
+  ломает локальный пайплайн; метрики `queued/dropped/delivered/last_error`
+- Фильтр: форвардятся только `type:"event"`
 
-- Каждый `StreamEvent` → `POST {forward_url}` с JSON-телом события
-- Заголовок авторизации: `X-Stream-Key: {stream_key}`
-- Настройки в профиле стримера: `forward_url`, `stream_key`,
-  `relay_admin_secret`, `enabled`
-- Fire-and-forget с мини-очередью (~500 шт) и таймаутом 5 с — падение
-  релея не должно ломать локальный пайплайн
-- Фильтр: форвардить только `type:"event"`, heartbeat/system не нужны
+## B. Релей внутри apps/server (прод)
 
-Если форвард не успеваем — fallback без изменений лаунчера: отдельный
-`roblox-bridge.exe`, подключающийся как игра по протоколу `ws://9876`
-(`hello` с токеном → форвардит `event`-фреймы на релей). Но форвард
-внутри лаунчера чище.
+`routes/stream.js` + миграция v15 (`stream_keys`, `stream_tickets`,
+`stream_events`, `stream_rooms` в SQLite — очереди и курсоры переживают
+рестарт и деплой). Отдельный сервис не нужен.
 
-### B. Релей — standalone-сервис
-
-Отдельный мини-сервис (новый проект, например `D:\roblox\relay`,
-Node ≥22) — `apps/server` chlauncher **не трогаем**. Он не видит БД
-подписок, поэтому валидность ключей пушит лаунчер (см. D).
-
-In-memory очередь на стримера (TTL события 60 с, cap ~500/стример,
-монотонный `since`-курсор); персистентность — только привязки ключей:
-
-| Метод | Путь | Кто дёргает | Что делает |
+| Метод | Путь | Кто | Что делает |
 |---|---|---|---|
-| `POST` | `/api/stream/ingest` | лаунчер (X-Stream-Key) | положить событие в очередь |
-| `GET` | `/api/stream/events?key=…&since=<cursor>` | Roblox, раз в 2–3 с | вернуть `{cursor, events[]}` |
-| `POST` | `/api/stream/claim` | Roblox-сервер румы | `{stream_key, job_id}` привязка; занято → 409 |
+| `POST` | `/api/stream/key` | лаунчер (JWT) | выдать/показать stream key; plaintext отдаётся один раз при создании, в БД — SHA-256 |
+| `POST` | `/api/stream/key/rotate` | лаунчер (JWT) | ротация: старый ключ и Roblox-привязка умирают |
+| `POST` | `/api/stream/ticket` | лаунчер (JWT) | одноразовый launch-тикет (TTL ~5 мин) |
+| `POST` | `/api/stream/redeem` | Roblox-сервер | `{ticket, roblox_user_id}` → `{stream_key}` — комнатный credential, бинд UserId |
+| `POST` | `/api/stream/ingest` | лаунчер (JWT) или `X-Stream-Key` | событие в очередь (cap 500/ключ, TTL 60 с) |
+| `GET` | `/api/stream/events?since=` | Roblox | `X-Stream-Key` (предпочтительно) или `?key=` → `{cursor, events[]}` |
+| `POST` | `/api/stream/claim` | Roblox-сервер румы | `{stream_key, job_id}`; занято → 409 |
 | `POST` | `/api/stream/release` | Roblox-сервер | отвязать при шатдауне |
-| `POST` | `/api/stream/validate` | Roblox-сервер | ключ + valid_until>now → bind UserId (см. D) |
-| `POST` | `/api/admin/register` | лаунчер (X-Admin-Secret) | `{stream_key, valid_until}` upsert валидности |
-| `POST` | `/api/admin/revoke` | админ | отозвать ключ |
+| `POST` | `/api/stream/validate` | Roblox-сервер | ручной `!key` — бинд UserId |
+| `GET` | `/api/stream/status` | лаунчер (JWT) | статус румы: claim, job_id, последний полл, глубина очереди |
 
-- `stream_key` генерится в лаунчере (кнопка в UI) и регистрируется на
-  релее через admin-эндпоинт; одним ключом авторизуются ingest и poll
-- Ошибки: 401 невалидный ключ/секрет, 402 `subscription_expired`
-  при `valid_until < now`, 409 на конфликтах claim/bind
-- Rate-limit на `/validate`; `stream_key`/`ADMIN_SECRET` не логировать,
-  ключи хранить хэшами
+- Подписка истекла → 402 `subscription_expired` на validate/poll/claim
+- События в `stream_events` — AUTOINCREMENT id = монотонный курсор;
+  номера не сбрасываются при рестарте
+- Rate-limit на redeem/validate; plaintext-ключей в БД нет
 
-### C. Маппинг правил
+Standalone-релей (`D:\roblox\relay`) остаётся для совместимости — тот же
+протокол, авторизация по `X-Stream-Key`; в проде не нужен.
 
-Стример настраивает `TriggerRule`s так, чтобы `action_command` попадал
-в whitelist игры: `spawn_chaser`, `invert_controls`, `drop_floor`,
-`yeet`, `freeze`, `slow_field`, `camera_spin`, `wall_ahead`,
-`decoy_clones`, `shield`, `speed_boost`, `checkpoint`, `coin_rain`,
-`fireworks`, `start_game:<id>`. Полный список — `DESIGN.md` §5.7
-в `D:\roblox`. Возможно, стоит шаблон-профайл правил «Steal the Stream»
-в лаунчере, чтобы стример не вбивал вручную.
+## C. Маппинг правил
 
-### D. Ключ стримера: доступ в руму + доставка событий
+Стример использует шаблон-профайл «steal-the-stream» (команда
+`roblox_play`/карточка создаёт профиль `roblox-sts` автоматически) —
+`action_command`'ы ложатся в whitelist игры: `spawn_chaser`,
+`invert_controls`, `drop_floor`, `yeet`, `freeze`, `slow_field`,
+`camera_spin`, `wall_ahead`, `decoy_clones`, `shield`, `speed_boost`,
+`checkpoint`, `coin_rain`, `fireworks`, `score_drain`, `execute`,
+`score_gift`, `start_game:<id>`.
 
-Один `stream_key` решает обе задачи — он же **пропуск стримера в игру**:
+## D. Ключ стримера и запуск без ручного ввода
 
-- Стример генерит `stream_key` в UI лаунчера (кнопка + «сбросить»);
-  при включении форварда и далее при старте + раз в 12 ч, **пока
-  подписка активна**, лаунчер пушит:
-  `POST {forward_url}/api/admin/register`
-  `{stream_key, valid_until = min(subscription_end, now + 24ч)}`
-  с `X-Admin-Secret` (поле в настройках)
-- Стример вводит ключ в Roblox-игре один раз → сервер игры дёргает
-  `POST /api/stream/validate {stream_key, roblox_user_id}`:
-  - релей проверяет: ключ известен и `valid_until > now`
-  - при успехе ключ **биндится к Roblox UserId** (one-to-one) —
-    дальше стример просто жмёт «Start Stream»
-- Подписка истекла → лаунчер перестаёт продлевать → `valid_until`
-  протухает ≤ 24 ч → `validate`/`ingest` отвечают
-  `402 subscription_expired`, «Start Stream» гаснет
-- Анти-шеринг: бинд one-to-one; перебинд только после revoke ключа
-  и генерации нового в лаунчере — друзьям ключ не передашь
-- Таким образом подписка на chlauncher = лицензия на стрим-румы;
-  стример **не покупает** платный вход — робуксы платят только зрители
+`stream_key` — пропуск стримера: ingest-авторизация и вход в
+стрим-руму. В проде руки стримера его не касаются:
 
-## Что chlauncher НЕ делает
+1. «Играть» на карточке → лаунчер просит `POST /api/stream/ticket`
+   (JWT, активная подписка) → одноразовый тикет на ~5 минут.
+2. Тикет уезжает в deep-link:
+   `roblox://experiences/start?placeId=…&launchData={"t":"<ticket>"}`
+   (percent-encoded). Сам stream_key в URL не светится — тикет
+   одноразовый и короткоживущий.
+3. Сервер игры читает `Player:GetJoinData().LaunchData`
+   (`StreamKeyService.TryRedeemLaunchData`) → `POST /api/stream/redeem`
+   → комнатный credential + бинд к Roblox UserId. Кнопка «Start Stream»
+   активна сразу — никакого `!key`.
+4. Комнатный credential сессионный (не персистится в профиль игрока —
+   сервер ротирует его при каждом запуске). Ручной ключ из
+   `DataService.streamKey` остаётся запасным путём (`!key <key>`).
 
-- **Робуксы.** Платный вход в стрим-руму и платный саботаж — Dev
-  Products/Game Passes внутри Roblox, деньги идут владельцу experience
-  через Roblox, минуя лаунчер
-- Игровую логику, модерацию, очередь команд — это Roblox-сторона
+Анти-шеринг: бинд one-to-one (409 `bound_to_other_user`), сброс —
+ротация ключа в лаунчере. Подписка на chlauncher = лицензия на
+стрим-румы; робуксы стример не платит.
+
+## E. Встроенный мост (режим разработчика)
+
+Для разработки до релиза relay можно не поднимать: лаунчер сам отдаёт
+тот же API на `localhost:8790` (`roblox_bridge.rs`).
+
+- Режим разработчика = dev-сборка **или** роль `admin`. Только в нём
+  видна dev-часть карточки и работают `roblox_bridge_*`/`roblox_dev_play`.
+- Эндпоинты совпадают с серверным релеем, включая
+  `POST /api/stream/redeem` (в dev любой тикет → dev stream key) —
+  LaunchData-путь в Studio отрабатывает тем же кодом, что и прод.
+- События — прямо из `EventHub`, без ingest-хопа. Очередь 500/60 с.
+- Studio: `MOCK_RELAY = false` в `Config.lua`, `RELAY_URL` уже
+  `http://localhost:8790` → Play; ручной fallback `!key <ключ>` +
+  `!claim` работает.
+- Опубликованный плейс крутится в облаке Roblox и localhost не видит —
+  для него продовый путь B/D.
+
+## F. Платный вход зрителей (игровая сторона)
+
+- Зритель в лобби видит живые румы (`STS_StreamRooms` MemoryStore) и
+  выбирает стримера; `RequestJoin(player, hostUserId)`.
+- **Pre-check до покупки**: `CanJoinRoom` проверяет, что рума жива и
+  `viewers < MAX_VIEWERS` (рума сама публикует счётчик в реестр) —
+  робуксы не списываются за мёртвую/полную руму.
+- Dev Product `ENTRY_PRODUCT_ID` — разовый вход; Game Pass
+  `BACKSTAGE_PASS_ID` — постоянный доступ.
+- Оплата → `entryCredit` в профиле игрока → телепорт. Телепорт упал →
+  кредит сохраняется (`TeleportInitFailed` возвращает его), повторный
+  вход бесплатный; успешный вход снимает кредит.
+- Лишние зрители сверх `MAX_VIEWERS` возвращаются в лобби сервером румы.
+- Робуксы идут владельцу experience через Roblox — лаунчер в этих
+  деньгах не участвует.
 
 ## Схема
 
 ```text
 TikTok/DA → integrations → TriggerMapper → EventHub ─┬─ game WS :9876
                                                      ├─ overlay :9877
-                                                     └─ HTTP-forward ─┐
-                  + продление ключа: POST /admin/register              ▼
-                                            standalone relay
-                                            /api/stream/* (очереди)
-                                            /api/admin/*  (ключи)
-                                                                       ▲
-                          Roblox reserved server: GET /events?key&since ┘
-                          → EventManager → whitelist action_commands
+                                                     └─ HTTP-forward (JWT)
+                                                                    ▼
+        apps/server /api/stream/*  ── stream_events (SQLite, TTL 60s)
+        ticket → launchData ──► Roblox redeem → room credential      ▲
+        Roblox reserved server: GET /events (X-Stream-Key) ──────────┘
+        → EventManager → whitelist action_commands
 ```
