@@ -2523,8 +2523,13 @@ impl Tts {
                 } else {
                     text
                 };
-                if cfg.read_nickname {
-                    phrase = format!("{} пишет: {phrase}", raw.user);
+                // Обычный комментарий читается как есть — только текст.
+                // Ответ на комментарий: «{ник адресата}, {текст}» —
+                // чтобы было слышно, кому отвечают. Тумблер
+                // `read_nickname` гасит и этот префикс.
+                let reply_to = raw.reply_to.trim();
+                if cfg.read_nickname && !reply_to.is_empty() {
+                    phrase = format!("{reply_to}, {phrase}");
                 }
                 let prio = whitelisted && cfg.whitelist_priority;
                 self.enqueue(TtsJob {
@@ -2650,6 +2655,7 @@ impl Tts {
             fan_level: 0,
             is_moderator: false,
             is_superfan: false,
+            reply_to: String::new(),
             ts_ms: crate::types::now_ms(),
             event_id: String::new(),
         };
@@ -3196,6 +3202,7 @@ mod tests {
             fan_level: 0,
             is_moderator: false,
             is_superfan: false,
+            reply_to: String::new(),
             ts_ms: 0,
             event_id: String::new(),
         }

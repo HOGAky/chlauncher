@@ -442,6 +442,7 @@ mod tests {
             fan_level: 0,
             is_moderator: false,
             is_superfan: false,
+            reply_to: String::new(),
             ts_ms: 0,
             event_id: String::new(),
         };
@@ -470,6 +471,7 @@ mod tests {
             fan_level: 0,
             is_moderator: false,
             is_superfan: false,
+            reply_to: String::new(),
             ts_ms: 0,
             event_id: String::new(),
         };

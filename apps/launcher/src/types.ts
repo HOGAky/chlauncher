@@ -90,6 +90,8 @@ export interface RawStreamEvent {
   is_moderator?: boolean;
   /** Суперфан/подписчик/топ-гифтер — байпасит min_level. */
   is_superfan?: boolean;
+  /** Ник зрителя, которому отвечает комментарий (TikTok reply/упоминание). */
+  reply_to?: string;
 }
 
 /** Reference to a media-library file (Settings.media). */

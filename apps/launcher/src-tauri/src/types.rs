@@ -82,6 +82,11 @@ pub struct RawStreamEvent {
     /// rules bypass the minimum team level.
     #[serde(default)]
     pub is_superfan: bool,
+    /// Ник зрителя, которому отвечает этот комментарий (TikTok reply/
+    /// упоминание). Пусто для обычных сообщений — озвучка читает только
+    /// текст; для ответов — «{ник адресата}, {текст}».
+    #[serde(default)]
+    pub reply_to: String,
     /// Unix ms when the event reached the launcher (queueing latency).
     #[serde(default)]
     pub ts_ms: u64,

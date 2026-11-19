@@ -67,3 +67,5 @@ tools/rvc-server/*-test*.wav
 
 # Google Drive Desktop sync temps
 .tmp.driveupload/
+
+_logs*.txt

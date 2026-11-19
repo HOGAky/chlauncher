@@ -1281,7 +1281,7 @@ export default function TtsPage() {
               checked={cfg.read_nickname}
               onChange={(e) => patch({ read_nickname: e.target.checked })}
             />
-            Префикс «{'{user}'} пишет:»
+            При ответе называть ник адресата
           </label>
           <label className="flex items-center gap-2">
             <input

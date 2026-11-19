@@ -243,6 +243,10 @@ const ev = (event_kind, d, raw_name, amount = 0, extra = {}) => {
     coins: extra.coins ?? 0,
     gift_id: extra.gift_id ?? null,
     like_total: extra.like_total ?? 0,
+    // Ответ на комментарий: ник зрителя, которому адресовано сообщение
+    // (proto `atUser`, фолбэк — первый из `mentionUsers`). Озвучка
+    // произносит «{ник}, {текст}» только для ответов.
+    reply_to: extra.reply_to ?? '',
     vip: vipOf(d),
     fan_level: fanLevelOf(d),
     is_moderator: isModeratorOf(d),
@@ -277,7 +281,11 @@ const createConnection = () => {
     })
   );
 
-  conn.on(WebcastEvent.CHAT, (d) => ev('comment', d, d.content ?? d.comment));
+  conn.on(WebcastEvent.CHAT, (d) => {
+    const to = d?.atUser || (Array.isArray(d?.mentionUsers) ? d.mentionUsers[0] : null);
+    const replyTo = to?.nickname || to?.uniqueId || to?.displayId || '';
+    ev('comment', d, d.content ?? d.comment, 0, { reply_to: replyTo });
+  });
   conn.on(WebcastEvent.LIKE, (d) => {
     // 2.5 payload: `count` = this tap-batch, `total` = authoritative
     // room counter. Emitting both lets downstream counters resync to

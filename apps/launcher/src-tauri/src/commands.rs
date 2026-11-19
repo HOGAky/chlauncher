@@ -1955,6 +1955,7 @@ pub async fn test_rule(
         fan_level: 0,
         is_moderator: false,
         is_superfan: false,
+        reply_to: String::new(),
         ts_ms: now_ms(),
         event_id: String::new(),
     };

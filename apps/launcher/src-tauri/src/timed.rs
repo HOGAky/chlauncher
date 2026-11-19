@@ -87,6 +87,7 @@ impl TimedEvents {
                 fan_level: 0,
                 is_moderator: false,
                 is_superfan: false,
+                reply_to: String::new(),
                 ts_ms: crate::types::now_ms(),
                 event_id: String::new(),
             };

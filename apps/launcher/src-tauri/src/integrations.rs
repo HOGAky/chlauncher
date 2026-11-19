@@ -351,6 +351,7 @@ async fn run_da(
                 fan_level: 0,
                 is_moderator: false,
                 is_superfan: false,
+                reply_to: String::new(),
                 ts_ms: now_ms(),
                 // DA alert id is stable across Centrifugo re-deliveries.
                 event_id: data["id"]
@@ -633,6 +634,7 @@ async fn run_tiktok(
                     fan_level: v["fan_level"].as_i64().unwrap_or(0),
                     is_moderator: v["is_moderator"].as_bool().unwrap_or(false),
                     is_superfan: v["is_superfan"].as_bool().unwrap_or(false),
+                    reply_to: v["reply_to"].as_str().unwrap_or_default().into(),
                     ts_ms: now_ms(),
                     event_id: v["event_id"].as_str().unwrap_or_default().into(),
                 };
