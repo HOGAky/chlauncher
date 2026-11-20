@@ -526,6 +526,78 @@ const CUSTOM_VOICES: &[CustomVoice] = &[
         quirk: "witch",
         gender: "Female",
     },
+    CustomVoice {
+        id: "custom:shkolnik",
+        label: "Школьник Петя",
+        engine: "silero",
+        base: "eugene",
+        rate: 1.18,
+        pitch: 1.3,
+        style: Some("cheerful"),
+        laugh: "хи-хи-хи!",
+        quirk: "",
+        gender: "Male",
+    },
+    CustomVoice {
+        id: "custom:babka",
+        label: "Бабка Нюра",
+        engine: "silero",
+        base: "kseniya",
+        rate: 0.8,
+        pitch: 0.85,
+        style: None,
+        laugh: "ох-хо-хо, хи-хи!",
+        quirk: "grandpa",
+        gender: "Female",
+    },
+    CustomVoice {
+        id: "custom:sport",
+        label: "Спортивный комментатор",
+        engine: "rvc",
+        base: "DosyeV2",
+        rate: 1.28,
+        pitch: 1.05,
+        style: Some("cheerful"),
+        laugh: "ха-ха! вот это гол!",
+        quirk: "",
+        gender: "Male",
+    },
+    CustomVoice {
+        id: "custom:anime",
+        label: "Аниме Кики",
+        engine: "silero",
+        base: "kseniya",
+        rate: 1.15,
+        pitch: 1.4,
+        style: Some("cheerful"),
+        laugh: "хи-хи-хи, ня!",
+        quirk: "",
+        gender: "Female",
+    },
+    CustomVoice {
+        id: "custom:baron",
+        label: "Барон фон Бас",
+        engine: "rvc",
+        base: "stariy_bog",
+        rate: 0.85,
+        pitch: 0.65,
+        style: None,
+        laugh: "м-ха-ха-ха…",
+        quirk: "grandpa",
+        gender: "Male",
+    },
+    CustomVoice {
+        id: "custom:sudba",
+        label: "Судьба (случайный голос)",
+        engine: "silero",
+        base: "random",
+        rate: 1.0,
+        pitch: 1.0,
+        style: None,
+        laugh: "ха-ха-ха!",
+        quirk: "",
+        gender: "?",
+    },
     // --- Piper-модели: реально другие голоса, работают офлайн ---
     CustomVoice {
         id: "custom:p-dmitri",
@@ -560,18 +632,6 @@ const CUSTOM_VOICES: &[CustomVoice] = &[
         pitch: 1.0,
         style: None,
         laugh: "хи-хи!",
-        quirk: "",
-        gender: "Female",
-    },
-    CustomVoice {
-        id: "custom:p-milena",
-        label: "Мила (Piper)",
-        engine: "piper",
-        base: "ru_RU-milena-medium",
-        rate: 1.02,
-        pitch: 1.0,
-        style: None,
-        laugh: "хи-хи-хи!",
         quirk: "",
         gender: "Female",
     },
@@ -887,14 +947,6 @@ const PIPER_CATALOG: &[PiperModel] = &[
         gender: "Female",
         locale: "ru-RU",
         hf_path: "ru/ru_RU/irina/medium/",
-        size_mb: 75,
-    },
-    PiperModel {
-        id: "ru_RU-milena-medium",
-        label: "Милена (Piper, RU)",
-        gender: "Female",
-        locale: "ru-RU",
-        hf_path: "ru/ru_RU/milena/medium/",
         size_mb: 75,
     },
     PiperModel {
@@ -1982,10 +2034,14 @@ fn is_laugh_emoji(c: char) -> bool {
 }
 
 /// Text laughter ("ахах", "лол", "xd", "рофл"…) → cheerful style.
+/// Матчим по границам слов — «лол» внутри «колол»/«приколол» смехом
+/// не считается. «ахахахахах» любой длины — тоже смех (все а/х).
 fn has_laugh_text(low: &str) -> bool {
-    ["ахах", "хаха", "ахха", "лол", "рофл", "xd"]
-        .iter()
-        .any(|p| low.contains(p))
+    low.split(|c: char| !c.is_alphanumeric()).any(|w| {
+        matches!(w, "ахах" | "хаха" | "ахха" | "лол" | "рофл" | "xd")
+            || (w.chars().count() >= 3
+                && w.chars().all(|c| matches!(c, 'а' | 'х')))
+    })
 }
 
 /// ≥6 letters of which ≥80% are uppercase → the viewer is SHOUTING.
@@ -2527,7 +2583,19 @@ impl Tts {
                 // Ответ на комментарий: «{ник адресата}, {текст}» —
                 // чтобы было слышно, кому отвечают. Тумблер
                 // `read_nickname` гасит и этот префикс.
-                let reply_to = raw.reply_to.trim();
+                // Ник из CJK/эмодзи (напр. «❤햄스터❤») синтезатор не
+                // прочитает — оставляем только кириллицу/латиницу/цифры,
+                // пустой результат = без префикса.
+                let reply_to: String = raw
+                    .reply_to
+                    .trim()
+                    .chars()
+                    .filter(|c| {
+                        c.is_ascii_alphanumeric()
+                            || matches!(c, '\u{0400}'..='\u{04FF}')
+                            || *c == '_'
+                    })
+                    .collect();
                 if cfg.read_nickname && !reply_to.is_empty() {
                     phrase = format!("{reply_to}, {phrase}");
                 }

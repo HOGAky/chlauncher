@@ -201,6 +201,15 @@ def _num_en(n: int) -> str:
 
 _NUM_RE = re.compile(r"\d+(?:[.,]\d+)?")
 
+# Алфавит Silero: кириллица/латиница/цифры + базовая пунктуация.
+# Всё прочее (CJK, эмодзи, экзотика) роняет apply_tts с ValueError.
+_SILERO_BAD = re.compile(r"[^0-9A-Za-zА-Яа-яЁё\s.,!?;:—–\-()«»\"'/%+*=]")
+
+
+def _sanitize_for_silero(t: str) -> str:
+    t = _SILERO_BAD.sub(" ", t)
+    return re.sub(r"\s+", " ", t).strip()
+
 
 def _normalize_numbers(text: str, lang: str) -> str:
     conv = _num_en if lang == "en" else _num_ru
@@ -307,6 +316,11 @@ async def tts(request: Request, speaker: str = Query(default="aidar")):
     lang = _detect_lang(text)
     # Silero проглатывает цифры — пишем их словами до синтеза.
     text = _normalize_numbers(text, lang)
+    # И падает с ValueError на символах вне алфавита (CJK, эмодзи,
+    # экзотика) — в никах ответов их много. Чистим до произносимого.
+    text = _sanitize_for_silero(text)
+    if not text:
+        raise HTTPException(400, "нет произносимого текста")
     if lang == "en":
         _silero_en_init()
         if _silero_en is None:
@@ -321,13 +335,27 @@ async def tts(request: Request, speaker: str = Query(default="aidar")):
 
     def _run():
         with _silero_lock:  # модель stateful — сериализуем
-            audio = model.apply_tts(
-                text=text,
-                speaker=speaker,
-                sample_rate=sample_rate,
-                put_accent=True,
-                put_yo=True,
-            )
+            try:
+                audio = model.apply_tts(
+                    text=text,
+                    speaker=speaker,
+                    sample_rate=sample_rate,
+                    put_accent=True,
+                    put_yo=True,
+                )
+            except ValueError:
+                # Последний рубеж: оставить только буквы/цифры/пробелы.
+                fallback = re.sub(r"[^\w\s]", " ", text)
+                fallback = re.sub(r"\s+", " ", fallback).strip()
+                if not fallback:
+                    raise
+                audio = model.apply_tts(
+                    text=fallback,
+                    speaker=speaker,
+                    sample_rate=sample_rate,
+                    put_accent=True,
+                    put_yo=True,
+                )
         import soundfile as sf
 
         buf = io.BytesIO()
