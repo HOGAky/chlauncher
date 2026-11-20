@@ -201,6 +201,13 @@ const fanLevelOf = (d) => {
   );
   const badges = u.badgeList || d?.badgeList || [];
   for (const b of Array.isArray(badges) ? badges : []) {
+    // Уровень в privilegeLogExtra есть и у других значков: sceneType 8 =
+    // уровень аккаунта (grade), 6 = топ-гифтер, 1 = модератор. Фан-клуб —
+    // только sceneType 10 (иконка fans_badge_*, текст = имя клуба).
+    const iconUri = b?.combine?.icon?.uri || b?.image?.image?.uri || '';
+    const isFanBadge =
+      Number(b?.sceneType) === 10 || /fans_badge|fans_medal/i.test(iconUri);
+    if (!isFanBadge) continue;
     const lv = Number(b?.privilegeLogExtra?.level);
     if (lv > n) n = lv;
   }
