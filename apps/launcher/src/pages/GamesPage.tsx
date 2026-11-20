@@ -84,7 +84,9 @@ export default function GamesPage() {
         </Card>
       )}
       <div className="grid gap-4 xl:grid-cols-3">
-        {view?.games.map((g) => (
+        {/* Remote link-packs (например, опубликованный Roblox-сервер) не
+            имеют overlay-страницы — они живут карточкой в Библиотеке. */}
+        {view?.games.filter((g) => !g.remote).map((g) => (
           <GameCard
             key={g.id}
             g={g}
@@ -93,16 +95,16 @@ export default function GamesPage() {
             onStart={() =>
               act(async () => {
                 await api.gameStart(g.id);
-                await api.openOverlayWindow(g.overlay_path.replace(/^\//, ''), false);
+                await api.openOverlayWindow((g.overlay_path ?? '').replace(/^\//, ''), false);
               })
             }
             onStartChroma={() =>
               act(async () => {
                 await api.gameStart(g.id);
-                await api.openOverlayWindow(g.overlay_path.replace(/^\//, ''), true);
+                await api.openOverlayWindow((g.overlay_path ?? '').replace(/^\//, ''), true);
               })
             }
-            onClose={() => act(() => api.closeOverlayWindow(g.overlay_path.replace(/^\//, '')))}
+            onClose={() => act(() => api.closeOverlayWindow((g.overlay_path ?? '').replace(/^\//, '')))}
             onError={setError}
           />
         ))}

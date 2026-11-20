@@ -25,120 +25,59 @@ use serde_json::json;
 use crate::settings::SettingsStore;
 use crate::types::{now_ms, BuiltinGameCfg, Entitlements, GameSessionInfo};
 
-/// Registry row for the Games page / allow-list checks.
-pub struct GameMeta {
-    pub id: &'static str,
-    pub title: &'static str,
-    pub desc: &'static str,
-}
-
-/// The MVP catalogue (§7–§9): tower duel, team war, survival.
-pub const GAMES: &[GameMeta] = &[
-    GameMeta {
-        id: "gift_tower",
-        title: "Gift Tower",
-        desc: "Зрители строят башни из подарков: блоки по стоимости доната, случайные события, разрушения у соперника.",
-    },
-    GameMeta {
-        id: "boy_vs_girl",
-        title: "Boy vs Girl",
-        desc: "Команды !boy и !girl тянут шкалу перевеса подарками, лайками и !attack.",
-    },
-    GameMeta {
-        id: "survive_horde",
-        title: "Survive the Horde",
-        desc: "Стример выживает волнами (WASD), зрители спавнят врагов и эффекты подарками.",
-    },
-    GameMeta {
-        id: "snake_gifts",
-        title: "Snake Gifts",
-        desc: "Автопилот-змейка: подарки кладут яблоки и растят хвост, подписки подрезают длину.",
-    },
-    GameMeta {
-        id: "flappy_gifts",
-        title: "Flappy Gifts",
-        desc: "Птица летит сама: подарки дают буст, щит от труб, очки и узкие штормовые трубы.",
-    },
-    GameMeta {
-        id: "prism_break",
-        title: "Prism Break",
-        desc: "Арканоид с призмами: зрители кидают мячи, расширяют платформу и сносят ряды.",
-    },
-    GameMeta {
-        id: "patrick_cabbage",
-        title: "Патрик, на капусту!",
-        desc: "Вертикальная (9:16) игра-обиженка: зрители разворачивают Патрика к капусте подарками, тролли сбрасывают прогресс.",
-    },
-];
-
-pub fn find(id: &str) -> Option<&'static GameMeta> {
-    GAMES.iter().find(|g| g.id == id)
-}
-
-/// Registry row for the merged catalogue — a compiled-in game or a
-/// drop-in package from `game_packs::scan` (`public/games` +
-/// `<app-data>/games`). Pack manifests override title/desc of the
-/// static row when they collide on `id`.
+/// Registry row for the merged catalogue — every entry is a folder
+/// package from `game_packs::scan` (`public/games` bundled +
+/// `<app-data>/games` user drop-in). `"type": "remote"` link-packs point
+/// at a published server instead of shipping a page.
 #[derive(Debug, Clone)]
 pub struct GameEntry {
     pub id: String,
     pub title: String,
     pub desc: String,
-    /// `true` when the entry came from (or is overridden by) a folder pack.
-    pub pack: bool,
+    /// `true` for `"type": "remote"` link-packs — no overlay page, the
+    /// `launch` spec drives the start flow (e.g. kind `"roblox"`).
+    pub remote: bool,
+    /// `launch` object from the manifest (remote entries only).
+    pub launch: Option<serde_json::Value>,
+    /// `true` when the pack lives in `<app-data>/games` (user drop-in).
+    pub user: bool,
     /// `/games-assets/<dir>` base for pack-provided games.
     pub assets_base: Option<String>,
     /// Manifest icon path relative to `assets_base`.
     pub icon: Option<String>,
 }
 
-/// Full game catalogue: compiled-in `GAMES` + folder packs. Pack
-/// manifests override the static row's title/desc on id clashes; a pack
-/// id not in `GAMES` is simply appended.
+/// Full game catalogue — folder packs only, sorted by title for a
+/// stable Games-page order.
 pub fn registry(data_dir: &Path) -> Vec<GameEntry> {
-    let packs = crate::game_packs::scan(data_dir);
-    let mut out: Vec<GameEntry> = GAMES
-        .iter()
-        .map(|g| {
-            let pack = packs.iter().find(|p| p.id == g.id);
+    let mut out: Vec<GameEntry> = crate::game_packs::scan(data_dir)
+        .into_iter()
+        .map(|p| {
+            let assets_base = p.assets_base();
+            let remote = p.is_remote();
             GameEntry {
-                id: g.id.to_string(),
-                title: pack
-                    .and_then(|p| p.manifest.title.clone())
-                    .unwrap_or_else(|| g.title.to_string()),
-                desc: pack
-                    .and_then(|p| p.manifest.desc.clone())
-                    .unwrap_or_else(|| g.desc.to_string()),
-                pack: pack.is_some(),
-                assets_base: pack.map(|p| p.assets_base()),
-                icon: pack.and_then(|p| p.manifest.icon.clone()),
+                title: p
+                    .manifest
+                    .title
+                    .clone()
+                    .unwrap_or_else(|| p.dir_name.clone()),
+                desc: p.manifest.desc.clone().unwrap_or_default(),
+                id: p.id,
+                remote,
+                launch: p.manifest.launch.clone(),
+                user: p.user,
+                assets_base: Some(assets_base),
+                icon: p.manifest.icon.clone(),
             }
         })
         .collect();
-    for p in packs {
-        if out.iter().any(|g| g.id == p.id) {
-            continue;
-        }
-        let assets_base = p.assets_base();
-        out.push(GameEntry {
-            title: p
-                .manifest
-                .title
-                .clone()
-                .unwrap_or_else(|| p.dir_name.clone()),
-            desc: p.manifest.desc.clone().unwrap_or_default(),
-            id: p.id,
-            pack: true,
-            assets_base: Some(assets_base),
-            icon: p.manifest.icon.clone(),
-        });
-    }
+    out.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
     out
 }
 
-/// Does the id name a launchable game — compiled-in or folder pack?
+/// Does the id name a registered game pack (local or remote)?
 pub fn exists(id: &str, data_dir: &Path) -> bool {
-    find(id).is_some() || crate::game_packs::find(id, data_dir).is_some()
+    crate::game_packs::find(id, data_dir).is_some()
 }
 
 /// Game ids a plan may launch. `interactive_games = None` (offline cache
@@ -146,21 +85,21 @@ pub fn exists(id: &str, data_dir: &Path) -> bool {
 /// degrade a paying streamer mid-broadcast. USER packs (`<data>/games`)
 /// are local additions, not server-published catalogue items — they
 /// bypass the plan allow-list by design; bundled packs stay gated.
+/// Remote link-packs are exempt too — their real gate is the launch
+/// command's server check (ticket/plan), not `interactive_games`.
 pub fn allowed_games(ent: &Entitlements, data_dir: &Path) -> Vec<String> {
-    let mut ids: Vec<String> = match &ent.interactive_games {
-        Some(list) => GAMES
-            .iter()
-            .filter(|g| list.iter().any(|x| x == g.id))
-            .map(|g| g.id.to_string())
-            .collect(),
-        None => GAMES.iter().map(|g| g.id.to_string()).collect(),
-    };
-    for p in crate::game_packs::scan(data_dir).into_iter().filter(|p| p.user) {
-        if !ids.iter().any(|i| i == &p.id) {
-            ids.push(p.id);
-        }
-    }
-    ids
+    registry(data_dir)
+        .into_iter()
+        .filter(|e| {
+            e.user
+                || e.remote
+                || match &ent.interactive_games {
+                    Some(list) => list.iter().any(|x| x == &e.id),
+                    None => true,
+                }
+        })
+        .map(|e| e.id)
+        .collect()
 }
 
 /// Default per-game config — seeded into settings on first use.
@@ -169,8 +108,8 @@ pub fn allowed_games(ent: &Entitlements, data_dir: &Path) -> Vec<String> {
 /// `match.names` (case-insensitive gift-name or comment-command list),
 /// `match.min_coins`, `action{type,...}`, `cooldownMs`, `perUserCdMs`,
 /// `priority` (visual effects dropped first when the queue floods).
-/// Folder packs (`game.json` manifest) override the whole rule table,
-/// `round_sec` and `volume`.
+/// The rule table, `round_sec` and `volume` come from the pack's
+/// `game.json`; an unknown id gets an empty table.
 pub fn default_cfg(game_id: &str, data_dir: &Path) -> BuiltinGameCfg {
     if let Some(pack) = crate::game_packs::find(game_id, data_dir) {
         let m = &pack.manifest;
@@ -182,112 +121,12 @@ pub fn default_cfg(game_id: &str, data_dir: &Path) -> BuiltinGameCfg {
             rules: m.rules.clone().unwrap_or_else(|| json!([])),
         };
     }
-    default_cfg_static(game_id)
-}
-
-fn default_cfg_static(game_id: &str) -> BuiltinGameCfg {
-    let rules = match game_id {
-        "gift_tower" => json!([
-            {"event":"gift","match":{"names":["Rose"]},"action":{"type":"add_block","value":1}},
-            {"event":"gift","match":{"names":["Finger Heart"]},"action":{"type":"add_block","value":2}},
-            {"event":"gift","match":{"names":["TikTok"]},"action":{"type":"add_block","value":5}},
-            {"event":"gift","match":{"names":["Rosa"]},"action":{"type":"add_block","value":10}},
-            {"event":"gift","match":{"names":["Galaxy"]},"action":{"type":"destroy","min":1,"max":3,"target":"enemy"},"cooldownMs":3000},
-            {"event":"gift","match":{"names":["Lion"]},"action":{"type":"destroy","min":4,"max":8,"target":"enemy"},"cooldownMs":3000},
-            {"event":"like","match":{},"action":{"type":"add_block","value":1,"per":100}},
-            {"event":"comment","match":{"commands":["!red","!blue"]},"action":{"type":"join_team"}},
-            {"event":"follow","match":{},"action":{"type":"add_block","value":1}},
-            {"event":"share","match":{},"action":{"type":"add_block","value":3}}
-        ]),
-        "boy_vs_girl" => json!([
-            {"event":"gift","match":{},"action":{"type":"add_score","per_coin":1}},
-            {"event":"gift","match":{"names":["Rose"]},"action":{"type":"add_score","value":1}},
-            {"event":"gift","match":{"names":["Galaxy"]},"action":{"type":"add_score","value":25,"fx":"hit"}},
-            {"event":"gift","match":{"names":["Lion"]},"action":{"type":"add_score","value":100,"fx":"big"}},
-            {"event":"like","match":{},"action":{"type":"add_score","per":10,"value":1}},
-            {"event":"follow","match":{},"action":{"type":"add_score","value":2}},
-            {"event":"share","match":{},"action":{"type":"add_score","value":5}},
-            {"event":"comment","match":{"commands":["!boy","!girl"]},"action":{"type":"join_team"}},
-            {"event":"comment","match":{"commands":["!attack"]},"action":{"type":"attack","value":5},"perUserCdMs":10000}
-        ]),
-        "survive_horde" => json!([
-            {"event":"gift","match":{"names":["Rose"]},"action":{"type":"spawn_enemy","count":1,"tier":"weak"}},
-            {"event":"gift","match":{"names":["Finger Heart"]},"action":{"type":"spawn_enemy","count":3,"tier":"weak"}},
-            {"event":"gift","match":{"names":["TikTok"]},"action":{"type":"spawn_enemy","count":10,"tier":"weak"}},
-            {"event":"gift","match":{"names":["Rosa"]},"action":{"type":"spawn_enemy","count":1,"tier":"miniboss"}},
-            {"event":"gift","match":{"names":["Galaxy"]},"action":{"type":"meteor"},"cooldownMs":5000},
-            {"event":"gift","match":{"names":["Lion"]},"action":{"type":"spawn_enemy","count":1,"tier":"boss"},"cooldownMs":10000},
-            {"event":"like","match":{},"action":{"type":"random_buff","per":50}},
-            {"event":"comment","match":{"commands":["!heal"]},"action":{"type":"heal","value":25},"perUserCdMs":60000},
-            {"event":"comment","match":{"commands":["!weapon"]},"action":{"type":"weapon"},"perUserCdMs":30000},
-            {"event":"follow","match":{},"action":{"type":"shield","sec":10}},
-            {"event":"share","match":{},"action":{"type":"slow","sec":10}}
-        ]),
-        "snake_gifts" => json!([
-            {"event":"gift","match":{"names":["Rose"]},"action":{"type":"add_apple","value":1}},
-            {"event":"gift","match":{"names":["Finger Heart"]},"action":{"type":"add_apple","value":2}},
-            {"event":"gift","match":{"names":["TikTok"]},"action":{"type":"add_apple","value":5}},
-            {"event":"gift","match":{"names":["Rosa"]},"action":{"type":"gold_apple","value":1}},
-            {"event":"gift","match":{"names":["Galaxy"]},"action":{"type":"storm","count":10},"cooldownMs":5000},
-            {"event":"gift","match":{"names":["Lion"]},"action":{"type":"speed","sec":15},"cooldownMs":10000},
-            {"event":"gift","match":{},"action":{"type":"grow","value":1,"per_coin":1}},
-            {"event":"subscribe","match":{},"action":{"type":"shrink","value":10}},
-            {"event":"like","match":{},"action":{"type":"add_apple","value":1,"per":200}},
-            {"event":"follow","match":{},"action":{"type":"grow","value":2}},
-            {"event":"share","match":{},"action":{"type":"gold_apple","value":1}}
-        ]),
-        "flappy_gifts" => json!([
-            {"event":"gift","match":{"names":["Rose"]},"action":{"type":"boost","value":1}},
-            {"event":"gift","match":{"names":["Finger Heart"]},"action":{"type":"boost","value":3}},
-            {"event":"gift","match":{"names":["TikTok"]},"action":{"type":"score","value":5}},
-            {"event":"gift","match":{"names":["Rosa"]},"action":{"type":"shield","sec":10}},
-            {"event":"gift","match":{"names":["Galaxy"]},"action":{"type":"storm","sec":12},"cooldownMs":8000},
-            {"event":"gift","match":{"names":["Lion"]},"action":{"type":"score","value":25},"cooldownMs":5000},
-            {"event":"gift","match":{},"action":{"type":"boost","value":1,"per_coin":1}},
-            {"event":"subscribe","match":{},"action":{"type":"shield","sec":20}},
-            {"event":"like","match":{},"action":{"type":"boost","value":1,"per":100}},
-            {"event":"follow","match":{},"action":{"type":"wide"}},
-            {"event":"share","match":{},"action":{"type":"shield","sec":15}}
-        ]),
-        "prism_break" => json!([
-            {"event":"gift","match":{"names":["Rose"]},"action":{"type":"score","value":1}},
-            {"event":"gift","match":{"names":["Finger Heart"]},"action":{"type":"add_ball","value":1}},
-            {"event":"gift","match":{"names":["TikTok"]},"action":{"type":"widen","sec":15}},
-            {"event":"gift","match":{"names":["Rosa"]},"action":{"type":"clear_row"}},
-            {"event":"gift","match":{"names":["Galaxy"]},"action":{"type":"add_ball","value":3},"cooldownMs":5000},
-            {"event":"gift","match":{"names":["Lion"]},"action":{"type":"clear_row"},"cooldownMs":8000},
-            {"event":"gift","match":{},"action":{"type":"score","value":1,"per_coin":1}},
-            {"event":"subscribe","match":{},"action":{"type":"add_ball","value":2}},
-            {"event":"like","match":{},"action":{"type":"score","value":1,"per":50}},
-            {"event":"comment","match":{"commands":["!ball"]},"action":{"type":"add_ball","value":1},"perUserCdMs":30000},
-            {"event":"follow","match":{},"action":{"type":"widen","sec":10}},
-            {"event":"share","match":{},"action":{"type":"speed","sec":10}}
-        ]),
-        // «Патрик, на капусту!» — единый словарь действий страницы:
-        // nudge (+0.5° лайк/«патрик»), small (+6°), mid (+18°),
-        // pet (+22° + щит), rotten (-35°), vacuum (сброс в 0°), mega (180°).
-        "patrick_cabbage" => json!([
-            {"event":"like","match":{},"action":{"type":"nudge","value":0.5,"per":1}},
-            {"event":"comment","match":{"contains":"патрик"},"action":{"type":"nudge","value":0.5},"cooldownMs":800},
-            {"event":"gift","match":{"names":["Rose"]},"action":{"type":"small","value":6}},
-            {"event":"gift","match":{"names":["Ice cream","Doughnut"]},"action":{"type":"mid","value":18}},
-            {"event":"gift","match":{"names":["Heart Me"]},"action":{"type":"pet","value":22,"sec":5}},
-            {"event":"gift","match":{"names":["Chili","Banana Peel"]},"action":{"type":"rotten","value":35},"cooldownMs":1200},
-            {"event":"gift","match":{"names":["Fan","Drums"]},"action":{"type":"vacuum"},"cooldownMs":3000},
-            {"event":"gift","match":{"names":["Galaxy","Crown"]},"action":{"type":"mega"},"cooldownMs":3000}
-        ]),
-        _ => json!([]),
-    };
     BuiltinGameCfg {
         enabled: true,
-        round_sec: match game_id {
-            // «Патрик» бесконечен — обида/победа зациклены до стопа.
-            "patrick_cabbage" => 0,
-            _ => 300,
-        },
+        round_sec: 300,
         volume: 0.7,
         antiflood: Default::default(),
-        rules,
+        rules: json!([]),
     }
 }
 
@@ -431,8 +270,8 @@ pub fn validate_cfg(v: &serde_json::Value) -> Result<(), String> {
     Ok(())
 }
 
-/// UI shape for the Games page: merged registry (compiled + packs)
-/// + session + per-game cfg.
+/// UI shape for the Games page + Library: merged registry of folder
+/// packs (local pages + remote links) + session + per-game cfg.
 pub fn catalog_view(
     settings: &mut SettingsStore,
     ent: &Entitlements,
@@ -447,12 +286,15 @@ pub fn catalog_view(
                 "id": g.id,
                 "title": g.title,
                 "desc": g.desc,
-                "allowed": allowed.iter().any(|a| a == &g.id),
-                "pack": g.pack,
+                "allowed": g.remote || allowed.iter().any(|a| a == &g.id),
+                "pack": !g.remote,
+                "remote": g.remote,
+                "user_pack": g.user,
+                "launch": g.launch,
                 "assets_base": g.assets_base,
                 "icon": g.icon.as_ref().map(|i| format!("{}/{}", g.assets_base.as_deref().unwrap_or(""), i)),
                 "cfg": cfg_for(settings, &g.id, data_dir),
-                "overlay_path": format!("/overlay/game/{}", g.id),
+                "overlay_path": (!g.remote).then(|| format!("/overlay/game/{}", g.id)),
             })
         })
         .collect();
@@ -490,16 +332,23 @@ mod tests {
         // appear, so assertions only cover the static allow-list logic.
         let empty = std::env::temp_dir().join(format!("chlg-ent-{}", std::process::id()));
         std::fs::create_dir_all(&empty).unwrap();
+        let bundled: Vec<String> = registry(&empty)
+            .into_iter()
+            .filter(|e| !e.user && !e.remote)
+            .map(|e| e.id)
+            .collect();
         let mut ent = Entitlements::default();
         ent.interactive_games = Some(vec!["gift_tower".into()]);
         let allowed = allowed_games(&ent, &empty);
         assert!(allowed.contains(&"gift_tower".to_string()));
         assert!(!allowed.contains(&"boy_vs_girl".to_string()));
         ent.interactive_games = None;
-        assert!(allowed_games(&ent, &empty).len() >= GAMES.len());
+        // None = «all bundled» + user/remote extras.
+        assert!(bundled.iter().all(|id| allowed_games(&ent, &empty).contains(id)));
         ent.interactive_games = Some(vec![]);
+        // Empty list still exempts remote/user entries; bundled vanish.
         let allowed = allowed_games(&ent, &empty);
-        assert!(!allowed.iter().any(|i| GAMES.iter().any(|g| g.id == i)));
+        assert!(!allowed.iter().any(|i| bundled.contains(i)));
         let _ = std::fs::remove_dir_all(&empty);
     }
 

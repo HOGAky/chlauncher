@@ -1,0 +1,21 @@
+{
+  "id": "prism_break",
+  "title": "Prism Break",
+  "desc": "Арканоид с призмами: зрители кидают мячи, расширяют платформу и сносят ряды.",
+  "round_sec": 300,
+  "volume": 0.7,
+  "rules": [
+    {"event":"gift","match":{"names":["Rose"]},"action":{"type":"score","value":1}},
+    {"event":"gift","match":{"names":["Finger Heart"]},"action":{"type":"add_ball","value":1}},
+    {"event":"gift","match":{"names":["TikTok"]},"action":{"type":"widen","sec":15}},
+    {"event":"gift","match":{"names":["Rosa"]},"action":{"type":"clear_row"}},
+    {"event":"gift","match":{"names":["Galaxy"]},"action":{"type":"add_ball","value":3},"cooldownMs":5000},
+    {"event":"gift","match":{"names":["Lion"]},"action":{"type":"clear_row"},"cooldownMs":8000},
+    {"event":"gift","match":{},"action":{"type":"score","value":1,"per_coin":1}},
+    {"event":"subscribe","match":{},"action":{"type":"add_ball","value":2}},
+    {"event":"like","match":{},"action":{"type":"score","value":1,"per":50}},
+    {"event":"comment","match":{"commands":["!ball"]},"action":{"type":"add_ball","value":1},"perUserCdMs":30000},
+    {"event":"follow","match":{},"action":{"type":"widen","sec":10}},
+    {"event":"share","match":{},"action":{"type":"speed","sec":10}}
+  ]
+}

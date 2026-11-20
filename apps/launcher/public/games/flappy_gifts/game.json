@@ -1,0 +1,20 @@
+{
+  "id": "flappy_gifts",
+  "title": "Flappy Gifts",
+  "desc": "Птица летит сама: подарки дают буст, щит от труб, очки и узкие штормовые трубы.",
+  "round_sec": 300,
+  "volume": 0.7,
+  "rules": [
+    {"event":"gift","match":{"names":["Rose"]},"action":{"type":"boost","value":1}},
+    {"event":"gift","match":{"names":["Finger Heart"]},"action":{"type":"boost","value":3}},
+    {"event":"gift","match":{"names":["TikTok"]},"action":{"type":"score","value":5}},
+    {"event":"gift","match":{"names":["Rosa"]},"action":{"type":"shield","sec":10}},
+    {"event":"gift","match":{"names":["Galaxy"]},"action":{"type":"storm","sec":12},"cooldownMs":8000},
+    {"event":"gift","match":{"names":["Lion"]},"action":{"type":"score","value":25},"cooldownMs":5000},
+    {"event":"gift","match":{},"action":{"type":"boost","value":1,"per_coin":1}},
+    {"event":"subscribe","match":{},"action":{"type":"shield","sec":20}},
+    {"event":"like","match":{},"action":{"type":"boost","value":1,"per":100}},
+    {"event":"follow","match":{},"action":{"type":"wide"}},
+    {"event":"share","match":{},"action":{"type":"shield","sec":15}}
+  ]
+}

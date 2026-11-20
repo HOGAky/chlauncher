@@ -5,10 +5,10 @@
  * always-on-top, chroma key).
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { Download, Play, RefreshCw, Square, Lock, Timer } from 'lucide-react';
+import { Download, Play, RefreshCw, Square, Lock, Timer, MonitorPlay, Globe } from 'lucide-react';
 import * as api from '../api';
 import { useApp } from '../App';
-import type { LibraryEntry, WindowOptions } from '../types';
+import type { BuiltinGameMeta, LibraryEntry, WindowOptions } from '../types';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -27,6 +27,9 @@ export default function LibraryPage() {
   const { subscription, boot } = useApp();
   const active = subscription?.status === 'active';
   const [games, setGames] = useState<LibraryEntry[]>([]);
+  // Folder-pack catalogue (bundled public/games + <app-data>/games):
+  // local overlay pages AND remote link-packs (e.g. the Roblox place).
+  const [packs, setPacks] = useState<BuiltinGameMeta[]>([]);
   const [busy, setBusy] = useState<Record<string, string>>({});
   const [opts, setOpts] = useState<WindowOptions>(
     boot?.window_options ?? { width: 540, height: 960, borderless: true, always_on_top: true, chroma_key: false }
@@ -35,6 +38,7 @@ export default function LibraryPage() {
 
   const refresh = useCallback(() => {
     api.listGames().then((r) => setGames(r.games)).catch((e) => setError(humanError(e)));
+    api.builtinGames().then((r) => setPacks(r.games)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -167,9 +171,79 @@ export default function LibraryPage() {
             </Button>
           </CardFooter>
         </Card>
-        {/* Roblox «Steal the Stream» — production launch for everyone;
-            developer mode adds the embedded Studio bridge controls. */}
-        <RobloxCard />
+        {/* Folder packs (public/games + <app-data>/games): «pack» cards
+            open a capture window, «remote» link-packs dispatch on
+            launch.kind — «roblox» renders the full Roblox card. */}
+        {packs.map((p) =>
+          p.remote ? (
+            p.launch?.kind === 'roblox' ? (
+              <RobloxCard key={p.id} />
+            ) : (
+              <Card key={p.id} className="overflow-hidden">
+                <div className="h-24 bg-gradient-to-br from-sky-500/30 to-indigo-500/30 flex items-end p-3">
+                  <span className="text-2xl font-black opacity-70">{p.title}</span>
+                </div>
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle>{p.title}</CardTitle>
+                    <Badge variant="outline">
+                      <Globe size={11} className="mr-1" /> Серверная
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">удалённый сервер · {p.launch?.kind}</p>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground line-clamp-2">{p.desc}</p>
+                </CardContent>
+              </Card>
+            )
+          ) : (
+            <Card key={p.id} className="overflow-hidden">
+              <div className="h-24 bg-gradient-to-br from-emerald-500/30 to-teal-500/30 flex items-end p-3">
+                <span className="text-2xl font-black opacity-70">{p.title}</span>
+              </div>
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <CardTitle>{p.title}</CardTitle>
+                  <div className="flex gap-1.5">
+                    <Badge variant="outline" title={p.assets_base ?? 'папка-пакет'}>
+                      {p.user_pack ? 'Своя папка' : 'Пакет'}
+                    </Badge>
+                    {!p.allowed && <Badge variant="destructive">Тариф</Badge>}
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">окно захвата · LIVE</p>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground line-clamp-2">{p.desc}</p>
+              </CardContent>
+              <CardFooter>
+                <Button
+                  size="sm"
+                  disabled={!!busy[p.id] || !p.allowed}
+                  onClick={act(p.id, 'open', async () => {
+                    await api.gameStart(p.id);
+                    await api.openOverlayWindow((p.overlay_path ?? '').replace(/^\//, ''), false);
+                  })}
+                >
+                  {p.allowed ? <Play size={14} /> : <Lock size={14} />} Играть
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={!!busy[p.id] || !p.allowed}
+                  title="Пурпурный фон — для chroma-key в LIVE Studio"
+                  onClick={act(p.id, 'open', async () => {
+                    await api.gameStart(p.id);
+                    await api.openOverlayWindow((p.overlay_path ?? '').replace(/^\//, ''), true);
+                  })}
+                >
+                  <MonitorPlay size={14} /> Chroma
+                </Button>
+              </CardFooter>
+            </Card>
+          )
+        )}
         {games.map((g) => {
           const isBusy = !!busy[g.slug];
           // §8.3: Free accounts play is_free titles; paid titles need an

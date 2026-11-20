@@ -35,6 +35,15 @@
 //! }
 //! ```
 //!
+//! Remote «link-packs» (`"type": "remote"`) ship NO page — the folder is
+//! a pointer to a published server; `launch.kind` picks the launcher
+//! flow (`"roblox"` → ticket + `roblox://` deep-link, bridge for Studio):
+//!
+//! ```json
+//! { "id": "roblox_sts", "type": "remote", "title": "Steal the Stream",
+//!   "launch": { "kind": "roblox", "place_id": null } }
+//! ```
+//!
 //! A folder WITHOUT `game.json` still registers when it holds a single
 //! `*.html` page (`overlay.html`/`index.html` preferred) — id and title
 //! fall back to the folder name. Packs whose `id` collides with a
@@ -49,6 +58,10 @@ use serde::Deserialize;
 /// Parsed `game.json` — every field optional; `None` = use defaults.
 #[derive(Debug, Clone, Default)]
 pub struct PackManifest {
+    /// `"pack"` (default) — a full local game (`overlay.html` + assets);
+    /// `"remote"` — a link-pack: the folder only POINTS to a published
+    /// server (e.g. the Roblox place), launch goes through `launch`.
+    pub pack_type: Option<String>,
     pub title: Option<String>,
     pub desc: Option<String>,
     /// Game page file relative to the pack dir (e.g. `overlay.html`).
@@ -62,6 +75,10 @@ pub struct PackManifest {
     /// TTS rule profile for `/tts/say` donor-name voice lines
     /// (e.g. `"patrick"`); game pages may also send `game` explicitly.
     pub tts: Option<String>,
+    /// Remote launch spec — e.g. `{"kind":"roblox","place_id":null}`.
+    /// `kind` dispatches to the matching launcher command (roblox →
+    /// ticket + `roblox://` deep-link flow, bridge for Studio dev).
+    pub launch: Option<serde_json::Value>,
     /// Default trigger rule table — feeds `BuiltinGameCfg.rules`.
     pub rules: Option<serde_json::Value>,
 }
@@ -69,6 +86,8 @@ pub struct PackManifest {
 #[derive(Debug, Deserialize, Default)]
 #[serde(default)]
 struct RawManifest {
+    #[serde(rename = "type")]
+    pack_type: Option<String>,
     title: Option<String>,
     desc: Option<String>,
     page: Option<String>,
@@ -77,6 +96,7 @@ struct RawManifest {
     round_sec: Option<u32>,
     volume: Option<f32>,
     tts: Option<String>,
+    launch: Option<serde_json::Value>,
     rules: Option<serde_json::Value>,
 }
 
@@ -132,6 +152,12 @@ impl GamePack {
     pub fn assets_base(&self) -> String {
         format!("/games-assets/{}", self.dir_name)
     }
+
+    /// `type: "remote"` link-pack — points at a published server,
+    /// launches via `launch.kind` instead of a capture window.
+    pub fn is_remote(&self) -> bool {
+        self.manifest.pack_type.as_deref() == Some("remote")
+    }
 }
 
 /// Valid pack dir names — same charset as `/games-assets` paths.
@@ -178,6 +204,7 @@ fn parse_manifest(text: &str) -> PackManifest {
             // `id` is read separately (it names the pack, not part of PackManifest).
             let raw: RawManifest = serde_json::from_value(v).unwrap_or_default();
             PackManifest {
+                pack_type: raw.pack_type,
                 title: raw.title.filter(|s| !s.trim().is_empty()),
                 desc: raw.desc.filter(|s| !s.trim().is_empty()),
                 page: raw.page,
@@ -187,6 +214,7 @@ fn parse_manifest(text: &str) -> PackManifest {
                 round_sec: raw.round_sec,
                 volume: raw.volume,
                 tts: raw.tts,
+                launch: raw.launch,
                 rules: raw.rules,
             }
         }

@@ -869,14 +869,21 @@ export interface BuiltinGameMeta {
   title: string;
   desc: string;
   allowed: boolean;
-  /** true — игра добавлена папкой-пакетом (games/<slug>/game.json). */
+  /** true — локальная игра-папка (games/<slug>/ с overlay.html). */
   pack?: boolean;
+  /** true — папка-ссылка на опубликованный сервер (нет overlay-страницы). */
+  remote?: boolean;
+  /** true — пользовательский drop-in из <app-data>/games (не bundled). */
+  user_pack?: boolean;
+  /** Спек запуска remote-игры — `{kind:'roblox', place_id?:string|null}`. */
+  launch?: { kind: string; place_id?: string | null } | null;
   /** База ассетов пакета (`/games-assets/<dir>`). */
   assets_base?: string;
   /** URL иконки карточки из манифеста пакета. */
   icon?: string;
   cfg: BuiltinGameCfg;
-  overlay_path: string;
+  /** null у remote-записей — страницы захвата у них нет. */
+  overlay_path: string | null;
 }
 
 export interface GameSessionInfo {

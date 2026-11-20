@@ -1,0 +1,11 @@
+{
+  "id": "roblox_sts",
+  "type": "remote",
+  "title": "Steal the Stream",
+  "desc": "Roblox-хаб: подарки и лайки зрителей саботируют стримера — воруют его ресурсы и спавнят хаос.",
+  "icon": "icon.svg",
+  "launch": {
+    "kind": "roblox",
+    "place_id": null
+  }
+}

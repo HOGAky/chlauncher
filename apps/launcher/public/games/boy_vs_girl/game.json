@@ -1,0 +1,18 @@
+{
+  "id": "boy_vs_girl",
+  "title": "Boy vs Girl",
+  "desc": "Команды !boy и !girl тянут шкалу перевеса подарками, лайками и !attack.",
+  "round_sec": 300,
+  "volume": 0.7,
+  "rules": [
+    {"event":"gift","match":{},"action":{"type":"add_score","per_coin":1}},
+    {"event":"gift","match":{"names":["Rose"]},"action":{"type":"add_score","value":1}},
+    {"event":"gift","match":{"names":["Galaxy"]},"action":{"type":"add_score","value":25,"fx":"hit"}},
+    {"event":"gift","match":{"names":["Lion"]},"action":{"type":"add_score","value":100,"fx":"big"}},
+    {"event":"like","match":{},"action":{"type":"add_score","per":10,"value":1}},
+    {"event":"follow","match":{},"action":{"type":"add_score","value":2}},
+    {"event":"share","match":{},"action":{"type":"add_score","value":5}},
+    {"event":"comment","match":{"commands":["!boy","!girl"]},"action":{"type":"join_team"}},
+    {"event":"comment","match":{"commands":["!attack"]},"action":{"type":"attack","value":5},"perUserCdMs":10000}
+  ]
+}

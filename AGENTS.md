@@ -123,27 +123,39 @@ share|subscribe`, поля `vip|fan_level|is_moderator|is_superfan|gift_id|coins
 
 ## Игровые пакеты (game_packs.rs)
 
-- Игра = самодостаточная папка `games/<slug>/`, лаунчер сканирует её сам
-  (без правок Rust/HTML): `public/games/` (встроенные, бандлятся в
-  `resources/games`) + `<app-data>/games/` (drop-in пользователя,
-  создаётся в `lib.rs::setup`). User-пакеты переопределяют bundled по id.
-- Минимум для регистрации: папка с `overlay.html` (или `index.html`, или
-  единственный `*.html`). Полный пакет: `game.json` (манифест) +
-  `overlay.html` + свободные ассеты (`sprites/`, `sfx/`, `skin.json`…).
-- Поля `game.json` (всё опционально): `id` (default: имя папки),
-  `title`, `desc`, `page`, `icon`, `window{w,h}` (default 420×640),
-  `round_sec`, `volume`, `tts` (имя правила для `/tts/say`), `rules`
-  (дефолтная таблица триггеров `BuiltinGameCfg.rules`).
+- Игра = папка `games/<slug>/`, лаунчер сканирует её сам (без правок
+  кода): `public/games/` (встроенные, бандлятся в `resources/games`) +
+  `<app-data>/games/` (drop-in пользователя, создаётся в `lib.rs::setup`).
+  User-пакеты переопределяют bundled по id. СТАТИЧЕСКОГО реестра больше
+  нет — `builtin_games::registry` = только папки (сортировка по title).
+- ДВА типа пакетов (`game.json.type`):
+  - `"pack"` (default) — полная локальная игра: `overlay.html` +
+    `game.json` + свободные ассеты (`sprites/`, `sfx/`, `skin.json`…).
+    Без `game.json` регистрируется по одному `*.html` (id = имя папки).
+  - `"remote"` — папка-ССЫЛКА на опубликованный сервер: `game.json` без
+    страницы, `launch:{"kind":"roblox","place_id":null}` диспетчерит
+    запуск (roblox → существующий ticket + `roblox://` deep-link, мост
+    `roblox_bridge.rs` для Studio dev). Пример — bundled
+    `public/games/roblox_sts/`.
+- Поля `game.json` (всё опционально): `id`, `type`, `title`, `desc`,
+  `page`, `icon`, `window{w,h}` (default 420×640), `round_sec`, `volume`,
+  `tts` (правило `/tts/say`), `launch{}`, `rules` (дефолтная таблица
+  `BuiltinGameCfg.rules`).
 - Пайплайн: `game_packs::scan/find` → `builtin_games::registry/exists/
-  allowed_games/default_cfg` (манифест overrides static GAMES по id;
-  user-пакеты обходят allow-list плана, bundled — нет) →
-  `/overlay/game/{id}` (disk-страница, static-роуты для compiled-игр
-  имеют приоритет) → ассеты `/games-assets/<dir>/...` (user → bundled)
-  → окно `open_overlay_window` (вайтлист = registry, размер из
-  `window{}` манифеста).
+  allowed_games/default_cfg` → `/overlay/game/{id}` (disk-страница;
+  remote 404 естественно) → ассеты `/games-assets/<dir>/...` (user →
+  bundled) → окно `open_overlay_window` (вайтлист = registry, размер из
+  `window{}`). `game_start` для remote → `REMOTE_GAME`.
+- Allow-list: user-пакеты и remote-записи обходят `interactive_games`
+  (user — локальное дополнение, remote гейтится серверным ticket);
+  bundled pack-игры гейтятся как раньше.
 - Общий рантайм для страниц пакетов: `/gamekit.js` (WS-клиент + engine
   rules), `/games/cfg/{id}`, `/games/state.json`, `POST /games/report`,
   `POST /tts/say` — всё token-guarded через `?t=` из URL страницы.
+- Каталог во фронте: `api.builtinGames()` → карточки на «Игры LIVE»
+  (только pack, сессии+правила) и в «Библиотеке» (pack → capture-кнопки,
+  `remote+launch.kind==="roblox"` → `RobloxCard`, прочий remote →
+  generic-карточка «Серверная»).
 - Голосовые модели тоже drop-in: Piper `<app-data>/piper/voices/*.onnx`
   (+`*.onnx.json`), RVC `tools/rvc-server/models/<name>/*.pth` — обе
   сканируются по папкам без регистрации в коде.
@@ -151,13 +163,10 @@ share|subscribe`, поля `vip|fan_level|is_moderator|is_superfan|gift_id|coins
 ## Игра «Патрик, на капусту!» (patrick_cabbage)
 
 - Пакет: `public/games/patrick/` — `game.json` (id=`patrick_cabbage`,
-  окно 405×720, rules-таблица), `skin.json`, `sprites/`, `sfx/`.
-- Страница: `src-tauri/overlay/patrick_cabbage.html` (9:16, 1080×1920
-  letterbox) — compiled-страница, роут `/overlay/game/patrick_cabbage`
-  статический и побеждает pack-роут.
-- Метаданные/дефолтные правила — `public/games/patrick/game.json`
-  (переопределяет static-строку `builtin_games.rs::GAMES`; compiled
-  rules в `default_cfg_static` — fallback при потере папки). Действия
+  окно 405×720, rules-таблица), `overlay.html` (9:16, 1080×1920
+  letterbox, роут `/overlay/game/patrick_cabbage` → динамический),
+  `skin.json`, `sprites/`, `sfx/`.
+- Действия
   страницы: `nudge|small|mid|pet|rotten|vacuum|mega`. `match.contains`
   (подстрока в тексте, массив или строка) добавлен в
   `gamekit.js::Engine._match` — триггер «патрик» в чате.

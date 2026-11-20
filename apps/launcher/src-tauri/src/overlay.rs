@@ -382,35 +382,9 @@ pub async fn start_overlay_server(
         .route("/overlay/timer", get(page_route(TIMER_HTML)))
         .route("/overlay/queue", get(page_route(QUEUE_HTML)))
         .route("/overlay/hype", get(page_route(HYPE_HTML)))
-        // Built-in interactive games — one token-guarded page per id.
-        .route("/overlay/game/gift_tower", get(page_route(GIFT_TOWER_HTML)))
-        .route(
-            "/overlay/game/boy_vs_girl",
-            get(page_route(BOY_VS_GIRL_HTML)),
-        )
-        .route(
-            "/overlay/game/survive_horde",
-            get(page_route(SURVIVE_HORDE_HTML)),
-        )
-        .route(
-            "/overlay/game/snake_gifts",
-            get(page_route(SNAKE_GIFTS_HTML)),
-        )
-        .route(
-            "/overlay/game/flappy_gifts",
-            get(page_route(FLAPPY_GIFTS_HTML)),
-        )
-        .route(
-            "/overlay/game/prism_break",
-            get(page_route(PRISM_BREAK_HTML)),
-        )
-        .route(
-            "/overlay/game/patrick_cabbage",
-            get(page_route(PATRICK_CABBAGE_HTML)),
-        )
-        // Folder-pack games — any `games/<slug>/overlay.html` (bundled or
-        // `<app-data>/games`) resolves here; static routes above win on
-        // exact matches for compiled-in pages.
+        // Interactive games — every `games/<slug>/overlay.html` (bundled
+        // `public/games` or `<app-data>/games` drop-in) resolves here;
+        // remote link-packs have no page and 404 naturally.
         .route("/overlay/game/{id}", get(serve_pack_game))
         .route("/games-assets/{*path}", get(serve_game_asset))
         .route("/tts/say", post(tts_say))
@@ -1215,13 +1189,6 @@ const QUEUE_HTML: &str = include_str!("../overlay/queue.html");
 const HYPE_HTML: &str = include_str!("../overlay/hype.html");
 const SPINNER_HTML: &str = include_str!("../overlay/spinner.html");
 const TTS_HTML: &str = include_str!("../overlay/tts.html");
-const GIFT_TOWER_HTML: &str = include_str!("../overlay/gift_tower.html");
-const BOY_VS_GIRL_HTML: &str = include_str!("../overlay/boy_vs_girl.html");
-const SURVIVE_HORDE_HTML: &str = include_str!("../overlay/survive_horde.html");
-const SNAKE_GIFTS_HTML: &str = include_str!("../overlay/snake_gifts.html");
-const FLAPPY_GIFTS_HTML: &str = include_str!("../overlay/flappy_gifts.html");
-const PRISM_BREAK_HTML: &str = include_str!("../overlay/prism_break.html");
-const PATRICK_CABBAGE_HTML: &str = include_str!("../overlay/patrick_cabbage.html");
 const GAMEKIT_JS: &str = include_str!("../overlay/gamekit.js");
 
 #[cfg(test)]

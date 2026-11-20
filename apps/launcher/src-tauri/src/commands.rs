@@ -673,6 +673,14 @@ pub async fn game_start(game_id: String, state: State<'_, AppState>) -> Result<V
     if !crate::builtin_games::exists(&game_id, &state.data_dir) {
         return Err("UNKNOWN_GAME".into());
     }
+    // Remote link-packs (e.g. the published Roblox place) have no overlay
+    // page — they launch through their own command path (ticket/deep-link).
+    if crate::game_packs::find(&game_id, &state.data_dir)
+        .map(|p| p.is_remote())
+        .unwrap_or(false)
+    {
+        return Err("REMOTE_GAME".into());
+    }
     let ent = state.usage.entitlements().await;
     let allowed = crate::builtin_games::allowed_games(&ent, &state.data_dir);
     if !allowed.contains(&game_id) {
