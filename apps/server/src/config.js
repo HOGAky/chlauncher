@@ -189,6 +189,13 @@ export function loadConfig(env = process.env) {
     tiktokClientKey: env.TIKTOK_CLIENT_KEY || '',
     tiktokClientSecret: env.TIKTOK_CLIENT_SECRET || '',
     tiktokRedirectUri: env.TIKTOK_REDIRECT_URI || '',
+    /**
+     * Official Roblox place id of the published «Steal the Stream»
+     * experience — advertised to launchers in /api/stream responses so
+     * «Играть» needs no manual Place ID once the game is published.
+     * A streamer-entered id in launcher settings still overrides it.
+     */
+    robloxPlaceId: (env.ROBLOX_PLACE_ID || '').replace(/\D/g, ''),
   };
 }
 

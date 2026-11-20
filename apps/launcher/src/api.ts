@@ -193,6 +193,14 @@ export const tiktokDisconnect = () => cmd<void>('tiktok_disconnect');
 export const setTiktokSession = (session: string | null) =>
   cmd<void>('set_tiktok_session', { session });
 
+/** Toggles restoring the saved TikTok room connection on launcher start. */
+export const setTiktokAutoconnect = (enabled: boolean) =>
+  cmd<void>('set_tiktok_autoconnect', { enabled });
+
+/** Fires when Rust adopted a verified TikTok handle into the room field. */
+export const onTiktokUsernameChanged = (cb: (username: string) => void) =>
+  listen<{ username: string }>('tiktok-username-changed', (e) => cb(e.payload.username));
+
 /** Opens the in-app TikTok login window; sessionid auto-captured. */
 export const openTiktokLogin = () => cmd<void>('open_tiktok_login');
 

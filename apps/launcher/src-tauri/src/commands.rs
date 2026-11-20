@@ -172,6 +172,7 @@ pub async fn get_bootstrap(state: State<'_, AppState>) -> Result<Value, String> 
         "window_options": settings.window_options,
         "tiktok_username": settings.tiktok_username,
         "has_tiktok_session": settings.tiktok_session.is_some(),
+        "tiktok_autoconnect": settings.tiktok_autoconnect.unwrap_or(true),
         "integrations": state.integrations.snapshot().await,
         "running": state.processes.running_slugs(),
         "overlay_url": state.overlay_port.lock().await.map(|p| {
@@ -205,6 +206,7 @@ pub async fn get_bootstrap(state: State<'_, AppState>) -> Result<Value, String> 
             "stream_key": settings.forward.stream_key,
             "has_admin_secret": settings.forward.relay_admin_secret.is_some(),
             "roblox_place_id": settings.forward.roblox_place_id,
+            "official_place_id": official_place_id(),
             "status": state.forwarder.snapshot().await,
         },
     }))
@@ -502,6 +504,15 @@ pub async fn pair_login_status(
             let _ = s.save();
             drop(s);
             let _ = app.emit("tiktok-session-captured", true);
+            // Same automation as the embedded login window: a fresh session
+            // retries an in-flight or WAF-blocked connect by itself.
+            let st = state.integrations.tiktok_status.lock().await.clone();
+            if matches!(st, IntegrationStatus::Connecting | IntegrationStatus::Error(_)) {
+                if let Some(u) = state.integrations.tiktok_username.lock().await.clone() {
+                    let bs = sidecar_bootstrap(&state.settings, &state.api.base()).await;
+                    let _ = state.integrations.tiktok_connect(u, bs).await;
+                }
+            }
             return Ok(res);
         }
         let _ = s.save();
@@ -650,6 +661,7 @@ pub async fn builtin_games(state: State<'_, AppState>) -> Result<Value, String> 
         &mut s,
         &ent,
         &state.games,
+        &state.data_dir,
     ))
 }
 
@@ -658,12 +670,12 @@ pub async fn builtin_games(state: State<'_, AppState>) -> Result<Value, String> 
 /// see spec §12.2).
 #[tauri::command]
 pub async fn game_start(game_id: String, state: State<'_, AppState>) -> Result<Value, String> {
-    if crate::builtin_games::find(&game_id).is_none() {
+    if !crate::builtin_games::exists(&game_id, &state.data_dir) {
         return Err("UNKNOWN_GAME".into());
     }
     let ent = state.usage.entitlements().await;
-    let allowed = crate::builtin_games::allowed_games(&ent);
-    if !allowed.contains(&game_id.as_str()) {
+    let allowed = crate::builtin_games::allowed_games(&ent, &state.data_dir);
+    if !allowed.contains(&game_id) {
         return Err("SUBSCRIPTION_REQUIRED".into());
     }
     // Only one capture window per stream — starting a second game
@@ -690,11 +702,11 @@ pub async fn game_stop(state: State<'_, AppState>) -> Result<Value, String> {
 /// Reads the per-game cfg blob (seeded with defaults on first call).
 #[tauri::command]
 pub async fn game_cfg(game_id: String, state: State<'_, AppState>) -> Result<Value, String> {
-    if crate::builtin_games::find(&game_id).is_none() {
+    if !crate::builtin_games::exists(&game_id, &state.data_dir) {
         return Err("UNKNOWN_GAME".into());
     }
     let mut s = state.settings.lock().await;
-    Ok(json!({ "cfg": crate::builtin_games::cfg_for(&mut s, &game_id) }))
+    Ok(json!({ "cfg": crate::builtin_games::cfg_for(&mut s, &game_id, &state.data_dir) }))
 }
 
 /// Saves a streamer-edited cfg (rules table, round length, antiflood).
@@ -704,7 +716,7 @@ pub async fn game_set_cfg(
     cfg: Value,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
-    if crate::builtin_games::find(&game_id).is_none() {
+    if !crate::builtin_games::exists(&game_id, &state.data_dir) {
         return Err("UNKNOWN_GAME".into());
     }
     crate::builtin_games::validate_cfg(&cfg)?;
@@ -997,25 +1009,59 @@ pub async fn kill_game(slug: String, state: State<'_, AppState>) -> Result<(), S
 // Integrations
 // ---------------------------------------------------------------------------
 
-/// Connect TikTok Live presence polling for `username`.
-#[tauri::command]
-pub async fn tiktok_connect(username: String, state: State<'_, AppState>) -> Result<(), String> {
-    // When signed in, hand the sidecar our sign-proxy URL + JWT over
-    // stdin: the backend injects the paid EulerStream key there, so it
-    // never ships inside the client. Signed-out users get the free tier.
+/// Accepts a bare handle (`user`/`@user`) or a pasted TikTok LIVE URL
+/// (`tiktok.com/@user/live`, `live.tiktok.com/@user`, `vm.tiktok.com/…`
+/// won't resolve — those are share tokens) and returns the handle.
+/// Lets the streamer paste the room link straight into the connect field.
+pub(crate) fn parse_tiktok_handle(input: &str) -> String {
+    let s = input.trim();
+    let s = if s.contains("tiktok.com") {
+        let after = s.split("tiktok.com").nth(1).unwrap_or("");
+        let after = after.trim_start_matches('/');
+        after.strip_prefix('@').unwrap_or(after)
+    } else {
+        s.trim_start_matches('@')
+    };
+    s.split(|c| matches!(c, '/' | '?' | '#' | '&'))
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_string()
+}
+
+/// Builds the launcher→sidecar stdin bootstrap from current settings:
+/// sign-proxy URL + JWT when signed in (the backend injects the paid
+/// EulerStream key — it never ships inside the client), plus the captured
+/// `sessionid` for the authenticated WebSocket. Shared by `tiktok_connect`,
+/// the startup auto-connect and the post-login-window auto-reconnect.
+pub(crate) async fn sidecar_bootstrap(
+    settings: &Arc<Mutex<SettingsStore>>,
+    api_base: &str,
+) -> Option<crate::integrations::SidecarBootstrap> {
     let (auth_token, session) = {
-        let s = state.settings.lock().await;
+        let s = settings.lock().await;
         (s.data.auth_token.clone(), s.data.tiktok_session.clone())
     };
-    let bootstrap = (auth_token.is_some() || session.is_some()).then(|| {
+    (auth_token.is_some() || session.is_some()).then(|| {
         crate::integrations::SidecarBootstrap {
             sign_url: auth_token
                 .as_ref()
-                .map(|_| format!("{}/api/tiktok-sign", state.api.base())),
+                .map(|_| format!("{api_base}/api/tiktok-sign")),
             token: auth_token,
             session,
         }
-    });
+    })
+}
+
+/// Connect TikTok Live presence polling for `username` (a handle or a
+/// pasted live-room URL — `parse_tiktok_handle` normalizes both).
+#[tauri::command]
+pub async fn tiktok_connect(username: String, state: State<'_, AppState>) -> Result<(), String> {
+    let username = parse_tiktok_handle(&username);
+    if username.is_empty() {
+        return Err("не удалось разобрать ник — вставьте @username или ссылку на эфир".into());
+    }
+    let bootstrap = sidecar_bootstrap(&state.settings, &state.api.base()).await;
     state
         .integrations
         .tiktok_connect(username.clone(), bootstrap)
@@ -1038,6 +1084,18 @@ pub async fn set_tiktok_session(
     s.data.tiktok_session = session
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty());
+    s.save().map_err(|e| e.to_string())
+}
+
+/// Toggles the startup auto-connect to the saved TikTok room. Stored as
+/// `Some(bool)` — `None` (older settings files) means enabled.
+#[tauri::command]
+pub async fn set_tiktok_autoconnect(
+    enabled: bool,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let mut s = state.settings.lock().await;
+    s.data.tiktok_autoconnect = Some(enabled);
     s.save().map_err(|e| e.to_string())
 }
 
@@ -1065,6 +1123,8 @@ pub async fn open_tiktok_login(app: AppHandle, state: State<'_, AppState>) -> Re
     let app2 = app.clone();
     let settings = state.settings.clone();
     let api = state.api.clone();
+    let api_base = state.api.base();
+    let integrations = state.integrations.clone();
     let hwid = state.hwid.clone();
     tauri::async_runtime::spawn(async move {
         for _ in 0..300 {
@@ -1110,6 +1170,9 @@ pub async fn open_tiktok_login(app: AppHandle, state: State<'_, AppState>) -> Re
             }
             // Best-effort identity step: the verified cookie doubles as a
             // login (no session → JWT issued) or a verified TikTok bind.
+            // Both responses carry the verified `tiktok.username` — the
+            // room handle is adopted from it below.
+            let mut verified_username: Option<String> = None;
             if let Ok(res) = api
                 .tiktok_session_login(
                     &sid_val,
@@ -1119,6 +1182,11 @@ pub async fn open_tiktok_login(app: AppHandle, state: State<'_, AppState>) -> Re
                 )
                 .await
             {
+                verified_username = res
+                    .pointer("/tiktok/username")
+                    .and_then(|u| u.as_str())
+                    .map(String::from)
+                    .filter(|u| !u.is_empty());
                 match res.get("status").and_then(|s| s.as_str()) {
                     Some("ready") => {
                         {
@@ -1137,14 +1205,50 @@ pub async fn open_tiktok_login(app: AppHandle, state: State<'_, AppState>) -> Re
                         let _ = app2.emit("auth-changed", true);
                     }
                     Some("bound") => {
-                        let username = res
-                            .pointer("/tiktok/username")
-                            .and_then(|u| u.as_str())
-                            .unwrap_or("")
-                            .to_string();
+                        let username = verified_username.clone().unwrap_or_default();
                         let _ = app2.emit("tiktok-bind-verified", json!({ "username": username }));
                     }
                     _ => {}
+                }
+            }
+
+            // --- stream automation ------------------------------------
+            // The session the streamer just logged in with is exactly
+            // what a DEVICE_BLOCKED retry (or a first-time setup) was
+            // waiting for: adopt the verified handle into the room field
+            // when it's unset, and (re)connect with the fresh bootstrap —
+            // no manual «Обновить связь» needed.
+            let status_now = integrations.tiktok_status.lock().await.clone();
+            if let Some(u) = &verified_username {
+                {
+                    let mut s = settings.lock().await;
+                    if s.data.tiktok_username.is_none() {
+                        s.data.tiktok_username = Some(u.clone());
+                        let _ = s.save();
+                    }
+                }
+                let _ = app2.emit("tiktok-username-changed", json!({ "username": u }));
+            }
+            let retrying = matches!(
+                status_now,
+                IntegrationStatus::Connecting | IntegrationStatus::Error(_)
+            );
+            let target = verified_username
+                .filter(|_| {
+                    !matches!(
+                        status_now,
+                        IntegrationStatus::Live | IntegrationStatus::Connected
+                    )
+                })
+                .or(if retrying {
+                    integrations.tiktok_username.lock().await.clone()
+                } else {
+                    None
+                });
+            if let Some(u) = target {
+                let bs = sidecar_bootstrap(&settings, &api_base).await;
+                if let Err(e) = integrations.tiktok_connect(u, bs).await {
+                    tracing::warn!(error = %e, "tiktok auto-connect after session capture failed");
                 }
             }
             return;
@@ -2095,7 +2199,9 @@ pub async fn rotate_overlay_token(state: State<'_, AppState>) -> Result<(), Stri
 
 /// Overlay pages that may be hosted in a capture window — kept in sync
 /// with the routes in `overlay.rs`. Whitelisting prevents the command
-/// from opening arbitrary local URLs in a privileged webview.
+/// from opening arbitrary local URLs in a privileged webview. Game
+/// pages (`overlay/game/<id>`) are resolved dynamically against the
+/// game registry — a folder pack is whitelisted the moment it exists.
 const OVERLAY_WINDOW_PAGES: &[&str] = &[
     "overlay",
     "overlay/alerts",
@@ -2106,10 +2212,20 @@ const OVERLAY_WINDOW_PAGES: &[&str] = &[
     "overlay/leaderboard",
     "overlay/goals",
     "overlay/timer",
-    "overlay/game/gift_tower",
-    "overlay/game/boy_vs_girl",
-    "overlay/game/survive_horde",
 ];
+
+/// Capture-window whitelist: the static pages above plus any
+/// `overlay/game/<id>` known to the merged registry (compiled-in or
+/// folder pack).
+fn overlay_page_known(page: &str, data_dir: &std::path::Path) -> bool {
+    if OVERLAY_WINDOW_PAGES.contains(&page) {
+        return true;
+    }
+    match page.strip_prefix("overlay/game/") {
+        Some(id) => crate::builtin_games::exists(id, data_dir),
+        None => false,
+    }
+}
 
 /// Opens (or focuses) a transparent always-on-top window hosting one of
 /// the local overlay pages. TikTok LIVE Studio has no Browser Source —
@@ -2123,7 +2239,7 @@ pub async fn open_overlay_window(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    if !OVERLAY_WINDOW_PAGES.contains(&page.as_str()) {
+    if !overlay_page_known(&page, &state.data_dir) {
         return Err("UNKNOWN_OVERLAY_PAGE".into());
     }
     let port = (*state.overlay_port.lock().await)
@@ -2143,7 +2259,9 @@ pub async fn open_overlay_window(
     // games (allow-list smaller than the catalogue) gets `wm=1`.
     if page.starts_with("overlay/game/") {
         let ent = state.usage.entitlements().await;
-        if crate::builtin_games::allowed_games(&ent).len() < crate::builtin_games::GAMES.len() {
+        if crate::builtin_games::allowed_games(&ent, &state.data_dir).len()
+            < crate::builtin_games::registry(&state.data_dir).len()
+        {
             url.push_str("&wm=1");
         }
     }
@@ -2168,10 +2286,17 @@ pub async fn open_overlay_window(
         "fetch('/overlay-close?page='+encodeURIComponent(location.pathname.slice(1))+'&t='+t);",
         "}});"
     );
+    // Game pages declare their capture size in `game.json`
+    // (`window.w`/`window.h`, e.g. Патрик 405×720 9:16); the compiled
+    // default is 420×640.
+    let (win_w, win_h) = page
+        .strip_prefix("overlay/game/")
+        .map(|id| crate::game_packs::window_size(id, &state.data_dir))
+        .unwrap_or((420.0, 640.0));
     tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::External(url))
         .initialization_script(ESC_CLOSE)
         .title(format!("chlauncher — {page}"))
-        .inner_size(420.0, 640.0)
+        .inner_size(win_w, win_h)
         .resizable(true)
         .decorations(false)
         .transparent(!chroma)
@@ -2186,7 +2311,11 @@ pub async fn open_overlay_window(
 /// Closes a capture window previously opened by `open_overlay_window`.
 #[tauri::command]
 pub async fn close_overlay_window(page: String, app: AppHandle) -> Result<(), String> {
-    if !OVERLAY_WINDOW_PAGES.contains(&page.as_str()) {
+    // Closing is harmless for unknown pages (the label simply won't
+    // exist) — allow any `overlay/game/<id>` without a registry lookup
+    // so pack windows stay closable even if the folder is removed
+    // mid-session.
+    if !OVERLAY_WINDOW_PAGES.contains(&page.as_str()) && !page.starts_with("overlay/game/") {
         return Err("UNKNOWN_OVERLAY_PAGE".into());
     }
     let label = format!("overlay-{}", page.replace('/', "-"));
@@ -2803,22 +2932,41 @@ fn encode_launch_data(json: &str) -> String {
         .collect()
 }
 
+/// Fallback for the official «Steal the Stream» place id
+/// (`CHLAUNCHER_ROBLOX_PLACE_ID`, compile- or run-time env). The
+/// server-advertised id (`ROBLOX_PLACE_ID` on the backend, rides in the
+/// ticket response) is preferred — this exists for dev builds and
+/// unreachable servers. Digits only; unset → `None`.
+fn official_place_id() -> Option<String> {
+    option_env!("CHLAUNCHER_ROBLOX_PLACE_ID")
+        .map(String::from)
+        .or_else(|| std::env::var("CHLAUNCHER_ROBLOX_PLACE_ID").ok())
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty() && v.chars().all(|c| c.is_ascii_digit()))
+}
+
 /// Launches the Roblox client straight into the configured experience via
 /// the `roblox://` deep link. While logged in a one-time launch ticket is
 /// fetched from the server and carried in `launchData` — the game redeems
 /// it for a room credential, so the streamer never types the stream key.
 /// Without a session the plain link is opened (manual `!key` fallback).
+///
+/// Place resolution: a streamer-entered custom id wins (dev/alternate
+/// places) → the server-advertised official place → `official_place_id()`.
 #[tauri::command]
 pub async fn roblox_launch(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let (place_id, token) = {
+    let (custom_place, token) = {
         let s = state.settings.lock().await;
-        (s.data.forward.roblox_place_id.clone(), s.data.auth_token.clone())
+        (
+            s.data.forward.roblox_place_id.clone(),
+            s.data.auth_token.clone(),
+        )
     };
-    let place_id = place_id.ok_or("Укажите Place ID игры")?;
-    let mut url = format!("roblox://experiences/start?placeId={place_id}");
+    let mut server_place: Option<String> = None;
+    let mut url = String::new();
     if let Some(t) = token {
         let v = state
             .api
@@ -2827,9 +2975,18 @@ pub async fn roblox_launch(
             .map_err(|e| e.to_client_string())?;
         if let Some(ticket) = v["ticket"].as_str() {
             let ld = encode_launch_data(&json!({ "t": ticket }).to_string());
-            url.push_str(&format!("&launchData={ld}"));
+            url = format!("&launchData={ld}");
         }
+        server_place = v["place_id"]
+            .as_str()
+            .map(String::from)
+            .filter(|s| !s.is_empty());
     }
+    let place_id = custom_place
+        .or(server_place)
+        .or_else(official_place_id)
+        .ok_or("Place ID игры не задан — впишите свой или обновите лаунчер")?;
+    url = format!("roblox://experiences/start?placeId={place_id}{url}");
     use tauri_plugin_opener::OpenerExt;
     app.opener()
         .open_url(url, None::<&str>)
@@ -3009,6 +3166,8 @@ pub async fn roblox_dev_play(
         roblox_bridge_set(true, None, state.clone()).await?;
     }
     ensure_sts_profile(&state).await?;
+    // Studio/dev path: an empty field intentionally means "test in
+    // Studio" — no client launch, no official-place fallback here.
     if let Some(place_id) = state
         .settings
         .lock()

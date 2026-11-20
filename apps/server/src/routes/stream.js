@@ -33,6 +33,7 @@
 
 import crypto from 'node:crypto';
 import rateLimit from '@fastify/rate-limit';
+import { config } from '../config.js';
 import { nowIso } from '../db.js';
 import {
   hasActiveSubscription,
@@ -236,7 +237,13 @@ export default async function streamRoutes(app, { db, authenticate }) {
       new Date(Date.now() + TICKET_TTL_MS).toISOString(),
       nowIso()
     );
-    return { ticket, expires_in_ms: TICKET_TTL_MS };
+    return {
+      ticket,
+      expires_in_ms: TICKET_TTL_MS,
+      // Official published place — the launcher uses it unless the
+      // streamer entered a custom id (dev/alternate place).
+      place_id: config.robloxPlaceId || null,
+    };
   });
 
   /** GET /api/stream/status — snapshot for the launcher card. */
@@ -267,6 +274,7 @@ export default async function streamRoutes(app, { db, authenticate }) {
           }
         : null,
       queued_events: queued,
+      place_id: config.robloxPlaceId || null,
       subscription: subscriptionView(
         refreshSubscription(db, request.auth.userId)
       ),

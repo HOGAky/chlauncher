@@ -96,6 +96,82 @@ share|subscribe`, поля `vip|fan_level|is_moderator|is_superfan|gift_id|coins
 
 - Авторизованный WS (sessionid) требует env WHITELIST_AUTHENTICATED_SESSION_ID_HOST = хост активного SignConfig.basePath — сайдкар выставляет её сам (index.js); при любой ошибке session-auth сайдкар сбрасывает сессию и работает анонимно (не уходит в вечный retry).
 
+## Автоконнект эфира
+
+- `settings.tiktok_autoconnect` (Option, None=on) → при старте (lib.rs
+  setup, задержка 3с) восстанавливается комната `tiktok_username`.
+- `commands::sidecar_bootstrap()` — общий билдер stdin-конфига сайдкара
+  (sign_url+JWT+session); используют `tiktok_connect`, старт-автоконнект и
+  пост-захват реконнект. Поле ника принимает и URL эфира
+  (`parse_tiktok_handle`: `tiktok.com/@user/live` → `user`).
+- `open_tiktok_login` после захвата sessionid: ник из ответа сервера
+  (`tiktok.username`, оба пути `ready`/`bound`) подставляется в
+  `tiktok_username` если пусто → эмит `tiktok-username-changed`; коннект
+  сам перезапускается (status Connecting/Error → retry той же комнаты,
+  verified-ник → коннект если не Live/Connected).
+- UI: тумблер автоподключения + CTA «Войти в TikTok и переподключить»
+  на WAF/DEVICE_BLOCKED-сообщениях (IntegrationsPage); `expectConnect`
+  — коннект из UI, если комната была Disconnected.
+- Перепроверка при старте: после автоконнекта статус перечитывается
+  каждые 10с до ~60с, до 3 попыток (Error/Disconnected → реконнект,
+  зависший Connecting → респавн = новый ролл ноды + fetchIsLive).
+- Перепроверка онлайна в сайдкаре: `fetchIsLive()` раз в 60с при живом
+  сокете (ловит эфир, завершённый без streamEnd); ping несёт `connected`
+  (isConnected сокета) — лаунчер понижает Live→Connecting при мёртвом
+  сокете. Таймеры сайдкара НЕ unref — stdin EOF после bootstrap-строки,
+  иначе процесс умирал между ретраями wait-for-live.
+
+## Игровые пакеты (game_packs.rs)
+
+- Игра = самодостаточная папка `games/<slug>/`, лаунчер сканирует её сам
+  (без правок Rust/HTML): `public/games/` (встроенные, бандлятся в
+  `resources/games`) + `<app-data>/games/` (drop-in пользователя,
+  создаётся в `lib.rs::setup`). User-пакеты переопределяют bundled по id.
+- Минимум для регистрации: папка с `overlay.html` (или `index.html`, или
+  единственный `*.html`). Полный пакет: `game.json` (манифест) +
+  `overlay.html` + свободные ассеты (`sprites/`, `sfx/`, `skin.json`…).
+- Поля `game.json` (всё опционально): `id` (default: имя папки),
+  `title`, `desc`, `page`, `icon`, `window{w,h}` (default 420×640),
+  `round_sec`, `volume`, `tts` (имя правила для `/tts/say`), `rules`
+  (дефолтная таблица триггеров `BuiltinGameCfg.rules`).
+- Пайплайн: `game_packs::scan/find` → `builtin_games::registry/exists/
+  allowed_games/default_cfg` (манифест overrides static GAMES по id;
+  user-пакеты обходят allow-list плана, bundled — нет) →
+  `/overlay/game/{id}` (disk-страница, static-роуты для compiled-игр
+  имеют приоритет) → ассеты `/games-assets/<dir>/...` (user → bundled)
+  → окно `open_overlay_window` (вайтлист = registry, размер из
+  `window{}` манифеста).
+- Общий рантайм для страниц пакетов: `/gamekit.js` (WS-клиент + engine
+  rules), `/games/cfg/{id}`, `/games/state.json`, `POST /games/report`,
+  `POST /tts/say` — всё token-guarded через `?t=` из URL страницы.
+- Голосовые модели тоже drop-in: Piper `<app-data>/piper/voices/*.onnx`
+  (+`*.onnx.json`), RVC `tools/rvc-server/models/<name>/*.pth` — обе
+  сканируются по папкам без регистрации в коде.
+
+## Игра «Патрик, на капусту!» (patrick_cabbage)
+
+- Пакет: `public/games/patrick/` — `game.json` (id=`patrick_cabbage`,
+  окно 405×720, rules-таблица), `skin.json`, `sprites/`, `sfx/`.
+- Страница: `src-tauri/overlay/patrick_cabbage.html` (9:16, 1080×1920
+  letterbox) — compiled-страница, роут `/overlay/game/patrick_cabbage`
+  статический и побеждает pack-роут.
+- Метаданные/дефолтные правила — `public/games/patrick/game.json`
+  (переопределяет static-строку `builtin_games.rs::GAMES`; compiled
+  rules в `default_cfg_static` — fallback при потере папки). Действия
+  страницы: `nudge|small|mid|pet|rotten|vacuum|mega`. `match.contains`
+  (подстрока в тексте, массив или строка) добавлен в
+  `gamekit.js::Engine._match` — триггер «патрик» в чате.
+- Ассеты → роут `/games-assets/{*path}` (корни: `<app-data>/games` →
+  `public/games`; `bundled_dir`: env `CHLAUNCHER_GAMES_DIR` →
+  `resources/games` → dev `public/games`), бандлятся через resources в
+  tauri.conf.json. Отсутствующие png/mp3 НЕ ломают страницу —
+  процедурные fallback (canvas + WebAudio).
+- `POST /tts/say` (token-guarded) → `tts.speak_rule(rule, text)` —
+  озвучка ника донатера; `rule` из поля `game` в теле или `tts` в
+  `game.json` (default `"patrick"`), флаг `ttsDonorNames` в skin.json.
+- Дебаг в окне игры: `Tab`/`D` — панель, `Space` лайк, `1..6` действия,
+  `R` сброс. `gift_tick` пропускается, аватары из `ev.avatar_url`.
+
 ## Roblox «Steal the Stream»
 
 - Исходники игры: `D:\roblox\game` (Rojo). Спека:
@@ -107,6 +183,12 @@ share|subscribe`, поля `vip|fan_level|is_moderator|is_superfan|gift_id|coins
 - Запуск: «Играть» → `POST /api/stream/ticket` → тикет в `launchData`
   deep-link'а → игра `POST /redeem` → комнатный credential (сессионный,
   не персистится) → claim/poll. Запасной путь — `!key` в чате.
+- Place ID: резолв `custom(settings.forward.roblox_place_id)` →
+  `ticket/status.place_id` (env `ROBLOX_PLACE_ID` на бэкенде — источник
+  правды после паблиша) → `CHLAUNCHER_ROBLOX_PLACE_ID` (env лаунчера,
+  dev-фолбэк). Пустое поле в UI = официальный сервер; кастомный id —
+  только для теста своей копии. `roblox_dev_play` фолбэк НЕ делает
+  (пусто = тест в Studio).
 - Ключ в игре передаётся заголовком `X-Stream-Key` (не query) — иначе
   попадает в логи прокси. Первый полл после claim только синхронизирует
   курсор — историю очереди не реплеим.

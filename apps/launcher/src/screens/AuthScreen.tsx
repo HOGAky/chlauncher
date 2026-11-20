@@ -138,34 +138,9 @@ export default function AuthScreen() {
           </p>
         </CardHeader>
         <CardContent>
-          <form onSubmit={submit} className="flex flex-col gap-3">
-            <Input
-              type="email"
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoFocus
-            />
-            <Input
-              type="password"
-              placeholder="Пароль"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-            />
-            {error && (
-              <div className="text-xs text-red-400 bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2">
-                {error}
-              </div>
-            )}
-            <Button type="submit" disabled={busy}>
-              {busy ? 'Подождите…' : mode === 'login' ? 'Войти' : 'Создать аккаунт'}
-            </Button>
+          <div className="flex flex-col gap-3">
             <Button
               type="button"
-              variant="outline"
               disabled={busy || tgWaiting}
               onClick={loginViaTelegram}
             >
@@ -174,20 +149,6 @@ export default function AuthScreen() {
             {tgWaiting && (
               <p className="text-center text-[11px] text-muted-foreground">
                 Открылся Telegram — нажмите Start у бота, вход продолжится автоматически.
-              </p>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy}
-              onClick={loginViaTiktok}
-            >
-              {ttWaiting ? 'Открылось окно TikTok…' : 'Войти через TikTok'}
-            </Button>
-            {ttWaiting && (
-              <p className="text-center text-[11px] text-muted-foreground">
-                Войдите в TikTok в открывшемся окне — вход в лаунчер и связь с эфиром
-                настроятся автоматически.
               </p>
             )}
             <Button
@@ -206,19 +167,63 @@ export default function AuthScreen() {
                 />
               </div>
             )}
-            <button
+            <Button
               type="button"
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              onClick={() => {
-                setMode(mode === 'login' ? 'register' : 'login');
-                setError(null);
-              }}
+              variant="outline"
+              disabled={busy}
+              onClick={loginViaTiktok}
             >
-              {mode === 'login'
-                ? 'Нет аккаунта? Зарегистрироваться'
-                : 'Уже есть аккаунт? Войти'}
-            </button>
-          </form>
+              {ttWaiting ? 'Открылось окно TikTok…' : 'Войти через TikTok'}
+            </Button>
+            {ttWaiting && (
+              <p className="text-center text-[11px] text-muted-foreground">
+                Войдите в TikTok в открывшемся окне — вход в лаунчер и связь с эфиром
+                настроятся автоматически.
+              </p>
+            )}
+            {error && (
+              <div className="text-xs text-red-400 bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2">
+                {error}
+              </div>
+            )}
+            <details className="text-xs">
+              <summary className="cursor-pointer select-none text-center text-muted-foreground hover:text-foreground transition-colors">
+                Другие способы — email и пароль
+              </summary>
+              <form onSubmit={submit} className="mt-3 flex flex-col gap-3">
+                <Input
+                  type="email"
+                  placeholder="Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+                <Input
+                  type="password"
+                  placeholder="Пароль"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                />
+                <Button type="submit" disabled={busy}>
+                  {busy ? 'Подождите…' : mode === 'login' ? 'Войти' : 'Создать аккаунт'}
+                </Button>
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  onClick={() => {
+                    setMode(mode === 'login' ? 'register' : 'login');
+                    setError(null);
+                  }}
+                >
+                  {mode === 'login'
+                    ? 'Нет аккаунта? Зарегистрироваться'
+                    : 'Уже есть аккаунт? Войти'}
+                </button>
+              </form>
+            </details>
+          </div>
           {import.meta.env.DEV && (
           <div className="mt-4 border-t border-border/40 pt-3">
             <button

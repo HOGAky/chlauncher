@@ -1,0 +1,49 @@
+{
+  "name": "Патрик",
+  "assetBase": "/games-assets/patrick",
+  "theme": {
+    "bgTop": "#2b2350",
+    "bgBottom": "#120f26",
+    "accent": "#ffcf5a",
+    "gaugeCold": "#4da6ff",
+    "gaugeWarm": "#ff9f43",
+    "gaugeHot": "#ff4d4d"
+  },
+  "texts": {
+    "heroTitle": "ГЕРОЙ",
+    "megaTitle": "ХОЗЯИН ПАТРИКА",
+    "fedCounter": "Накормлен",
+    "topDonor": "Топ донатер"
+  },
+  "sprites": {
+    "back": "sprites/back.png",
+    "peek": "sprites/peek.png",
+    "almost": "sprites/almost.png",
+    "eat": "sprites/eat.png",
+    "angry": "sprites/angry.png",
+    "hand": "sprites/hand_cabbage.png"
+  },
+  "sfx": {
+    "call": ["sfx/call_1.mp3", "sfx/call_2.mp3"],
+    "cabbage": "sfx/cabbage.mp3",
+    "crunch": "sfx/crunch.mp3",
+    "trollGross": "sfx/troll_gross.mp3",
+    "trollVacuum": "sfx/troll_vacuum.mp3",
+    "mega": "sfx/mega.mp3"
+  },
+  "callLoop": { "enabled": true, "minPauseS": 4.0, "maxPauseS": 7.5, "hotAngle": 120, "hotPauseS": 2.0 },
+  "decay": [
+    { "below": 90, "degPerSec": 2.5 },
+    { "below": 145, "degPerSec": 4.5 },
+    { "below": 179, "degPerSec": 7.5 }
+  ],
+  "ttsDonorNames": false,
+  "hints": [
+    { "action": "small", "label": "+6°", "caption": "Капусточка" },
+    { "action": "mid", "label": "+18°", "caption": "Морковка" },
+    { "action": "pet", "label": "🛡+22°", "caption": "Погладить" },
+    { "action": "rotten", "label": "-35°", "caption": "Гнилая капуста" },
+    { "action": "vacuum", "label": "0°!", "caption": "ПЫЛЕСОС" },
+    { "action": "mega", "label": "180°!", "caption": "Золотой кочан" }
+  ]
+}

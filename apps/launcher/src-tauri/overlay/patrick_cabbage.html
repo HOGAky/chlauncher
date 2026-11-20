@@ -1,0 +1,900 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>Патрик, на капусту!</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:transparent;font-family:system-ui,sans-serif;color:#fff}
+  canvas{position:fixed;inset:0;width:100%;height:100%}
+  .hud{position:fixed;top:10px;right:10px;z-index:40}.dot{width:10px;height:10px;border-radius:50%;background:#3f8}
+  .dot[data-s=reconnecting]{background:#f80}
+  #stage{position:fixed;transform-origin:0 0;pointer-events:none}
+  #stage>*{pointer-events:none}
+
+  /* всплывающие карточки донатеров (левая кромка сцены) */
+  .dcard{position:absolute;left:14px;display:flex;align-items:center;gap:10px;
+    background:rgba(14,12,34,.78);border:1px solid rgba(255,255,255,.14);
+    border-radius:44px;padding:8px 18px 8px 8px;min-width:240px;
+    backdrop-filter:blur(4px);transition:transform .18s cubic-bezier(.2,1.6,.4,1),opacity .3s;
+    animation:slidein .25s cubic-bezier(.2,1.2,.4,1)}
+  .dcard.out{opacity:0;transform:translateX(-30px)}
+  .dcard .av{width:52px;height:52px;border-radius:50%;object-fit:cover;background:#3a2f66;flex:none}
+  .dcard .av-init{display:grid;place-items:center;font:800 24px system-ui;color:#fff}
+  .dcard .nm{font:700 22px/1.15 system-ui;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dcard .gf{width:36px;height:36px;object-fit:contain}
+  .dcard .dl{font:800 24px monospace}.dcard .dl.plus{color:#7dff9a}.dcard .dl.minus{color:#ff7d7d}
+  .dcard .cb{position:absolute;top:-8px;right:-4px;background:#ffb340;color:#241500;border-radius:14px;
+    font:800 18px system-ui;padding:1px 9px;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+  @keyframes slidein{from{transform:translateX(-260px);opacity:0}to{transform:none;opacity:1}}
+  @keyframes bump{0%{transform:scale(1)}40%{transform:scale(1.12)}100%{transform:scale(1)}}
+  .dcard.bump{animation:bump .25s}
+
+  /* нижняя сетка подсказок */
+  #hints{position:absolute;left:0;right:0;bottom:26px;display:flex;justify-content:center;gap:14px}
+  .hint{width:150px;background:rgba(14,12,34,.55);border:1px solid rgba(255,255,255,.12);
+    border-radius:16px;padding:10px 6px 8px;text-align:center;backdrop-filter:blur(3px)}
+  .hint img{width:52px;height:52px;object-fit:contain;filter:drop-shadow(0 3px 6px rgba(0,0,0,.5))}
+  .hint .l{font:800 21px monospace;margin-top:2px}
+  .hint .c{font:600 13px system-ui;color:#cfc8ee;margin-top:2px}
+
+  /* карточка героя / хозяина */
+  #hero{position:absolute;left:50%;top:34%;transform:translateX(-50%);display:none;text-align:center;
+    background:rgba(14,12,34,.85);border:2px solid #ffcf5a;border-radius:28px;padding:22px 44px;
+    box-shadow:0 0 60px rgba(255,207,90,.35)}
+  #hero.show{display:block;animation:pop .35s cubic-bezier(.2,1.5,.4,1)}
+  #hero .t{font:800 34px system-ui;color:#ffcf5a;letter-spacing:2px}
+  #hero .u{font:800 40px system-ui;margin-top:6px}
+  #hero .av{width:120px;height:120px;border-radius:50%;object-fit:cover;margin:10px auto 0;display:block;
+    border:3px solid #ffcf5a}
+  #hero .av-init{display:grid;place-items:center;font:800 52px system-ui}
+  @keyframes pop{from{transform:translateX(-50%) scale(.4);opacity:0}to{transform:translateX(-50%) scale(1);opacity:1}}
+
+  /* дебаг-панель */
+  #debug{position:absolute;top:10px;left:10px;display:none;background:rgba(0,0,0,.72);
+    border:1px solid #444;border-radius:10px;padding:10px 12px;font:13px/1.55 monospace;color:#9fe;
+    pointer-events:auto;white-space:pre}
+  #debug.show{display:block}
+  #pause{position:absolute;inset:0;display:none;place-items:center;font:800 80px system-ui;
+    background:rgba(0,0,0,.5);text-shadow:0 4px 18px #000}
+</style></head><body>
+<canvas id="cv"></canvas>
+<div id="stage">
+  <div id="cards"></div>
+  <div id="hints"></div>
+  <div id="hero"><div class="t" id="heroT"></div><div class="u" id="heroU"></div><img class="av" id="heroA" alt=""></div>
+  <div id="debug"></div>
+  <div id="pause">ПАУЗА</div>
+</div>
+<script>
+'use strict';
+/* ════════════════════════════════════════════════════════════════════
+ * «Патрик, на капусту!» — вертикальная (9:16, 1080×1920) интерактивная
+ * игра. Зрители доводят angle 0→180° подарками/лайками/чатом; обиженный
+ * кролик спиной → поворачивается → ест капусту. Тролли сбрасывают угол.
+ *
+ * Файл — единая overlay-страница (соглашение /overlay/game/*), код
+ * разбит на секции-модули: CONFIG → AUDIO → ENGINE → RENDERER → HUD →
+ * BRIDGE. Спрайты/звуки берутся из скин-пака (/games-assets/patrick/) и
+ * при отсутствии заменяются процедурной отрисовкой/синтезом — страница
+ * не ломается на 404.
+ * ════════════════════════════════════════════════════════════════════ */
+const BG = new URLSearchParams(location.search).get('bg');
+if (BG) document.body.style.background = '#' + BG;
+const TOKEN = new URLSearchParams(location.search).get('t') || '';
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const stage = document.getElementById('stage');
+const GAME = 'patrick_cabbage';
+const W = 1080, H = 1920;               // логическое разрешение сцены
+let HUD = null;
+
+/* ══ CONFIG — cfg лаунчера + skin.json + каталог подарков ═════════════ */
+
+const S = {
+  cfg: null, skin: null, eng: null, running: true,
+  angle: 0, state: 'back',
+  eatUntil: 0, angryUntil: 0, shieldUntil: 0,
+  fed: 0, hero: null, megaOwner: null, lastDonor: null,
+  shake: 0, bounce: 0, handPulse: 0, flash: 0, beam: 0,
+  particles: [], donors: {}, avatars: {}, dropped: 0,
+  giftIcons: {},     // giftName(lower) → url
+  callNext: 0, debug: false,
+};
+
+const DEF_SKIN = {   // дефолты, если skin.json недоступен
+  name: 'Патрик', assetBase: '/games-assets/patrick',
+  theme: { bgTop: '#2b2350', bgBottom: '#120f26', accent: '#ffcf5a',
+           gaugeCold: '#4da6ff', gaugeWarm: '#ff9f43', gaugeHot: '#ff4d4d' },
+  texts: { heroTitle: 'ГЕРОЙ', megaTitle: 'ХОЗЯИН ПАТРИКА', fedCounter: 'Накормлен', topDonor: 'Топ донатер' },
+  sprites: { back: 'sprites/back.png', peek: 'sprites/peek.png', almost: 'sprites/almost.png',
+             eat: 'sprites/eat.png', angry: 'sprites/angry.png', hand: 'sprites/hand_cabbage.png' },
+  sfx: { call: ['sfx/call_1.mp3', 'sfx/call_2.mp3'], cabbage: 'sfx/cabbage.mp3', crunch: 'sfx/crunch.mp3',
+         trollGross: 'sfx/troll_gross.mp3', trollVacuum: 'sfx/troll_vacuum.mp3', mega: 'sfx/mega.mp3' },
+  callLoop: { enabled: true, minPauseS: 4.0, maxPauseS: 7.5, hotAngle: 120, hotPauseS: 2.0 },
+  decay: [ { below: 90, degPerSec: 2.5 }, { below: 145, degPerSec: 4.5 }, { below: 179, degPerSec: 7.5 } ],
+  ttsDonorNames: false,
+  hints: [],
+};
+
+async function loadConfig() {
+  const [cfgRes, skinRes, giftRes] = await Promise.all([
+    GameKit.fetchCfg(GAME),
+    fetch(`${DEF_SKIN.assetBase}/skin.json?t=${encodeURIComponent(TOKEN)}`)
+      .then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    fetch(`/gifts/gifts.json?t=${encodeURIComponent(TOKEN)}`)
+      .then((r) => (r.ok ? r.json() : [])).catch(() => []),
+  ]);
+  S.cfg = cfgRes.cfg;
+  S.skin = Object.assign({}, DEF_SKIN, skinRes || {});
+  S.skin.theme = Object.assign({}, DEF_SKIN.theme, (skinRes || {}).theme || {});
+  S.skin.texts = Object.assign({}, DEF_SKIN.texts, (skinRes || {}).texts || {});
+  S.skin.callLoop = Object.assign({}, DEF_SKIN.callLoop, (skinRes || {}).callLoop || {});
+  for (const row of giftRes) {
+    if (row.name && row.image) S.giftIcons[row.name.toLowerCase()] = `/${row.image}?t=${encodeURIComponent(TOKEN)}`;
+  }
+  S.eng = new GameKit.Engine(S.cfg);
+}
+
+function giftIcon(name) { return S.giftIcons[String(name || '').toLowerCase()] || null; }
+
+/* ══ AUDIO — mp3 из скина + процедурный WebAudio-fallback ══════════════
+ * Каждый клип пробуется HEAD-запросом; 404 → синтез осциллятором/шумом.
+ * Анти-спам: кулдауны по типу, cabbage варьирует playbackRate на комбо,
+ * троллинг обрывает текущую реплику call/cabbage. */
+
+const Audio2 = {
+  ac: null, ready: {}, last: {}, voice: null, callList: [],
+  COOLDOWN: { call: 0.4, cabbage: 0.7, crunch: 0.3, trollGross: 0.4, trollVacuum: 1.2, mega: 1.5 },
+
+  url(name) {
+    if (name === 'call' && this.callList.length) {
+      return this.callList[Math.floor(Math.random() * this.callList.length)];
+    }
+    const p = S.skin.sfx[name];
+    const f = Array.isArray(p) ? p[0] : p;
+    return f ? `${S.skin.assetBase}/${f}?t=${encodeURIComponent(TOKEN)}` : null;
+  },
+  async probe() {
+    const names = ['cabbage', 'crunch', 'trollGross', 'trollVacuum', 'mega'];
+    const jobs = names.map(async (n) => {
+      const u = this.url(n);
+      this.ready[n] = u ? await fetch(u, { method: 'HEAD' }).then((r) => r.ok).catch(() => false) : false;
+    });
+    const callPaths = Array.isArray(S.skin.sfx.call) ? S.skin.sfx.call : [S.skin.sfx.call];
+    const callOk = await Promise.all(callPaths.map(async (f) =>
+      fetch(`${S.skin.assetBase}/${f}?t=${encodeURIComponent(TOKEN)}`, { method: 'HEAD' })
+        .then((r) => r.ok).catch(() => false)));
+    this.callList = callPaths.filter((_, i) => callOk[i])
+      .map((f) => `${S.skin.assetBase}/${f}?t=${encodeURIComponent(TOKEN)}`);
+    this.ready.call = this.callList.length > 0;
+    await Promise.all(jobs);
+  },
+  ctx() {
+    if (!this.ac) {
+      try { this.ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {}
+    }
+    if (this.ac && this.ac.state === 'suspended') this.ac.resume().catch(() => {});
+    return this.ac;
+  },
+  vol(mult = 1) { return Math.max(0, Math.min(1, (S.cfg ? S.cfg.volume : 0.7) * mult)); },
+
+  /** Основной вход: kind = call|cabbage|crunch|trollGross|trollVacuum|mega. */
+  play(kind, opts = {}) {
+    const now = performance.now() / 1000;
+    if (now - (this.last[kind] || 0) < (this.COOLDOWN[kind] || 0.3)) return;
+    this.last[kind] = now;
+    if (kind.startsWith('troll')) this.stopVoice();
+    if (this.ready[kind]) {
+      const a = new Audio(this.url(kind));
+      a.volume = this.vol(opts.mult || 1);
+      if (kind === 'cabbage') a.playbackRate = 0.96 + Math.random() * 0.16; // комбо-вариация
+      a.play().catch(() => {});
+      if (kind === 'call' || kind === 'cabbage') {
+        this.voice = a;
+        a.onended = () => { if (this.voice === a) this.voice = null; };
+      }
+    } else {
+      this.synth(kind);
+    }
+  },
+  stopVoice() { try { this.voice && this.voice.pause(); } catch (_) {} this.voice = null; },
+  voiceBusy() { return !!(this.voice && !this.voice.paused && !this.voice.ended); },
+
+  /* Процедурные тоны — разные характеры на каждый вид события. */
+  synth(kind) {
+    const ac = this.ctx(); if (!ac) return;
+    const t = ac.currentTime, v = this.vol();
+    const tone = (f0, f1, dur, type = 'sine', at = 0, mul = 1) => {
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(f0, t + at);
+      o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + at + dur);
+      g.gain.setValueAtTime(v * 0.2 * mul, t + at);
+      g.gain.exponentialRampToValueAtTime(0.001, t + at + dur);
+      o.connect(g); g.connect(ac.destination);
+      o.start(t + at); o.stop(t + at + dur + 0.02);
+    };
+    const noise = (dur, freq, mul = 1) => {   // «хруст» — короткий шумовой импульс
+      const n = ac.sampleRate * dur, buf = ac.createBuffer(1, n, ac.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+      const src = ac.createBufferSource(); src.buffer = buf;
+      const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq;
+      const g = ac.createGain(); g.gain.value = v * 0.5 * mul;
+      src.connect(f); f.connect(g); g.connect(ac.destination); src.start(t);
+    };
+    switch (kind) {
+      case 'call':        tone(660, 440, 0.22, 'sine', 0, 0.7); tone(520, 340, 0.3, 'sine', 0.26, 0.7); break;
+      case 'cabbage':     tone(720, 980, 0.1, 'triangle', 0, 0.8); tone(980, 1240, 0.09, 'triangle', 0.11, 0.7); break;
+      case 'crunch':      noise(0.28, 2600, 1); noise(0.2, 1400, 0.8); break;
+      case 'trollGross':  tone(160, 90, 0.5, 'sawtooth', 0, 0.8); tone(120, 70, 0.4, 'square', 0.1, 0.4); break;
+      case 'trollVacuum': tone(90, 700, 0.9, 'sawtooth', 0, 0.9); noise(0.9, 900, 0.7); break;
+      case 'mega':        [523, 659, 784, 1046].forEach((f, i) => tone(f, f * 1.02, 0.5, 'triangle', i * 0.09, 0.9)); break;
+    }
+  },
+  /* Фоновый цикл зова «Патрик…» с рандомной паузой (короче на 120°+). */
+  tick(nowMs) {
+    const cl = S.skin.callLoop;
+    if (!cl.enabled || !S.running || this.voiceBusy()) return;
+    if (nowMs < S.callNext) return;
+    this.play('call');
+    const pause = S.angle > cl.hotAngle
+      ? cl.hotPauseS
+      : cl.minPauseS + Math.random() * Math.max(0.5, cl.maxPauseS - cl.minPauseS);
+    S.callNext = nowMs + pause * 1000;
+  },
+};
+
+/* ══ ENGINE — угол, фазы, пассивная обида ═════════════════════════════ */
+
+function decayRate() {
+  const tiers = S.skin.decay || DEF_SKIN.decay;
+  for (const t of tiers) if (S.angle < t.below) return t.degPerSec;
+  return tiers.length ? tiers[tiers.length - 1].degPerSec : 5;
+}
+
+function addAngle(d, user, icon, card = true) {
+  S.angle = Math.max(0, Math.min(180, S.angle + d));
+  if (user) {
+    S.lastDonor = user;
+    S.donors[user] = (S.donors[user] || 0) + Math.abs(d);
+  }
+  if (S.angle >= 180) win();
+  if (card) spawnCard(user, icon, d);
+}
+
+function win() {
+  if (S.eatUntil && Date.now() < S.eatUntil) return;  // едим — не дублировать
+  S.fed++;
+  S.eatUntil = Date.now() + 5000;
+  const u = S.megaOwner || S.lastDonor;
+  if (u) showHero(S.megaOwner ? S.skin.texts.megaTitle : S.skin.texts.heroTitle, u, S.avatars[u]);
+  Audio2.play('crunch');
+  confetti(60);
+  S.beam = 1;
+}
+
+function angry(ms = 1500) {
+  S.angryUntil = Date.now() + ms;
+  S.flash = 1; S.shake = Math.max(S.shake, 14);
+}
+
+/** Единая точка входа действия (живое событие или дебаг-клавиша). */
+function act(a) {
+  if (a.per) a = { ...a, value: (a.value || 1) * (a._count || 1) / a.per };
+  if (a.per_coin) a = { ...a, value: (a.value || 1) * (a._coins || 1) * a.per_coin };
+  const u = a._user || null;
+  const icon = a._ev === 'gift' ? giftIcon(a._gift) : null;
+  S.bounce = 1; S.handPulse = 1;
+  switch (a.type) {
+    case 'nudge':
+      addAngle(a.value || 0.5, u, icon, false);   // лайк — без карточки
+      burst(3, 'spark');
+      break;
+    case 'small':
+      addAngle(a.value || 6, u, icon);
+      burst(8, 'leaf');
+      Audio2.play('cabbage');
+      break;
+    case 'mid':
+      addAngle(a.value || 18, u, icon);
+      burst(12, 'carrot'); burst(6, 'spark');
+      Audio2.play('cabbage');
+      sayDonor(u);
+      break;
+    case 'pet':
+      addAngle(a.value || 22, u, icon);
+      S.shieldUntil = Date.now() + (a.sec || 5) * 1000;
+      burst(10, 'heart');
+      Audio2.play('cabbage');
+      break;
+    case 'rotten':
+      addAngle(-(a.value || 35), u, icon);
+      angry(); burst(8, 'stink');
+      Audio2.play('trollGross');
+      break;
+    case 'vacuum': {
+      const was = S.angle;
+      S.angle = 0;
+      angry(1800); S.shake = 26;
+      burst(24, 'swirl');
+      Audio2.play('trollVacuum');
+      spawnCard(u, icon, -was);
+      break;
+    }
+    case 'mega':
+      S.megaOwner = u;
+      S.angle = 180; win();
+      burst(30, 'star'); S.shake = 18;
+      Audio2.play('mega');
+      sayDonor(u);
+      spawnCard(u, icon, 180);
+      break;
+  }
+}
+
+let ttsLast = 0;
+function sayDonor(u) {
+  if (!u || !S.skin.ttsDonorNames) return;
+  if (Date.now() - ttsLast < 4000) return;          // не дублировать озвучку на комбо
+  ttsLast = Date.now();
+  fetch(`/tts/say?t=${encodeURIComponent(TOKEN)}`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ text: u.slice(0, 40) }),
+  }).catch(() => {});
+}
+
+function step(dt) {
+  const now = Date.now();
+  if (S.eatUntil && now >= S.eatUntil) {   // доел → снова обиделся
+    S.eatUntil = 0; S.angle = 0;
+  }
+  if (S.running) {
+    for (const a of S.eng.pump()) act(a);
+    Audio2.tick(now);
+    if (now < S.eatUntil) {
+      // фаза еды — угол держим на 180
+    } else {
+      S.megaOwner = null;
+      if (now > S.shieldUntil && now > S.angryUntil) {
+        S.angle = Math.max(0, S.angle - decayRate() * dt);
+      }
+    }
+  }
+  // состояние
+  S.state = now < S.eatUntil ? 'eat'
+    : now < S.angryUntil ? 'angry'
+    : S.angle >= 110 ? 'almost'
+    : S.angle >= 40 ? 'peek' : 'back';
+  // затухания
+  S.shake *= Math.pow(0.02, dt); S.bounce *= Math.pow(0.05, dt);
+  S.handPulse *= Math.pow(0.1, dt); S.flash *= Math.pow(0.01, dt);
+  S.beam *= Math.pow(0.15, dt);
+  for (const p of S.particles) {
+    p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += p.g * dt; p.rot += p.vr * dt;
+  }
+  S.particles = S.particles.filter((p) => p.t < p.life);
+  tickCards();
+}
+
+/* ── частицы ────────────────────────────────────────────────────────── */
+const P_KIND = {
+  leaf:    { n: 0, col: '#7ed957', size: 16, g: 900, vr: 4 },
+  carrot:  { n: 0, col: '#ff9f43', size: 18, g: 900, vr: 5 },
+  heart:   { n: 0, col: '#ff6b9d', size: 15, g: -60, vr: 2 },
+  star:    { n: 0, col: '#ffcf5a', size: 14, g: 500, vr: 6 },
+  spark:   { n: 0, col: '#fff6b0', size: 7,  g: 300, vr: 3 },
+  sweat:   { n: 0, col: '#7fd4ff', size: 9,  g: 1400, vr: 1 },
+  stink:   { n: 0, col: '#8aa05a', size: 14, g: -120, vr: 2 },
+  swirl:   { n: 0, col: '#b8c4d6', size: 12, g: 0,   vr: 9 },
+  confetti:{ n: 0, col: '',        size: 12, g: 600, vr: 7 },
+};
+function burst(n, kind, x = 540, y = 1150) {
+  const k = P_KIND[kind];
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, sp = 120 + Math.random() * 380;
+    S.particles.push({
+      kind, x: x + (Math.random() - 0.5) * 120, y: y + (Math.random() - 0.5) * 80,
+      vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 200, g: k.g,
+      rot: Math.random() * 7, vr: (Math.random() - 0.5) * k.vr * 2,
+      t: 0, life: 0.7 + Math.random() * 0.9, size: k.size * (0.7 + Math.random() * 0.6),
+      col: kind === 'confetti' ? `hsl(${Math.random() * 360} 85% 62%)` : k.col,
+    });
+  }
+}
+function confetti(n) {
+  for (let i = 0; i < n; i++) {
+    S.particles.push({
+      kind: 'confetti', x: Math.random() * W, y: -30 - Math.random() * 300,
+      vx: (Math.random() - 0.5) * 140, vy: 120 + Math.random() * 240, g: 500,
+      rot: Math.random() * 7, vr: (Math.random() - 0.5) * 14,
+      t: 0, life: 2.2 + Math.random() * 1.6, size: 9 + Math.random() * 9,
+      col: `hsl(${Math.random() * 360} 85% 62%)`,
+    });
+  }
+}
+function sweat() {  // капли пота на 150°+
+  if (S.angle > 150 && S.state !== 'eat' && Math.random() < 0.1) {
+    S.particles.push({ kind: 'sweat', x: 540 + (Math.random() - 0.5) * 160, y: 940,
+      vx: (Math.random() - 0.5) * 60, vy: -60, g: 1400, rot: 0, vr: 0,
+      t: 0, life: 0.8, size: 9, col: P_KIND.sweat.col });
+  }
+}
+
+/* ══ RENDERER — Canvas 1080×1920 в letterbox, спрайты + fallback ═══════ */
+
+const SPR = {};   // state → {img|null, failed:bool}
+function loadSprites() {
+  for (const [k, rel] of Object.entries(S.skin.sprites || {})) {
+    const img = new Image();
+    img.onload = () => { SPR[k].img = img; };
+    img.onerror = () => { SPR[k].failed = true; };
+    img.src = `${S.skin.assetBase}/${rel}?t=${encodeURIComponent(TOKEN)}`;
+    SPR[k] = { img: null, failed: false };
+  }
+}
+
+function stageRect() {
+  const w = cv.clientWidth, h = cv.clientHeight;
+  const s = Math.min(w / W, h / H);
+  return { s, ox: (w - W * s) / 2, oy: (h - H * s) / 2 };
+}
+
+function draw() {
+  cv.width = cv.clientWidth; cv.height = cv.clientHeight;
+  const { s, ox, oy } = stageRect();
+  stage.style.width = W + 'px'; stage.style.height = H + 'px';
+  stage.style.transform = `translate(${ox}px,${oy}px) scale(${s})`;
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.save();
+  ctx.translate(ox + W * s / 2, oy + H * s / 2);
+  const tremble = S.angle > 145 && S.state !== 'eat' ? Math.sin(performance.now() / 40) * 2 : 0;
+  const pulse = S.state === 'almost' ? 1 + Math.sin(performance.now() / 300) * 0.004 : 1;
+  ctx.scale(s * pulse, s * pulse);
+  const shx = (Math.random() - 0.5) * S.shake, shy = (Math.random() - 0.5) * S.shake;
+  ctx.translate(-W / 2 + shx + tremble, -H / 2 + shy);
+
+  drawRoom();
+  sweat();
+  drawHand();
+  drawPatrick();
+  drawParticles();
+  drawGauge();
+  drawFlashBeam();
+  ctx.restore();
+}
+
+function drawRoom() {
+  const th = S.skin.theme;
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, th.bgTop); g.addColorStop(1, th.bgBottom);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  // пол
+  ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fillRect(0, 1420, W, 500);
+  ctx.strokeStyle = 'rgba(255,255,255,.04)'; ctx.lineWidth = 3;
+  for (let y = 1460; y < H; y += 70) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  // окно слева
+  ctx.fillStyle = 'rgba(120,160,255,.10)'; ctx.fillRect(90, 320, 240, 300);
+  ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 8; ctx.strokeRect(90, 320, 240, 300);
+  ctx.beginPath(); ctx.moveTo(210, 320); ctx.lineTo(210, 620); ctx.moveTo(90, 470); ctx.lineTo(330, 470); ctx.stroke();
+  // лампа справа
+  ctx.fillStyle = '#3a2f66'; ctx.fillRect(920, 380, 18, 900);
+  ctx.fillStyle = '#ffcf5a';
+  ctx.beginPath(); ctx.moveTo(840, 380); ctx.lineTo(1018, 380); ctx.lineTo(980, 480); ctx.lineTo(878, 480); ctx.fill();
+  const lg = ctx.createRadialGradient(930, 480, 40, 930, 480, 520);
+  lg.addColorStop(0, 'rgba(255,207,90,.16)'); lg.addColorStop(1, 'rgba(255,207,90,0)');
+  ctx.fillStyle = lg; ctx.fillRect(330, 0, 750, 1300);
+  // коврик под Патриком
+  ctx.fillStyle = 'rgba(255,255,255,.07)';
+  ctx.beginPath(); ctx.ellipse(540, 1440, 330, 80, 0, 0, 7); ctx.fill();
+}
+
+/* Процедурный кролик — fallback на случай отсутствия спрайтов. Рисуется
+ * в локальных координатах: центр тела (0,0), «масштаб» = r. */
+function drawRabbitProc(pose, r, t) {
+  const twitch = Math.sin(t * 2.2) * 0.06 + S.bounce * 0.15;
+  const breathe = 1 + Math.sin(t * 3) * 0.02;
+  const fur = '#cfc9e8', dark = '#8f86bd', pink = '#ff9db0';
+  ctx.save();
+  ctx.scale(breathe, breathe);
+  ctx.fillStyle = fur;
+  if (pose === 'back') {
+    // уши от зрителя
+    for (const sgn of [-1, 1]) {
+      ctx.save(); ctx.translate(sgn * r * 0.32, -r * 1.15); ctx.rotate(sgn * 0.22 + twitch * sgn);
+      ctx.beginPath(); ctx.ellipse(0, -r * 0.42, r * 0.13, r * 0.5, 0, 0, 7); ctx.fill();
+      ctx.restore();
+    }
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.78, r * 0.95, 0, 0, 7); ctx.fill();        // тело
+    ctx.fillStyle = '#efeaff';
+    ctx.beginPath(); ctx.arc(0, r * 0.62, r * 0.3, 0, 7); ctx.fill();                  // хвост-помпон
+    ctx.strokeStyle = dark; ctx.lineWidth = r * 0.03;                                   // лапки снизу
+    for (const sgn of [-1, 1]) {
+      ctx.beginPath(); ctx.ellipse(sgn * r * 0.5, r * 0.78, r * 0.18, r * 0.12, 0, 0, 7);
+      ctx.fillStyle = fur; ctx.fill(); ctx.stroke();
+    }
+  } else if (pose === 'peek') {
+    for (const sgn of [-1, 1]) {
+      ctx.save(); ctx.translate(sgn * r * 0.3, -r * 1.1); ctx.rotate(sgn * 0.3);
+      ctx.beginPath(); ctx.ellipse(0, -r * 0.4, r * 0.12, r * 0.46, 0, 0, 7); ctx.fill();
+      ctx.restore();
+    }
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.8, r * 0.92, 0, 0, 7); ctx.fill();
+    // косящийся глаз через плечо
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(-r * 0.42, -r * 0.35, r * 0.16, r * 0.2, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#241d3d'; ctx.beginPath(); ctx.arc(-r * 0.49 + twitch * 20, -r * 0.35, r * 0.09, 0, 7); ctx.fill();
+    ctx.fillStyle = pink; ctx.beginPath(); ctx.ellipse(-r * 0.52, -r * 0.12, r * 0.09, r * 0.06, 0, 0, 7); ctx.fill();
+  } else if (pose === 'almost' || pose === 'eat') {
+    for (const sgn of [-1, 1]) {
+      ctx.save(); ctx.translate(sgn * r * 0.34, -r * 1.15); ctx.rotate(sgn * 0.18);
+      ctx.beginPath(); ctx.ellipse(0, -r * 0.42, r * 0.13, r * 0.5, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = pink;
+      ctx.beginPath(); ctx.ellipse(0, -r * 0.36, r * 0.06, r * 0.3, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = fur; ctx.restore();
+    }
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.82, r * 0.9, 0, 0, 7); ctx.fill();
+    const munch = pose === 'eat' ? Math.sin(t * 14) * r * 0.05 : 0;
+    ctx.fillStyle = '#efeaff'; ctx.beginPath(); ctx.ellipse(0, r * 0.3 + munch, r * 0.5, r * 0.4, 0, 0, 7); ctx.fill();
+    for (const sgn of [-1, 1]) {                                                        // глаза
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(sgn * r * 0.3, -r * 0.3, r * 0.14, r * 0.17, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = '#241d3d'; ctx.beginPath(); ctx.arc(sgn * r * 0.3, -r * 0.28, r * 0.08, 0, 7); ctx.fill();
+    }
+    ctx.fillStyle = pink; ctx.beginPath(); ctx.ellipse(0, -r * 0.05, r * 0.1, r * 0.07, 0, 0, 7); ctx.fill(); // нос
+    if (pose === 'eat') {                                                                // рот + капуста
+      ctx.fillStyle = '#7a4a3a'; ctx.beginPath(); ctx.ellipse(0, r * 0.32 + munch, r * 0.16, r * 0.12, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = '#7ed957'; ctx.beginPath(); ctx.ellipse(r * 0.1, r * 0.5 + munch, r * 0.22, r * 0.14, 0.3, 0, 7); ctx.fill();
+    }
+  } else if (pose === 'angry') {
+    const jx = (Math.random() - 0.5) * r * 0.06;
+    ctx.translate(jx, 0);
+    for (const sgn of [-1, 1]) {
+      ctx.save(); ctx.translate(sgn * r * 0.34, -r * 1.05); ctx.rotate(sgn * 0.55);
+      ctx.beginPath(); ctx.ellipse(0, -r * 0.4, r * 0.12, r * 0.44, 0, 0, 7); ctx.fill();
+      ctx.restore();
+    }
+    ctx.fillStyle = '#e8c9cf';
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.8, r * 0.92, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = fur;
+    ctx.beginPath(); ctx.ellipse(0, -r * 0.05, r * 0.7, r * 0.7, 0, 0, 7); ctx.fill();
+    // 💢-мордочка: сжатые глаза и хмурые брови
+    ctx.strokeStyle = '#241d3d'; ctx.lineWidth = r * 0.05; ctx.lineCap = 'round';
+    for (const sgn of [-1, 1]) {
+      ctx.beginPath(); ctx.moveTo(sgn * r * 0.16, -r * 0.42); ctx.lineTo(sgn * r * 0.44, -r * 0.34); ctx.stroke();
+      ctx.beginPath(); ctx.arc(sgn * r * 0.3, -r * 0.22, r * 0.07, 0, 7);
+      ctx.fillStyle = '#241d3d'; ctx.fill();
+    }
+    ctx.fillStyle = '#c22';
+    ctx.font = `${r * 0.5}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('💢', r * 0.75, -r * 0.85);
+  }
+  ctx.restore();
+}
+
+function drawPatrick() {
+  const now = performance.now() / 1000;
+  // squash & stretch при подарках (bounce затухает)
+  const sq = 1 + S.bounce * 0.12;
+  ctx.save();
+  ctx.translate(540, 1210 - Math.abs(S.bounce) * 46);
+  ctx.scale(1 + S.bounce * 0.1, 2 - sq);
+  const spr = SPR[S.state];
+  if (spr && spr.img) {
+    const r = 300, img = spr.img;
+    const ar = img.width / img.height;
+    ctx.drawImage(img, -r * ar, -r * 1.55, r * ar * 2, r * 2);
+  } else {
+    drawRabbitProc(S.state, 190, now);
+  }
+  ctx.restore();
+}
+
+function drawHand() {
+  // рука с капустой тянется снизу; активнее трясётся в 'almost'
+  const t = performance.now() / 1000;
+  const reach = 1 - Math.abs(S.angle - 180) / 220;                  // чем ближе 180, тем выше рука
+  const baseY = 1920 - 560 * reach - S.handPulse * 40;
+  const wig = (S.state === 'almost' ? 14 : 4) + S.handPulse * 10;
+  const hx = 540 + Math.sin(t * 2.6) * wig;
+  const hy = baseY + Math.cos(t * 3.1) * wig * 0.6;
+  ctx.save();
+  ctx.translate(hx, hy);
+  const spr = SPR.hand;
+  if (spr && spr.img) {
+    const w = 300, ar = spr.img.width / spr.img.height;
+    ctx.drawImage(spr.img, -w / 2, -w / ar / 2, w, w / ar);
+  } else {
+    ctx.rotate(Math.sin(t * 3) * 0.08);
+    ctx.fillStyle = '#e8b58a';                                        // рука
+    ctx.beginPath(); ctx.roundRect(-40, 60, 80, 300, 36); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, 46, 52, 42, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#7ed957';                                        // лист капусты
+    ctx.beginPath(); ctx.ellipse(0, -20, 95, 62, -0.15, 0, 7); ctx.fill();
+    ctx.fillStyle = '#5cb53f';
+    ctx.beginPath(); ctx.ellipse(0, -20, 62, 40, -0.15, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#3f8f2a'; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(-80, -8); ctx.quadraticCurveTo(0, -34, 80, -30); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawParticles() {
+  for (const p of S.particles) {
+    const k = 1 - p.t / p.life;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, k);
+    ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+    ctx.fillStyle = p.col;
+    const s = p.size;
+    if (p.kind === 'heart') {
+      ctx.beginPath();
+      ctx.moveTo(0, s * 0.5);
+      ctx.bezierCurveTo(-s, -s * 0.4, -s * 0.4, -s, 0, -s * 0.35);
+      ctx.bezierCurveTo(s * 0.4, -s, s, -s * 0.4, 0, s * 0.5);
+      ctx.fill();
+    } else if (p.kind === 'star') {
+      ctx.beginPath();
+      for (let i = 0; i < 5; i++) {
+        const a = (i * 4 * Math.PI) / 5 - Math.PI / 2;
+        ctx.lineTo(Math.cos(a) * s, Math.sin(a) * s);
+      }
+      ctx.closePath(); ctx.fill();
+    } else if (p.kind === 'leaf' || p.kind === 'carrot') {
+      ctx.beginPath(); ctx.ellipse(0, 0, s, s * 0.55, 0, 0, 7); ctx.fill();
+    } else if (p.kind === 'swirl') {
+      ctx.strokeStyle = p.col; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(0, 0, s * (1 + p.t * 3), p.rot, p.rot + 4); ctx.stroke();
+    } else {
+      ctx.fillRect(-s / 2, -s / 3, s, s * 0.66);                       // confetti/spark/sweat/stink
+    }
+    ctx.restore();
+  }
+}
+
+/* полукруглый спидометр 0–180° + счётчик + топ-донатер */
+function drawGauge() {
+  const cx = 540, cy = 320, R = 330;
+  const th = S.skin.theme;
+  ctx.save();
+  ctx.lineWidth = 46; ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(255,255,255,.10)';
+  ctx.beginPath(); ctx.arc(cx, cy, R, Math.PI, 0); ctx.stroke();
+  const frac = Math.max(0, Math.min(1, S.angle / 180));
+  if (frac > 0.005) {
+    const g = ctx.createLinearGradient(cx - R, 0, cx + R, 0);
+    g.addColorStop(0, th.gaugeCold); g.addColorStop(0.55, th.gaugeWarm); g.addColorStop(1, th.gaugeHot);
+    ctx.strokeStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, R, Math.PI, Math.PI + Math.PI * frac); ctx.stroke();
+    // золотое свечение щита
+    if (Date.now() < S.shieldUntil) {
+      ctx.strokeStyle = 'rgba(255,207,90,.5)'; ctx.lineWidth = 60;
+      ctx.beginPath(); ctx.arc(cx, cy, R, Math.PI, Math.PI + Math.PI * frac); ctx.stroke();
+      ctx.lineWidth = 46;
+    }
+  }
+  // стрелка
+  const a = Math.PI + Math.PI * frac;
+  const tremor = S.angle > 145 ? (Math.random() - 0.5) * 4 : 0;
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 9;
+  ctx.beginPath(); ctx.moveTo(cx, cy);
+  ctx.lineTo(cx + Math.cos(a) * (R - 60) + tremor, cy + Math.sin(a) * (R - 60)); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cx, cy, 16, 0, 7); ctx.fill();
+  ctx.font = '800 64px system-ui'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+  ctx.shadowColor = '#000'; ctx.shadowBlur = 10;
+  ctx.fillText(`${Math.round(S.angle)}°`, cx, cy - 24);
+  ctx.font = '700 40px system-ui'; ctx.textAlign = 'left';
+  ctx.fillText(`${S.skin.texts.fedCounter}: ${S.fed}`, 40, 70);
+  const top = GameKit.leaderboard(S.donors, 1)[0];
+  ctx.textAlign = 'right';
+  ctx.fillText(top ? `${S.skin.texts.topDonor}: @${top.user}` : '', W - 40, 70);
+  ctx.restore();
+}
+
+function drawFlashBeam() {
+  if (S.flash > 0.01) {
+    ctx.fillStyle = `rgba(255,40,40,${S.flash * 0.28})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+  if (S.beam > 0.01) {
+    const g = ctx.createLinearGradient(0, 0, 0, H * 0.8);
+    g.addColorStop(0, `rgba(255,230,140,${S.beam * 0.55})`);
+    g.addColorStop(1, 'rgba(255,230,140,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(340, 0); ctx.lineTo(740, 0); ctx.lineTo(880, 1500); ctx.lineTo(200, 1500);
+    ctx.fill();
+    // золотая корона на Патрике в фазе eat
+    if (S.state === 'eat') {
+      ctx.save(); ctx.translate(540, 1210 - 330);
+      ctx.fillStyle = '#ffcf5a';
+      ctx.beginPath();
+      ctx.moveTo(-90, 30); ctx.lineTo(-90, -20); ctx.lineTo(-45, 10); ctx.lineTo(0, -40);
+      ctx.lineTo(45, 10); ctx.lineTo(90, -20); ctx.lineTo(90, 30); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+  }
+}
+
+/* ══ HUD — HTML поверх сцены: карточки, подсказки, дебаг ══════════════ */
+
+const cardsEl = document.getElementById('cards');
+const cards = new Map();   // user → {el, until, combo, timer}
+const CARD_TTL = 6000, CARD_GAP = 74, CARD_TOP = 420;
+
+function spawnCard(user, icon, delta) {
+  if (!user) return;
+  const key = user;
+  let c = cards.get(key);
+  if (!c) {
+    const el = GameKit.el('div', 'dcard', cardsEl);
+    const init = () => {                                                  // fallback-инициал
+      const d = document.createElement('div');
+      d.className = 'av av-init'; d.textContent = (user[0] || '?').toUpperCase();
+      d.style.background = `hsl(${[...user].reduce((a, ch) => a + ch.charCodeAt(0), 0) * 37 % 360} 55% 45%)`;
+      return d;
+    };
+    let av;
+    if (S.avatars[user]) {
+      av = document.createElement('img');
+      av.className = 'av'; av.alt = '';
+      av.onerror = () => { av.replaceWith(init()); };
+      av.src = S.avatars[user];
+    } else av = init();
+    const nm = GameKit.el('div', 'nm', null); nm.textContent = user;
+    const gf = document.createElement('img'); gf.className = 'gf'; gf.alt = '';
+    const dl = GameKit.el('div', 'dl', null);
+    const cb = GameKit.el('div', 'cb', null); cb.style.display = 'none';
+    el.append(av, nm, gf, dl, cb);
+    c = { el, combo: 0, av, gf, dl, cb };
+    cards.set(key, c);
+  }
+  c.combo++;
+  if (icon) c.gf.src = icon; else c.gf.style.display = 'none';
+  if (icon) c.gf.style.display = '';
+  const sign = delta >= 0 ? '+' : '';
+  c.dl.textContent = `${sign}${Math.round(delta * 10) / 10}°`;
+  c.dl.className = 'dl ' + (delta >= 0 ? 'plus' : 'minus');
+  if (c.combo > 1) { c.cb.style.display = ''; c.cb.textContent = 'x' + c.combo; }
+  c.until = Date.now() + CARD_TTL;
+  c.el.classList.remove('bump'); void c.el.offsetWidth; c.el.classList.add('bump');
+  layoutCards();
+}
+function layoutCards() {
+  let i = 0;
+  for (const [, c] of cards) { c.el.style.top = CARD_TOP + i * CARD_GAP + 'px'; i++; }
+}
+function tickCards() {
+  const now = Date.now();
+  for (const [k, c] of cards) {
+    if (now > c.until) {
+      c.el.classList.add('out');
+      const el = c.el;
+      setTimeout(() => el.remove(), 300);
+      cards.delete(k);
+      layoutCards();
+    }
+  }
+}
+
+function showHero(title, user, avatar) {
+  const h = document.getElementById('hero');
+  document.getElementById('heroT').textContent = title + ': @' + user;
+  document.getElementById('heroU').textContent = S.megaOwner ? 'ЗОЛОТОЙ КОЧАН!' : 'Патрик ел!';
+  const old = document.getElementById('heroA');
+  if (old) old.remove();
+  let av;
+  if (avatar) {
+    av = document.createElement('img');
+    av.id = 'heroA'; av.className = 'av'; av.alt = '';
+    av.onerror = () => av.replaceWith(heroInit(user));
+    av.src = avatar;
+  } else av = heroInit(user);
+  h.insertBefore(av, null);
+  h.classList.add('show');
+  setTimeout(() => h.classList.remove('show'), 4800);
+}
+function heroInit(user) {
+  const d = document.createElement('div');
+  d.id = 'heroA'; d.className = 'av av-init';
+  d.textContent = (user[0] || '?').toUpperCase();
+  d.style.background = `hsl(${[...user].reduce((a, ch) => a + ch.charCodeAt(0), 0) * 37 % 360} 55% 45%)`;
+  return d;
+}
+
+/* нижние подсказки: по одной карточке на действие, иконка = первый
+ * подарок из match.names соответствующего правила cfg.rules */
+function buildHints() {
+  const root = document.getElementById('hints');
+  root.innerHTML = '';
+  const hintList = S.skin.hints && S.skin.hints.length ? S.skin.hints : DEF_SKIN.hints;
+  for (const h of hintList) {
+    const rule = (S.cfg.rules || []).find((r) => r.action && r.action.type === h.action);
+    const gname = rule && rule.match && rule.match.names && rule.match.names[0];
+    const icon = gname ? giftIcon(gname) : null;
+    const d = GameKit.el('div', 'hint', root);
+    if (icon) {
+      const im = document.createElement('img'); im.src = icon; im.alt = gname || '';
+      im.onerror = () => { im.style.display = 'none'; };
+      d.appendChild(im);
+    }
+    const l = GameKit.el('div', 'l', d); l.textContent = h.label;
+    const c = GameKit.el('div', 'c', d); c.textContent = gname ? `${gname} — ${h.caption}` : h.caption;
+  }
+}
+
+/* дебаг-панель */
+const dbg = document.getElementById('debug');
+function drawDebug() {
+  if (!S.debug) return;
+  const q = S.eng ? S.eng.queue.length : 0;
+  dbg.textContent =
+    `angle ${S.angle.toFixed(1)}°  state ${S.state}\n` +
+    `fed ${S.fed}  queue ${q}  dropped ${S.eng ? S.eng.dropped : 0}\n` +
+    `shield ${Math.max(0, (S.shieldUntil - Date.now()) / 1000).toFixed(1)}s\n` +
+    `audio: ${Object.entries(Audio2.ready).map(([k, v]) => `${k}:${v ? 'mp3' : 'synth'}`).join(' ')}\n` +
+    `keys: Space=лайк 1..6=действия R=reset Tab/D=panel`;
+}
+setInterval(drawDebug, 250);
+
+/* ══ BRIDGE — события TikTok + дебаг-клавиши ══════════════════════════ */
+
+const DEBUG_ACT = {
+  ' ': { type: 'nudge', value: 0.5, _user: 'debug', _ev: 'like' },
+  '1': { type: 'small', value: 6, _user: 'debug', _ev: 'gift', _gift: 'Rose' },
+  '2': { type: 'mid', value: 18, _user: 'debug', _ev: 'gift', _gift: 'Ice cream' },
+  '3': { type: 'pet', value: 22, sec: 5, _user: 'debug', _ev: 'gift', _gift: 'Heart Me' },
+  '4': { type: 'rotten', value: 35, _user: 'debug', _ev: 'gift', _gift: 'Chili' },
+  '5': { type: 'vacuum', _user: 'debug', _ev: 'gift', _gift: 'Fan' },
+  '6': { type: 'mega', _user: 'debug', _ev: 'gift', _gift: 'Galaxy' },
+};
+
+addEventListener('keydown', (e) => {
+  if (e.key === 'Tab' || e.key === 'd' || e.key === 'D' || e.key === 'в' || e.key === 'В') {
+    e.preventDefault();
+    S.debug = !S.debug; dbg.classList.toggle('show', S.debug); drawDebug();
+    return;
+  }
+  if (e.key === 'r' || e.key === 'R' || e.key === 'к' || e.key === 'К') {
+    S.angle = 0; S.fed = 0; S.donors = {}; S.particles = []; S.megaOwner = null;
+    S.eatUntil = 0; S.angryUntil = 0; S.shieldUntil = 0;
+    return;
+  }
+  const a = DEBUG_ACT[e.key];
+  if (a) act({ ...a });
+});
+
+async function main() {
+  HUD = GameKit.hud();
+  await loadConfig();
+  loadSprites();
+  await Audio2.probe();
+  buildHints();
+  S.callNext = Date.now() + 1500;
+
+  GameKit.connect(['game'], (ev) => {
+    if (ev.event_kind === 'gift_tick') return;      // промежутки серий — пропускаем
+    if (ev.avatar_url) S.avatars[ev.user] = ev.avatar_url;
+    S.eng.feed(ev);
+  }, (s) => HUD.setStatus(s));
+
+  GameKit.watchSession(GAME, (status) => {
+    document.getElementById('pause').style.display = status === 'paused' ? 'grid' : 'none';
+    S.running = status === 'running';
+  });
+  GameKit.unloadReport(GAME, () => {
+    if (!S.cfg) return null;
+    return {
+      duration_s: 0,
+      winner: S.lastDonor || '—',
+      score: S.fed,
+      top: GameKit.leaderboard(S.donors, 5),
+      stats: { fed: S.fed, donors: Object.keys(S.donors).length },
+    };
+  });
+  GameKit.loop(step, draw);
+}
+{
+  const s = document.createElement('script');
+  s.src = '/gamekit.js?t=' + encodeURIComponent(TOKEN);
+  s.onload = () => main().catch((e) => {
+    document.body.innerHTML = `<pre style="color:#f66;padding:20px">${e}</pre>`;
+  });
+  s.onerror = () => { document.body.innerHTML = '<pre style="color:#f66;padding:20px">gamekit: 403 — проверьте токен</pre>'; };
+  document.head.appendChild(s);
+}
+</script></body></html>

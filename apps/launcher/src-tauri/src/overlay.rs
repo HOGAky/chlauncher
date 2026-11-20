@@ -119,6 +119,18 @@ struct OverlayState {
     /// `/widgets/<path>` — files are NOT embedded so they can be
     /// customised without rebuilding the launcher.
     widgets_dir: Option<PathBuf>,
+    /// Game asset packs (`public/games/<pack>` — sprites/sfx/skin.json),
+    /// served at `/games-assets/<path>`; also disk-based so skins can be
+    /// dropped in without a rebuild.
+    games_dir: Option<PathBuf>,
+    /// User drop-in game packs root (`<app-data>/games`) — second lookup
+    /// for `/games-assets` and the `/overlay/game/{id}` dynamic route.
+    user_games_dir: PathBuf,
+    /// App data dir — pack scanning + `cfg_for` need it.
+    data_dir: PathBuf,
+    /// TTS queue — `/tts/say` lets game pages voice donor names through
+    /// the streamer's configured TTS output.
+    tts: Arc<crate::tts::Tts>,
     /// Lets `/overlay-close` shut frameless capture windows — the Escape
     /// handler injected into them can only reach the app through HTTP.
     app_handle: tauri::AppHandle,
@@ -304,6 +316,10 @@ pub async fn start_overlay_server(
     timer: broadcast::Sender<serde_json::Value>,
     // Engine handle — snapshot replays state+cfg to late subscribers.
     efirtimer: Arc<crate::efirtimer::EfirTimer>,
+    // TTS queue for `/tts/say` (game pages voice donor names).
+    tts: Arc<crate::tts::Tts>,
+    // App data dir — user game packs live in `<data>/games`.
+    data_dir: PathBuf,
 ) -> std::io::Result<(u16, bool)> {
     let state = OverlayState {
         hub,
@@ -325,6 +341,10 @@ pub async fn start_overlay_server(
         timer,
         efirtimer,
         widgets_dir: widgets_dir(),
+        games_dir: games_dir(),
+        user_games_dir: crate::game_packs::user_dir(&data_dir),
+        data_dir,
+        tts,
         app_handle,
     };
 
@@ -384,6 +404,16 @@ pub async fn start_overlay_server(
             "/overlay/game/prism_break",
             get(page_route(PRISM_BREAK_HTML)),
         )
+        .route(
+            "/overlay/game/patrick_cabbage",
+            get(page_route(PATRICK_CABBAGE_HTML)),
+        )
+        // Folder-pack games — any `games/<slug>/overlay.html` (bundled or
+        // `<app-data>/games`) resolves here; static routes above win on
+        // exact matches for compiled-in pages.
+        .route("/overlay/game/{id}", get(serve_pack_game))
+        .route("/games-assets/{*path}", get(serve_game_asset))
+        .route("/tts/say", post(tts_say))
         .route("/gamekit.js", get(serve_gamekit))
         .route("/games/cfg/{id}", get(serve_game_cfg))
         .route("/games/state.json", get(serve_game_state))
@@ -592,6 +622,119 @@ async fn serve_widget(
     }
 }
 
+/// Locates the game skin/asset library (`public/games`) — delegated to
+/// `game_packs::bundled_dir` (env override → `resources/games` beside
+/// the exe → dev path `<manifest>/../public/games`).
+fn games_dir() -> Option<PathBuf> {
+    crate::game_packs::bundled_dir()
+}
+
+/// `/overlay/game/{id}` — serves a folder-pack game page from disk.
+/// Compiled-in pages keep their static routes (matchit resolves exact
+/// segments first); this handler covers everything else — so a new game
+/// is a folder drop, not a rebuild.
+async fn serve_pack_game(
+    Path(id): Path<String>,
+    Query(q): Query<HashMap<String, String>>,
+    State(st): State<OverlayState>,
+) -> Response {
+    if !token_ok(q.get("t").map(String::as_str), &st.token) {
+        return (StatusCode::FORBIDDEN, "overlay token required (?t=…)").into_response();
+    }
+    let ok = !id.is_empty()
+        && id.len() <= 64
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
+    if !ok {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let Some(pack) = crate::game_packs::find(&id, &st.data_dir) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let Some(page) = pack.page_path() else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    match tokio::fs::read(&page).await {
+        Ok(bytes) => Html(String::from_utf8_lossy(&bytes).into_owned()).into_response(),
+        Err(_) => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// `/games-assets/<path>` — game skin packs (sprites/sfx/skin.json).
+/// Served from disk like `/widgets/` so a new skin drops in without a
+/// rebuild. Assets carry no secrets → no token gate (same as widget
+/// sub-resources); `..` and exotic chars are rejected char-wise.
+async fn serve_game_asset(
+    Path(path): Path<String>,
+    State(st): State<OverlayState>,
+) -> Response {
+    let ok = !path.is_empty()
+        && path.len() <= 256
+        && !path.contains("..")
+        && path
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/'));
+    if !ok {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let mime = match std::path::Path::new(&path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+    {
+        "json" => "application/json",
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "mp3" | "wav" | "ogg" => "audio/mpeg",
+        _ => return StatusCode::NOT_FOUND.into_response(),
+    };
+    // User packs override bundled ones — same precedence as the registry.
+    let mut roots = vec![st.user_games_dir.clone()];
+    if let Some(d) = &st.games_dir {
+        roots.push(d.clone());
+    }
+    for root in roots {
+        if let Ok(bytes) = tokio::fs::read(root.join(&path)).await {
+            return ([("content-type", mime)], bytes).into_response();
+        }
+    }
+    StatusCode::NOT_FOUND.into_response()
+}
+
+/// `POST /tts/say?t=` — game pages voice a donor nickname through the
+/// streamer's configured TTS pipeline (`speak_rule` — obeys mute,
+/// filters and the device/overlay output). Body: `{text, voice?, style?}`.
+async fn tts_say(
+    Query(q): Query<HashMap<String, String>>,
+    State(st): State<OverlayState>,
+    Json(body): Json<serde_json::Value>,
+) -> Response {
+    if !token_ok(q.get("t").map(String::as_str), &st.token) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let text = body.get("text").and_then(|v| v.as_str()).unwrap_or("");
+    if text.trim().is_empty() || text.len() > 120 {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+    // `game` picks the TTS rule profile (pack games may carry their own
+    // profile name in game.json); "patrick" stays the default voice rule.
+    let rule = body
+        .get("game")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty() && s.len() <= 64)
+        .unwrap_or("patrick");
+    st.tts.speak_rule(
+        rule.to_string(),
+        text.to_string(),
+        body.get("voice").and_then(|v| v.as_str()).map(String::from),
+        body.get("style").and_then(|v| v.as_str()).map(String::from),
+    );
+    StatusCode::OK.into_response()
+}
+
 /// `/top.json` — session leaderboard (top supporters by cumulative
 /// amount). The leaderboard page polls it every few seconds — cheap
 /// enough that a WS channel isn't warranted.
@@ -700,12 +843,12 @@ async fn serve_game_cfg(
     if !token_ok(q.get("t").map(String::as_str), &st.token) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    if crate::builtin_games::find(&id).is_none() {
+    if !crate::builtin_games::exists(&id, &st.data_dir) {
         return StatusCode::NOT_FOUND.into_response();
     }
     let cfg = {
         let mut s = st.settings.lock().await;
-        crate::builtin_games::cfg_for(&mut s, &id)
+        crate::builtin_games::cfg_for(&mut s, &id, &st.data_dir)
     };
     Json(serde_json::json!({
         "game_id": id,
@@ -726,7 +869,7 @@ async fn serve_game_report(
         return StatusCode::FORBIDDEN.into_response();
     }
     let game_id = body["game_id"].as_str().unwrap_or("");
-    if crate::builtin_games::find(game_id).is_none() {
+    if !crate::builtin_games::exists(game_id, &st.data_dir) {
         return StatusCode::BAD_REQUEST.into_response();
     }
     match st.games.record_result(body) {
@@ -1051,6 +1194,7 @@ const SURVIVE_HORDE_HTML: &str = include_str!("../overlay/survive_horde.html");
 const SNAKE_GIFTS_HTML: &str = include_str!("../overlay/snake_gifts.html");
 const FLAPPY_GIFTS_HTML: &str = include_str!("../overlay/flappy_gifts.html");
 const PRISM_BREAK_HTML: &str = include_str!("../overlay/prism_break.html");
+const PATRICK_CABBAGE_HTML: &str = include_str!("../overlay/patrick_cabbage.html");
 const GAMEKIT_JS: &str = include_str!("../overlay/gamekit.js");
 
 #[cfg(test)]

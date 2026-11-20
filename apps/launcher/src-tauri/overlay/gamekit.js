@@ -90,6 +90,12 @@
         const cmd = cm ? '!' + cm[1] : null;
         if (!cmd || !m.commands.map(lc).includes(cmd)) return false;
       }
+      // Подстрока в тексте (комментарий «патрик», «патрик на капусту»):
+      // строка или массив — матчится любая, регистронезависимо.
+      if (m.contains) {
+        const list = (Array.isArray(m.contains) ? m.contains : [m.contains]).map(lc);
+        if (!list.some((c) => lc(ev.raw_name).includes(c))) return false;
+      }
       if (m.min_coins && (ev.coins || 0) < m.min_coins) return false;
       return true;
     }

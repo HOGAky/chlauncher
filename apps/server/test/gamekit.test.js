@@ -72,6 +72,15 @@ test('comment commands are case-insensitive and need the ! prefix (§15.3)', () 
   assert.equal(e.pump().length, 2);
 });
 
+test('comment substring match («патрик» в чате)', () => {
+  const e = new Engine(cfg([{ event: 'comment', match: { contains: 'патрик' }, action: { type: 'nudge', value: 0.5 } }]));
+  e.feed(ev({ event_kind: 'comment', raw_name: 'ПАТРИК на капусту!', coins: 0, user: 'a' }));
+  e.feed(ev({ event_kind: 'comment', raw_name: 'привет патрик', coins: 0, user: 'b' }));
+  e.feed(ev({ event_kind: 'comment', raw_name: 'обычное сообщение', coins: 0, user: 'c' }));
+  e.feed(ev({ event_kind: 'gift', raw_name: 'патрик', coins: 1, user: 'd' })); // gift ≠ comment
+  assert.equal(e.pump().length, 2);
+});
+
 test('min_coins gate blocks cheap gifts (§15 match)', () => {
   const e = new Engine(cfg([{ event: 'gift', match: { min_coins: 100 }, action: { type: 'destroy' } }]));
   e.feed(ev({ coins: 50 }));

@@ -484,6 +484,8 @@ export interface RobloxStreamStatus {
     last_seen_at: string;
   } | null;
   queued_events: number;
+  /** Official published place id from the server (ROBLOX_PLACE_ID). */
+  place_id?: string | null;
   subscription: Subscription;
 }
 
@@ -597,6 +599,8 @@ export interface Bootstrap {
   tiktok_username: string | null;
   /** True when a sessionid cookie is stored for authenticated WS connect. */
   has_tiktok_session?: boolean;
+  /** Restore the saved room on launcher start (default true). */
+  tiktok_autoconnect?: boolean;
   integrations: {
     tiktok: IntegrationStatus;
     tiktok_username: string | null;
@@ -634,6 +638,8 @@ export interface Bootstrap {
     stream_key: string | null;
     has_admin_secret: boolean;
     roblox_place_id: string | null;
+    /** Build/env fallback for the official place (used when server says none). */
+    official_place_id?: string | null;
     status: ForwardStatus;
   } | null;
 }
@@ -840,6 +846,12 @@ export interface BuiltinGameMeta {
   title: string;
   desc: string;
   allowed: boolean;
+  /** true — игра добавлена папкой-пакетом (games/<slug>/game.json). */
+  pack?: boolean;
+  /** База ассетов пакета (`/games-assets/<dir>`). */
+  assets_base?: string;
+  /** URL иконки карточки из манифеста пакета. */
+  icon?: string;
   cfg: BuiltinGameCfg;
   overlay_path: string;
 }

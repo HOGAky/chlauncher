@@ -84778,6 +84778,18 @@ function parseSession(raw) {
   return { sessionId: sid, ttTargetIdc: idc || "useast2a" };
 }
 var evCount = 0;
+var conn = null;
+var connConnected = () => {
+  try {
+    const c3 = conn;
+    if (!c3) return false;
+    if (typeof c3.isConnected === "boolean") return c3.isConnected;
+    if (c3.state && typeof c3.state.isConnected === "boolean") return c3.state.isConnected;
+    return true;
+  } catch {
+    return true;
+  }
+};
 var ev = (event_kind, d, raw_name, amount = 0, extra = {}) => {
   evCount++;
   out({
@@ -84801,7 +84813,7 @@ var ev = (event_kind, d, raw_name, amount = 0, extra = {}) => {
   });
 };
 var createConnection = () => {
-  const conn = new TikTokLiveConnection2(username, {
+  const conn2 = new TikTokLiveConnection2(username, {
     processInitialData: false,
     enableExtendedGiftInfo: false,
     // gift/list endpoint needs a paid sign plan
@@ -84814,15 +84826,15 @@ var createConnection = () => {
       session: { cookie: { type: "cookie", value: sessionBundle } }
     } : {}
   });
-  conn.on(
+  conn2.on(
     ControlEvent2.ERROR,
     (e) => out({
       type: "warn",
       message: String(e?.exception?.message || e?.message || e?.info || e)
     })
   );
-  conn.on(WebcastEvent2.CHAT, (d) => ev("comment", d, d.content ?? d.comment));
-  conn.on(WebcastEvent2.LIKE, (d) => {
+  conn2.on(WebcastEvent2.CHAT, (d) => ev("comment", d, d.content ?? d.comment));
+  conn2.on(WebcastEvent2.LIKE, (d) => {
     const likes = Number(d.count ?? d.likeCount) || 0;
     const plural = (n2) => n2 % 10 === 1 && n2 % 100 !== 11 ? "\u043B\u0430\u0439\u043A" : n2 % 10 >= 2 && n2 % 10 <= 4 && (n2 % 100 < 10 || n2 % 100 >= 20) ? "\u043B\u0430\u0439\u043A\u0430" : "\u043B\u0430\u0439\u043A\u043E\u0432";
     ev("like", d, `${likes} ${plural(likes)}`, likes, {
@@ -84830,7 +84842,7 @@ var createConnection = () => {
       like_total: Number(d.total ?? d.totalLikeCount) || 0
     });
   });
-  conn.on(WebcastEvent2.GIFT, (d) => {
+  conn2.on(WebcastEvent2.GIFT, (d) => {
     const giftType = d.giftType ?? d.gift?.type;
     const repeatEnd = d.repeatEnd ?? d.gift?.repeatEnd;
     const giftId = d.giftId ?? d.gift?.id ?? null;
@@ -84850,16 +84862,16 @@ var createConnection = () => {
       gift_id: giftId
     });
   });
-  conn.on(WebcastEvent2.MEMBER, (d) => ev("join", d, "joined"));
-  conn.on(WebcastEvent2.FOLLOW, (d) => ev("follow", d, "followed"));
-  conn.on(WebcastEvent2.SHARE, (d) => ev("share", d, "shared"));
-  conn.on(WebcastEvent2.SOCIAL, (d) => {
+  conn2.on(WebcastEvent2.MEMBER, (d) => ev("join", d, "joined"));
+  conn2.on(WebcastEvent2.FOLLOW, (d) => ev("follow", d, "followed"));
+  conn2.on(WebcastEvent2.SHARE, (d) => ev("share", d, "shared"));
+  conn2.on(WebcastEvent2.SOCIAL, (d) => {
     const t = String(d.displayType || "").toLowerCase();
     if (t.includes("share")) ev("share", d, "shared");
     else if (t.includes("follow")) ev("follow", d, "followed");
   });
-  conn.on(WebcastEvent2.SUB_NOTIFY, (d) => ev("subscribe", d, "subscribed"));
-  return conn;
+  conn2.on(WebcastEvent2.SUB_NOTIFY, (d) => ev("subscribe", d, "subscribed"));
+  return conn2;
 };
 var friendly = (msg) => /Failed to retrieve (Room ID|live status)|CompositeError/i.test(msg) ? "\u041D\u0438\u043A \u043D\u0435 \u043D\u0430\u0439\u0434\u0435\u043D, \u043B\u0438\u0431\u043E TikTok \u0440\u0435\u0436\u0435\u0442 \u0430\u043D\u043E\u043D\u0438\u043C\u043D\u044B\u0435 \u0437\u0430\u043F\u0440\u043E\u0441\u044B (WAF-\u0431\u043B\u043E\u043A) \u2014 \u043F\u0440\u043E\u0432\u0435\u0440\u044C\u0442\u0435 \u043D\u0438\u043A; \u0435\u0441\u043B\u0438 \u043E\u043D \u0432\u0435\u0440\u043D\u044B\u0439, \u043D\u0430\u0436\u043C\u0438\u0442\u0435 \xAB\u0412\u043E\u0439\u0442\u0438 \u0447\u0435\u0440\u0435\u0437 TikTok \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438\xBB." : /DEVICE_BLOCKED/i.test(msg) ? "\u041D\u043E\u0434\u0430 \u043F\u043E\u0434\u043F\u0438\u0441\u0438 \u043F\u043E\u0434 \u0431\u0430\u043D\u043E\u043C TikTok (DEVICE_BLOCKED) \u2014 \u043F\u0435\u0440\u0435\u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0438\u0434\u0451\u0442 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438, \u0441\u043C\u0435\u043D\u0430 \u043D\u043E\u0434\u044B \u043F\u0440\u0438 \u043A\u0430\u0436\u0434\u043E\u0439 \u043F\u043E\u043F\u044B\u0442\u043A\u0435." : /offline|not online|isn't online/i.test(msg) ? "\u0421\u0442\u0440\u0438\u043C\u0435\u0440 \u0441\u0435\u0439\u0447\u0430\u0441 \u043D\u0435 \u0432 \u044D\u0444\u0438\u0440\u0435 \u2014 \u043B\u0430\u0443\u043D\u0447\u0435\u0440 \u043F\u0435\u0440\u0435\u043F\u0440\u043E\u0432\u0435\u0440\u0438\u0442 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438." : /SIGN_NOT_200|sign/i.test(msg) ? "\u041E\u0448\u0438\u0431\u043A\u0430 \u043F\u043E\u0434\u043F\u0438\u0441\u0438 \u0437\u0430\u043F\u0440\u043E\u0441\u0430 \u2014 \u043F\u0435\u0440\u0435\u043F\u043E\u0434\u043A\u043B\u044E\u0447\u0435\u043D\u0438\u0435 \u0430\u0432\u0442\u043E\u043C\u0430\u0442\u0438\u0447\u0435\u0441\u043A\u0438." : msg;
 var RETRY_MS = 15e3;
@@ -84876,7 +84888,6 @@ var main = async () => {
     } catch {
     }
   }
-  let conn = null;
   let retryTimer = null;
   const scheduleRetry = (msg) => {
     if (retryTimer) return;
@@ -84886,7 +84897,6 @@ var main = async () => {
       retryTimer = null;
       void run();
     }, RETRY_MS);
-    retryTimer.unref?.();
   };
   const run = async () => {
     if (conn) {
@@ -84929,10 +84939,23 @@ var main = async () => {
       scheduleRetry(friendly(msg));
     }
   };
+  setInterval(() => {
+    const c3 = conn;
+    if (!c3 || !connConnected()) return;
+    c3.fetchIsLive().then((live) => {
+      if (live === false && conn === c3) {
+        scheduleRetry("\u042D\u0444\u0438\u0440 \u0437\u0430\u0432\u0435\u0440\u0448\u0451\u043D \u2014 \u0436\u0434\u0451\u043C \u0441\u043B\u0435\u0434\u0443\u044E\u0449\u0438\u0439.");
+      }
+    }).catch(() => {
+    });
+  }, 6e4);
   await run();
 };
 main();
-setInterval(() => out({ type: "ping", ts: Date.now(), events: evCount }), 15e3).unref();
+setInterval(
+  () => out({ type: "ping", ts: Date.now(), events: evCount, connected: connConnected() }),
+  15e3
+);
 process.stdin.resume();
 /*! Bundled license information:
 

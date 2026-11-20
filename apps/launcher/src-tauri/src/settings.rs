@@ -31,6 +31,10 @@ pub struct Settings {
     /// anonymous-device DEVICE_BLOCKED waves on the free sign tier.
     #[serde(default)]
     pub tiktok_session: Option<String>,
+    /// Restore the saved TikTok room connection on launcher start.
+    /// `None`/missing = on (automation default), `Some(false)` = manual.
+    #[serde(default)]
+    pub tiktok_autoconnect: Option<bool>,
     /// DonationAlerts access token pasted by the streamer.
     pub donationalerts_token: Option<String>,
     /// Hide personal data on screen (for streamers on one monitor).

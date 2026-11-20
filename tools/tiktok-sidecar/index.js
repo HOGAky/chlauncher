@@ -190,6 +190,20 @@ function parseSession(raw) {
 // Event counter rides the heartbeat — lets the launcher tell
 // "connected but stream is quiet" apart from "events aren't flowing".
 let evCount = 0;
+// The active connection lives at module scope so the heartbeat can
+// report socket truth — a dead socket must not keep pinging "alive".
+let conn = null;
+const connConnected = () => {
+  try {
+    const c = conn;
+    if (!c) return false;
+    if (typeof c.isConnected === 'boolean') return c.isConnected;
+    if (c.state && typeof c.state.isConnected === 'boolean') return c.state.isConnected;
+    return true; // unknown shape — don't claim a false negative
+  } catch {
+    return true;
+  }
+};
 
 const ev = (event_kind, d, raw_name, amount = 0, extra = {}) => {
   evCount++;
@@ -334,7 +348,6 @@ const main = async () => {
     } catch { /* malformed basePath — the lib reports its own error */ }
   }
 
-  let conn = null;
   let retryTimer = null;
 
   const scheduleRetry = (msg) => {
@@ -347,7 +360,9 @@ const main = async () => {
       retryTimer = null;
       void run();
     }, RETRY_MS);
-    retryTimer.unref?.();
+    // NOT unref'd: stdin is EOF after the bootstrap line and a dead socket
+    // holds nothing — an unref'd retry would let the process silently exit
+    // during wait-for-live instead of re-checking online.
   };
 
   const run = async () => {
@@ -396,11 +411,34 @@ const main = async () => {
     }
   };
 
+  // Online re-check: while a socket is up, re-verify every 60 s that the
+  // room is actually still live. Catches streams that ended without a
+  // clean streamEnd/DISCONNECTED — the supervisor then waits for the
+  // next broadcast as usual.
+  setInterval(() => {
+    const c = conn;
+    if (!c || !connConnected()) return;
+    c.fetchIsLive()
+      .then((live) => {
+        if (live === false && conn === c) {
+          scheduleRetry('Эфир завершён — ждём следующий.');
+        }
+      })
+      .catch(() => {
+        /* probe failure — the connect supervisor's retries cover it */
+      });
+  }, 60000);
+
   await run();
 };
 
 main();
 
 // Heartbeat so the launcher can tell a dead pipe from a quiet room.
-setInterval(() => out({ type: 'ping', ts: Date.now(), events: evCount }), 15000).unref();
+// `connected` reports real socket state — without it a silently dead
+// WebSocket would keep the launcher showing «В эфире» forever.
+setInterval(
+  () => out({ type: 'ping', ts: Date.now(), events: evCount, connected: connConnected() }),
+  15000
+);
 process.stdin.resume(); // keep alive; launcher kills us on disconnect

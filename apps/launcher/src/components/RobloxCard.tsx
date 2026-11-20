@@ -177,17 +177,28 @@ export default function RobloxCard() {
         <Input
           className="h-8 text-xs"
           placeholder={
-            dev ? 'Place ID (пусто = тест в Studio: !key <ключ>, затем !claim)' : 'Place ID игры'
+            dev
+              ? 'Place ID (пусто = тест в Studio: !key <ключ>, затем !claim)'
+              : 'Place ID (пусто = официальный сервер)'
           }
           value={placeId}
           onChange={(e) => setPlaceId(e.target.value.replace(/\D/g, ''))}
           onBlur={() => api.setRobloxPlaceId(placeId.trim()).catch((e) => setErr(humanError(e)))}
         />
+        <span className="text-[11px] text-muted-foreground">
+          {placeId.trim()
+            ? `Запустится свой плейс ${placeId.trim()}`
+            : dev
+              ? 'Пусто — без запуска клиента, тест в Studio'
+              : st?.place_id || boot?.forward?.official_place_id
+                ? `Запустится официальный сервер · place ${st?.place_id ?? boot?.forward?.official_place_id}`
+                : 'Запустится официальный сервер (если уже опубликован)'}
+        </span>
       </CardContent>
       <CardFooter className="gap-2">
         <Button
           size="sm"
-          disabled={busy || !placeId.trim() || !boot?.authed}
+          disabled={busy || !boot?.authed}
           title={boot?.authed ? 'Профиль в эфир + тикет + запуск Roblox' : 'Сначала войдите'}
           onClick={run(async () => {
             await api.setRobloxPlaceId(placeId.trim());

@@ -47,7 +47,8 @@
     "resources": {
       "../../../tools/tiktok-sidecar/dist": "tiktok-sidecar",
       "../public/gifts": "gifts",
-      "../public/widgets": "widgets"
+      "../public/widgets": "widgets",
+      "../public/games": "games"
     },
     "windows": {
       "webviewInstallMode": {

@@ -4,7 +4,7 @@
  * presence), DonationAlerts token connect, and the Browser Source overlay
  * URL for TikTok Live Studio.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Radio, Copy, Wallet, Cloud, RefreshCw, Plug, Play, AppWindow, BadgeCheck, LogIn, QrCode } from 'lucide-react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import * as api from '../api';
@@ -42,6 +42,11 @@ export default function IntegrationsPage() {
   // sessionid cookie — authenticated-WS bypass for DEVICE_BLOCKED waves.
   const [ttSession, setTtSession] = useState('');
   const [ttSessionSaved, setTtSessionSaved] = useState(boot?.has_tiktok_session ?? false);
+  // Startup auto-connect toggle + one-click «log in & connect» intent.
+  const [autoconnect, setAutoconnect] = useState(boot?.tiktok_autoconnect ?? true);
+  const expectConnect = useRef(false);
+  const usernameRef = useRef(username);
+  usernameRef.current = username;
   const [showQr, setShowQr] = useState(false);
   const [daToken, setDaToken] = useState('');
   const [statuses, setStatuses] = useState(boot?.integrations);
@@ -86,8 +91,31 @@ export default function IntegrationsPage() {
 
   useEffect(() => {
     let un: (() => void) | undefined;
-    api.onTiktokSessionCaptured(() => setTtSessionSaved(true)).then((u) => (un = u));
-    return () => un?.();
+    let un2: (() => void) | undefined;
+    api
+      .onTiktokSessionCaptured(() => {
+        setTtSessionSaved(true);
+        // «Войти в TikTok и подключить» flow: Rust auto-reconnects when a
+        // connect attempt was in-flight/failed; a Disconnected room still
+        // needs the connect call from here.
+        if (expectConnect.current) {
+          expectConnect.current = false;
+          api.getIntegrationStatus().then((s) => {
+            const name = usernameRef.current.trim();
+            if (name && (!s?.tiktok || s.tiktok === 'disconnected')) {
+              api.tiktokConnect(name).catch(() => {});
+            }
+          });
+        }
+      })
+      .then((u) => (un = u));
+    api
+      .onTiktokUsernameChanged((u) => setUsername(u))
+      .then((u) => (un2 = u));
+    return () => {
+      un?.();
+      un2?.();
+    };
   }, []);
 
   const saveForward = (enabled: boolean) => {
@@ -142,6 +170,21 @@ export default function IntegrationsPage() {
     statuses?.tiktok === 'connected' || statuses?.tiktok === 'live' || statuses?.tiktok === 'connecting';
   const daConnected = statuses?.donationalerts === 'live' || statuses?.donationalerts === 'connecting';
   const ttError = typeof statuses?.tiktok === 'object' && statuses.tiktok && 'error' in statuses.tiktok;
+  const ttErrorMsg =
+    typeof statuses?.tiktok === 'object' && statuses.tiktok && 'error' in statuses.tiktok
+      ? String(statuses.tiktok.error)
+      : '';
+  // Problems the embedded TikTok login fixes: WAF/DEVICE_BLOCKED waves,
+  // a dead sessionid, sign rejects — the capture→reconnect is automatic.
+  const sessionFixable = /DEVICE_BLOCKED|WAF|session|аноним|подпис|не найден/i.test(
+    `${ttErrorMsg} ${ttMsg}`
+  );
+  const sessionLoginAndConnect = () => {
+    expectConnect.current = true;
+    api.openTiktokLogin().catch(() => {
+      expectConnect.current = false;
+    });
+  };
   const lastAct = statuses?.tiktok_last_activity;
   const actAgeSec = lastAct ? Math.max(0, Math.floor(Date.now() / 1000 - lastAct)) : null;
 
@@ -370,7 +413,7 @@ export default function IntegrationsPage() {
           </p>
           <div className="flex gap-2">
             <Input
-              placeholder="TikTok username (без @)"
+              placeholder="TikTok username или ссылка на эфир"
               value={username}
               onChange={(e) => setUsername(e.target.value.replace(/^@/, ''))}
             />
@@ -396,6 +439,30 @@ export default function IntegrationsPage() {
               </Button>
             )}
           </div>
+          {(ttError || sessionFixable) && (
+            <div className="flex flex-col gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+              <p className="text-xs text-amber-200/90">
+                TikTok режет анонимное подключение. Войдите в TikTok во встроенном
+                окне — sessionid и ник подхватятся сами, связь восстановится
+                автоматически.
+              </p>
+              <div>
+                <Button size="sm" variant="secondary" onClick={sessionLoginAndConnect}>
+                  <LogIn size={14} className="mr-1" /> Войти в TikTok и переподключить
+                </Button>
+              </div>
+            </div>
+          )}
+          <label className="flex items-center gap-2 text-xs text-muted-foreground select-none">
+            <Switch
+              checked={autoconnect}
+              onCheckedChange={(v) => {
+                setAutoconnect(v);
+                api.setTiktokAutoconnect(v).catch(() => setAutoconnect(!v));
+              }}
+            />
+            Подключаться к эфиру при запуске лаунчера
+          </label>
           {ttConnected && (
             <p className={`text-[11px] ${stale ? 'text-amber-400' : 'text-muted-foreground'}`}>
               {statuses?.tiktok === 'live'
@@ -418,10 +485,11 @@ export default function IntegrationsPage() {
               <p className="text-muted-foreground">
                 Если TikTok отвечает DEVICE_BLOCKED — войдите в TikTok во встроенном окне, кука
                 <code> sessionid</code> подхватится сама. Подключение станет авторизованным —
-                без анонимных лимитов. Хранится только локально.
+                без анонимных лимитов. Хранится только локально. После входа ник подставится и
+                связь перезапустится автоматически.
               </p>
-              <Button size="sm" variant="secondary" onClick={() => api.openTiktokLogin()}>
-                <LogIn size={14} className="mr-1" /> Войти в TikTok — sessionid подхватится сам
+              <Button size="sm" variant="secondary" onClick={sessionLoginAndConnect}>
+                <LogIn size={14} className="mr-1" /> Войти в TikTok — сессия и связь настроятся сами
               </Button>
               <Button size="sm" variant="secondary" onClick={() => setShowQr((v) => !v)}>
                 <QrCode size={14} className="mr-1" /> {showQr ? 'Скрыть QR' : 'Передать с телефона (QR)'}
@@ -592,18 +660,20 @@ export default function IntegrationsPage() {
           <div className="flex gap-2 items-center border-t border-border/60 pt-3">
             <Input
               className="flex-1"
-              placeholder="Roblox Place ID (из URL игры)"
+              placeholder="Place ID (пусто = официальный сервер)"
               value={placeId}
               onChange={(e) => setPlaceId(e.target.value.replace(/\D/g, ''))}
             />
-            <Button variant="outline" size="sm" onClick={launchRoblox} disabled={!placeId.trim()}>
+            <Button variant="outline" size="sm" onClick={launchRoblox}>
               <Play size={14} /> Запустить игру
             </Button>
           </div>
           {launchMsg && <p className="text-[11px] text-destructive">{launchMsg}</p>}
           <p className="text-[10px] text-muted-foreground">
-            Кнопка открывает Roblox-клиент прямо в указанном experience — сервер
+            Кнопка открывает Roblox-клиент прямо в experience — сервер
             румы поднимается в облаке Roblox и забирает события по ключу.
+            Пустое поле = официальный сервер Steal the Stream (берётся с
+            нашего бэкенда); впишите id только для теста своей копии игры.
           </p>
 
           {fwdEnabled && streamKey && (

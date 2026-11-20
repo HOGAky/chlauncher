@@ -527,6 +527,22 @@ async fn run_tiktok(
             "ping" => {
                 last_ping = std::time::Instant::now();
                 touch(&last_activity).await;
+                // The heartbeat is process-level — a silently dead socket
+                // still pings. `connected:false` is the sidecar's socket
+                // truth: downgrade a stale «В эфире» badge until the
+                // supervisor re-verifies and pushes a real status.
+                if v["connected"] == false {
+                    let mut st = status.lock().await;
+                    if *st == IntegrationStatus::Live {
+                        *st = IntegrationStatus::Connecting;
+                        let _ = app.emit(
+                            STATUS_EVENT,
+                            json!({"integration":"tiktok","status":IntegrationStatus::Connecting,
+                                   "username":username,
+                                   "message":"Сокет молчит — перепроверка связи…"}),
+                        );
+                    }
+                }
             }
             "status" => {
                 // Unknown status strings (e.g. "sign_proxy") are

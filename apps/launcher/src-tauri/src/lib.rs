@@ -24,6 +24,7 @@ pub mod downloads;
 pub mod efirtimer;
 pub mod events;
 pub mod forwarder;
+pub mod game_packs;
 pub mod game_ws;
 pub mod goals;
 pub mod hwid;
@@ -117,6 +118,20 @@ pub fn run() {
             let game_events = broadcast::channel::<RawStreamEvent>(512).0;
             // Built-in game sessions + results ledger (<data>/game_results.json).
             let builtin = Arc::new(builtin_games::BuiltinGames::new(&data_dir));
+            // User drop-in game packs root — folders added here are
+            // picked up by the registry without a rebuild.
+            let user_games = game_packs::user_dir(&data_dir);
+            std::fs::create_dir_all(&user_games).ok();
+            {
+                let packs = game_packs::scan(&data_dir);
+                let user = packs.iter().filter(|p| p.user).count();
+                tracing::info!(
+                    total = packs.len(),
+                    user_packs = user,
+                    dir = %user_games.display(),
+                    "game packs scanned"
+                );
+            }
 
             // Local services bind 127.0.0.1:0 — the OS picks free ports.
             // A bind failure is recorded (not fatal): the UI shows the
@@ -240,6 +255,8 @@ pub fn run() {
                 raw_stream_tx.clone(),
                 timer_tx.clone(),
                 efirtimer.clone(),
+                tts.clone(),
+                data_dir.clone(),
             )) {
                 Ok((port, fell_back)) => {
                     if fell_back {
@@ -450,6 +467,66 @@ pub fn run() {
 
             app.manage(state);
 
+            // --- startup auto-connect + re-verification --------------------
+            // Restore the saved TikTok room a few seconds after boot, then
+            // actively re-check the connection: Error/Disconnected retries
+            // (up to 3 attempts — each respawn re-rolls the sign node and
+            // re-runs the sidecar's fetchIsLive online check); a stuck
+            // «Подключение…» also gets a fresh respawn per check round.
+            // Skipped only when the streamer turned `tiktok_autoconnect` off.
+            {
+                let app_h = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    use crate::types::IntegrationStatus;
+                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                    let state = app_h.state::<AppState>();
+                    let username = {
+                        let s = state.settings.lock().await;
+                        if s.data.tiktok_autoconnect == Some(false) {
+                            None
+                        } else {
+                            s.data.tiktok_username.clone()
+                        }
+                    };
+                    let Some(username) = username else { return };
+
+                    for attempt in 1..=3u8 {
+                        let bs =
+                            commands::sidecar_bootstrap(&state.settings, &state.api.base()).await;
+                        if let Err(e) =
+                            state.integrations.tiktok_connect(username.clone(), bs).await
+                        {
+                            tracing::warn!(error = %e, attempt, "tiktok auto-connect failed");
+                        }
+                        // Re-check: poll the reported status for ~60 s.
+                        // Connecting = the sidecar is up and waiting for
+                        // the room to go live — normal, but the next round
+                        // still gives it one fresh respawn/online re-check.
+                        let mut settled = false;
+                        for _ in 0..6 {
+                            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                            match *state.integrations.tiktok_status.lock().await {
+                                IntegrationStatus::Live | IntegrationStatus::Connected => {
+                                    return;
+                                }
+                                IntegrationStatus::Disconnected
+                                | IntegrationStatus::Error(_) => {
+                                    settled = true;
+                                    break;
+                                }
+                                IntegrationStatus::Connecting => {}
+                            }
+                        }
+                        if !settled && attempt == 3 {
+                            tracing::info!(
+                                "tiktok auto-connect: still connecting after re-checks — \
+                                 sidecar supervisor keeps waiting for live"
+                            );
+                        }
+                    }
+                });
+            }
+
             // Register the configured TTS-mute hotkey (§6.2). The
             // configured string is `Ctrl+Shift+M`-style; on parse failure
             // we log and continue — hotkey stays unbound.
@@ -579,6 +656,7 @@ pub fn run() {
             commands::kill_game,
             commands::tiktok_connect,
             commands::set_tiktok_session,
+            commands::set_tiktok_autoconnect,
             commands::open_tiktok_login,
             commands::tiktok_disconnect,
             commands::tiktok_reconnect,
