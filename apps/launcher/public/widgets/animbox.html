@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Gift Animations</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:transparent; }
+  .stage {
+    position:absolute; left:50%; top:50%;
+    width:1080px; height:1920px;
+    transform-origin:center center;
+    font-family:'Segoe UI', sans-serif;
+  }
+
+  /* ---- слой одного проигрывания: якорь по position + scale правила ---- */
+  .anim-layer {
+    position:absolute; pointer-events:none;
+    display:flex; align-items:center; justify-content:center;
+    opacity:0; transition:opacity .35s ease;
+  }
+  .anim-layer.on { opacity:1; }
+  .anim-layer.pos-center       { inset:0; }
+  .anim-layer.pos-top          { left:0; right:0; top:4%;    height:34%; }
+  .anim-layer.pos-bottom       { left:0; right:0; bottom:4%; height:44%; }
+  .anim-layer.pos-left         { left:3%;  top:0; bottom:0; width:46%; }
+  .anim-layer.pos-right        { right:3%; top:0; bottom:0; width:46%; }
+  .anim-layer.pos-top-left     { left:3%;  top:4%;    width:46%; height:40%; }
+  .anim-layer.pos-top-right    { right:3%; top:4%;    width:46%; height:40%; }
+  .anim-layer.pos-bottom-left  { left:3%;  bottom:4%; width:46%; height:44%; }
+  .anim-layer.pos-bottom-right { right:3%; bottom:4%; width:46%; height:44%; }
+  .anim-inner { width:100%; height:100%; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; transform-origin:center center; }
+  .anim-media { max-width:100%; max-height:88%; object-fit:contain;
+    filter:drop-shadow(0 14px 30px rgba(0,0,0,.45)); }
+  .anim-cap {
+    margin-top:14px; padding:10px 26px; border-radius:999px;
+    background:rgba(10,12,16,.72); border:1px solid rgba(255,255,255,.22);
+    color:#fff; font-weight:700; font-size:34px; letter-spacing:.5px;
+    text-shadow:0 2px 8px rgba(0,0,0,.6); white-space:nowrap;
+  }
+  .anim-cap b { color:#ff7b93; }
+
+  /* ============ встроенная «рука из крана с розой» ============ */
+  /* Таймлайн 5.6s: рука выезжает из носика крана с увядшей розой,
+     роза расправляется и расцветает, рука уезжает обратно. */
+  .rosefx { width:100%; height:100%; }
+  .rosefx svg { width:100%; height:100%; overflow:visible; }
+
+  .fx-arm {
+    transform-origin:300px 175px;
+    animation:armSlide 5.6s cubic-bezier(.25,.9,.3,1) both;
+  }
+  @keyframes armSlide {
+    0%   { transform:translateY(-560px); }
+    15%  { transform:translateY(0); }
+    84%  { transform:translateY(0); }
+    100% { transform:translateY(-560px); }
+  }
+  .fx-sway {
+    transform-origin:300px 352px;
+    animation:sway 5.6s ease-in-out both;
+  }
+  @keyframes sway {
+    0%,15% { transform:rotate(0); }
+    24% { transform:rotate(-4deg); }
+    34% { transform:rotate(4deg); }
+    44% { transform:rotate(-2deg); }
+    52%,100% { transform:rotate(0); }
+  }
+  /* наклон всего букета в точке хвата: вяло висит → встаёт */
+  .fx-tilt {
+    transform-origin:300px 352px;
+    animation:tilt 5.6s ease-in-out both;
+  }
+  @keyframes tilt {
+    0%,30%  { transform:rotate(55deg); }
+    48%     { transform:rotate(-8deg); }
+    58%     { transform:rotate(3deg); }
+    66%,100%{ transform:rotate(0deg); }
+  }
+  /* поникшая головка относительно стебля */
+  .fx-droop {
+    transform-origin:300px 232px;
+    animation:droop 5.6s ease-in-out both;
+  }
+  @keyframes droop {
+    0%,34%  { transform:rotate(-78deg) translateY(6px); }
+    55%     { transform:rotate(9deg); }
+    64%,100%{ transform:rotate(0); }
+  }
+  /* стебель: согнут → прямой (лёгкое вытягивание) */
+  .fx-stem {
+    transform-origin:300px 346px;
+    animation:stemUp 5.6s ease-in-out both;
+  }
+  @keyframes stemUp {
+    0%,32% { transform:scaleY(.86); }
+    58%,100% { transform:scaleY(1); }
+  }
+  /* цвет головки: тусклый бордо → живой красный */
+  .fx-budcore { animation:budColor 5.6s ease both; }
+  @keyframes budColor {
+    0%,38%  { fill:#8a4a3a; }
+    62%,100%{ fill:#ff3d6e; }
+  }
+  .fx-petal {
+    transform-origin:50% 100%;
+    transform-box:fill-box;
+    animation:petalOpen 5.6s ease-out both;
+  }
+  @keyframes petalOpen {
+    0%,46% { transform:scale(.18) translateY(6px); opacity:.85; }
+    62%    { transform:scale(1.12); opacity:1; }
+    70%,100% { transform:scale(1); opacity:1; }
+  }
+  .fx-leaf {
+    transform-origin:0px 0px; transform-box:fill-box;
+    animation:leafOpen 5.6s ease-out both;
+  }
+  @keyframes leafOpen {
+    0%,40% { transform:scale(.3); opacity:.7; }
+    58%,100% { transform:scale(1); opacity:1; }
+  }
+  .fx-glow { animation:glowPulse 5.6s ease both; }
+  @keyframes glowPulse {
+    0%,48% { opacity:0; }
+    62% { opacity:.85; }
+    82% { opacity:.5; }
+    94%,100% { opacity:0; }
+  }
+  .fx-spark { transform-origin:center; transform-box:fill-box;
+    animation:sparkPop 5.6s ease-out both; }
+  @keyframes sparkPop {
+    0%,58% { transform:scale(0) rotate(0deg); opacity:0; }
+    66% { transform:scale(1.25) rotate(20deg); opacity:1; }
+    78% { transform:scale(.7) rotate(40deg); opacity:.8; }
+    90%,100% { transform:scale(0) rotate(60deg); opacity:0; }
+  }
+  .fx-fallpetal {
+    transform-origin:center; transform-box:fill-box;
+    animation:fallPetal 5.6s ease-in both;
+  }
+  @keyframes fallPetal {
+    0%,46% { transform:translate(0,0) rotate(0); opacity:.9; }
+    70% { transform:translate(46px,150px) rotate(160deg); opacity:.7; }
+    88%,100% { transform:translate(60px,260px) rotate(240deg); opacity:0; }
+  }
+</style>
+</head>
+<body>
+<div class="stage" id="stage"></div>
+<script src="bridge.js"></script>
+<script>
+(function(){
+  const stage = document.getElementById('stage');
+  function fit(){
+    const s = Math.min(innerWidth/1080, innerHeight/1920);
+    stage.style.transform = `translate(-50%,-50%) scale(${s})`;
+  }
+  addEventListener('resize', fit); fit();
+
+  const q = new URLSearchParams(location.search);
+  const token = q.get('t') || '';
+  const demo = q.get('demo') || '';
+
+  let rules = [], mediaMap = {};
+  fetch('/anim/cfg?t=' + encodeURIComponent(token))
+    .then(r => r.ok ? r.json() : {rules:[],media:[]})
+    .then(c => {
+      rules = (c.rules || []).filter(r => r.enabled);
+      (c.media || []).forEach(m => mediaMap[m.id] = m);
+      bootDemo();
+    })
+    .catch(() => {});
+
+  const norm = s => String(s||'').toLowerCase().trim();
+  const lastFire = {};
+
+  function matchRule(ev){
+    const kind = ev.event_kind;
+    for (const r of rules) {
+      // 'each' — каждый юнит серии (gift_tick) + финальный gift (одиночный
+      // подарок без стрика тоже приходит как gift); 'series' — только gift.
+      if (r.mode === 'each' ? (kind !== 'gift' && kind !== 'gift_tick')
+                           : kind !== 'gift') continue;
+      if (r.gift_id && ev.gift_id && ev.gift_id === r.gift_id) return fire(r, ev);
+      if (r.gift_id && !r.gift_name) continue;
+      if (r.gift_name && !norm(ev.raw_name).includes(norm(r.gift_name))) continue;
+      if (!r.gift_name && !r.gift_id) { /* любой подарок */ }
+      if ((r.min_coins|0) > 0 && (ev.coins|0) < r.min_coins) continue;
+      return fire(r, ev);
+    }
+  }
+  function fire(r, ev){
+    const now = Date.now();
+    if ((r.cooldown_ms|0) > 0 && lastFire[r.id] && now - lastFire[r.id] < r.cooldown_ms) return;
+    lastFire[r.id] = now;
+    enqueue(r, ev);
+  }
+
+  // ---- очередь: одна анимация за раз, чтобы не наслаивались ----
+  const queue = []; let busy = false;
+  function enqueue(r, ev){
+    if (queue.length >= 8) queue.shift();
+    queue.push({r, ev}); pump();
+  }
+  function pump(){
+    if (busy || !queue.length) return;
+    busy = true;
+    const {r, ev} = queue.shift();
+    play(r, ev, () => { busy = false; pump(); });
+  }
+
+  const POS = p => 'pos-' + (POS_SET.has(p) ? p : 'bottom');
+  const POS_SET = new Set(['center','top','bottom','left','right',
+    'top-left','top-right','bottom-left','bottom-right']);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  function makeLayer(r, ev){
+    const layer = document.createElement('div');
+    layer.className = 'anim-layer ' + POS(r.position);
+    const inner = document.createElement('div');
+    inner.className = 'anim-inner';
+    inner.style.transform = `scale(${Math.min(3, Math.max(.2, r.scale || 1))})`;
+    layer.appendChild(inner);
+    const m = r.media_id ? mediaMap[r.media_id] : null;
+    const cap = document.createElement('div');
+    cap.className = 'anim-cap';
+    const gift = ev.raw_name || 'Rose';
+    cap.innerHTML = `${esc(ev.user || 'зритель')} <b>${esc(gift)}${(ev.count||1) > 1 ? ' ×' + ev.count : ''}</b>`;
+    if (!m) {
+      inner.appendChild(roseNode());
+    } else if (m.kind === 'video') {
+      const v = document.createElement('video');
+      v.className = 'anim-media';
+      v.src = `/media/${m.id}?t=` + encodeURIComponent(token);
+      v.autoplay = true; v.playsInline = true; v.muted = (r.volume ?? 1) <= 0;
+      v.volume = Math.min(1, Math.max(0, r.volume ?? 1));
+      // Тримминг монтажа: старт с start_ms, стоп на end_ms.
+      const t0 = (r.start_ms | 0) / 1000, t1 = (r.end_ms | 0) / 1000;
+      if (t0 > 0) v.addEventListener('loadedmetadata', () => { v.currentTime = t0; });
+      if (t1 > t0) v.addEventListener('timeupdate', () => {
+        if (v.currentTime >= t1) v.dispatchEvent(new Event('ended'));
+      });
+      inner.appendChild(v);
+      v.play().catch(() => {});
+      layer._video = v;
+    } else {
+      const img = document.createElement('img');
+      img.className = 'anim-media';
+      img.src = `/media/${m.id}?t=` + encodeURIComponent(token);
+      inner.appendChild(img);
+    }
+    inner.appendChild(cap);
+    return layer;
+  }
+
+  function play(r, ev, done){
+    const layer = makeLayer(r, ev);
+    stage.appendChild(layer);
+    requestAnimationFrame(() => layer.classList.add('on'));
+    const v = layer._video;
+    let ms = r.duration_ms | 0;
+    if (ms <= 0) ms = v ? 0 : 5600; // видео — до конца файла
+    let finished = false;
+    const finish = () => {
+      if (finished) return; finished = true;
+      layer.classList.remove('on');
+      setTimeout(() => { layer.remove(); done(); }, 380);
+    };
+    if (v) v.addEventListener('ended', finish);
+    setTimeout(finish, ms > 0 ? ms : 30000); // видео без duration_ms — страховка 30с
+  }
+
+  /* ===== встроенная анимация «рука из крана с розой» (SVG+CSS) ===== */
+  const ROSE_SVG = `
+  <div class="rosefx"><svg viewBox="0 0 600 700">
+    <defs>
+      <linearGradient id="brass" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#8a6420"/><stop offset=".45" stop-color="#e8c76a"/>
+        <stop offset=".7" stop-color="#b8902f"/><stop offset="1" stop-color="#6e5218"/>
+      </linearGradient>
+      <linearGradient id="brassD" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#f4dd8f"/><stop offset="1" stop-color="#a07822"/>
+      </linearGradient>
+      <linearGradient id="sleeve" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="#1e2a45"/><stop offset="1" stop-color="#3b4d78"/>
+      </linearGradient>
+      <linearGradient id="skin" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#ffd9b3"/><stop offset="1" stop-color="#e0a878"/>
+      </linearGradient>
+      <radialGradient id="glowG" cx=".5" cy=".5" r=".5">
+        <stop offset="0" stop-color="#ffd1dc" stop-opacity=".9"/>
+        <stop offset="1" stop-color="#ffd1dc" stop-opacity="0"/>
+      </radialGradient>
+      <clipPath id="spoutClip"><rect x="222" y="-600" width="156" height="770"/></clipPath>
+    </defs>
+
+    <!-- КРАН: труба сверху экрана, носик смотрит вниз -->
+    <g>
+      <rect x="262" y="-14" width="76" height="112" rx="14" fill="url(#brass)"/>
+      <rect x="252" y="76" width="96" height="26" rx="12" fill="url(#brassD)"/>
+      <circle cx="300" cy="30" r="38" fill="none" stroke="url(#brassD)" stroke-width="12"/>
+      <circle cx="300" cy="30" r="9" fill="#8a6420"/>
+      <path d="M262 94 C262 136 278 146 300 146 C322 146 338 136 338 94" fill="url(#brass)"/>
+      <rect x="278" y="132" width="44" height="30" rx="8" fill="url(#brass)"/>
+      <ellipse cx="300" cy="168" rx="24" ry="9" fill="#4a3a12"/>
+      <ellipse cx="300" cy="165" rx="24" ry="8" fill="url(#brassD)"/>
+    </g>
+
+    <!-- РУКА выезжает из носика; клип прячет её внутри трубы -->
+    <g clip-path="url(#spoutClip)">
+    <g class="fx-arm">
+      <g class="fx-sway">
+        <!-- манжета рукава у носика -->
+        <rect x="268" y="168" width="64" height="42" rx="16" fill="#233a66"/>
+        <!-- голое предплечье — светлое, читается на тёмном фоне -->
+        <rect x="274" y="196" width="52" height="150" rx="20" fill="url(#skin)"/>
+        <ellipse cx="300" cy="336" rx="27" ry="14" fill="url(#skin)"/>
+        <!-- кисть (кулак) -->
+        <g>
+          <ellipse cx="300" cy="326" rx="34" ry="30" fill="url(#skin)"/>
+          <ellipse cx="276" cy="310" rx="11" ry="15" fill="url(#skin)" transform="rotate(-24 276 310)"/>
+          <ellipse cx="324" cy="310" rx="11" ry="15" fill="url(#skin)" transform="rotate(24 324 310)"/>
+          <ellipse cx="300" cy="352" rx="15" ry="11" fill="url(#skin)"/>
+        </g>
+        <!-- роза в кулаке -->
+        <g class="fx-tilt">
+          <g class="fx-stem">
+            <path d="M300 346 C296 310 304 276 300 232" stroke="#2e7d32" stroke-width="9" fill="none" stroke-linecap="round"/>
+            <path class="fx-leaf" d="M300 318 C330 308 348 318 354 300 C336 296 314 304 300 318 Z" fill="#2f8f3a"/>
+            <path class="fx-leaf" d="M300 284 C272 274 256 282 250 266 C268 262 288 270 300 284 Z" fill="#43a04a"/>
+            <!-- падающий увядший лепесток -->
+            <ellipse class="fx-fallpetal" cx="312" cy="252" rx="9" ry="15" fill="#7a4038"/>
+            <!-- головка розы -->
+            <g class="fx-droop">
+              <circle class="fx-glow" cx="300" cy="200" r="95" fill="url(#glowG)"/>
+              <g transform="rotate(0 300 200)"><ellipse class="fx-petal" cx="300" cy="200" rx="16" ry="33" fill="#ff7b9d"/></g>
+              <g transform="rotate(60 300 200)"><ellipse class="fx-petal" style="animation-delay:.05s" cx="300" cy="200" rx="17" ry="34" fill="#ff5c82"/></g>
+              <g transform="rotate(120 300 200)"><ellipse class="fx-petal" style="animation-delay:.1s" cx="300" cy="200" rx="17" ry="34" fill="#e0355f"/></g>
+              <g transform="rotate(180 300 200)"><ellipse class="fx-petal" style="animation-delay:.08s" cx="300" cy="200" rx="16" ry="33" fill="#ff7b9d"/></g>
+              <g transform="rotate(240 300 200)"><ellipse class="fx-petal" style="animation-delay:.15s" cx="300" cy="200" rx="17" ry="34" fill="#ff5c82"/></g>
+              <g transform="rotate(300 300 200)"><ellipse class="fx-petal" style="animation-delay:.12s" cx="300" cy="200" rx="17" ry="34" fill="#e0355f"/></g>
+              <ellipse class="fx-budcore" cx="300" cy="200" rx="21" ry="26" fill="#8a4a3a"/>
+              <path d="M292 194 C296 188 304 188 308 194" stroke="#a8324f" stroke-width="3" fill="none"/>
+              <path d="M288 228 C296 234 304 234 312 228 L308 242 H292 Z" fill="#2e7d32"/>
+            </g>
+            <!-- искры при расцветании -->
+            <g fill="#ffe08a">
+              <path class="fx-spark" d="M382 190 l6 14 14 6 -14 6 -6 14 -6 -14 -14 -6 14 -6 Z"/>
+              <path class="fx-spark" style="animation-delay:.12s" d="M214 200 l5 11 11 5 -11 5 -5 11 -5 -11 -11 -5 11 -5 Z"/>
+              <path class="fx-spark" style="animation-delay:.24s" d="M356 268 l4 9 9 4 -9 4 -4 9 -4 -9 -9 -4 9 -4 Z"/>
+              <path class="fx-spark" style="animation-delay:.34s" d="M240 276 l4 9 9 4 -9 4 -4 9 -4 -9 -9 -4 9 -4 Z"/>
+            </g>
+          </g>
+        </g>
+      </g>
+    </g>
+    </g>
+  </svg></div>`;
+  function roseNode(){
+    const d = document.createElement('div');
+    d.className = 'rosefx';
+    d.innerHTML = ROSE_SVG;
+    return d;
+  }
+
+  // ---- события ----
+  io().on('raw', matchRule);
+
+  // ---- демо: ?demo=1 — цикл по всем правилам; ?demo=<idx> — одно ----
+  function bootDemo(){
+    if (!demo) return;
+    const fake = () => ({ event_kind:'gift', user:'DemoFan', unique_id:'demofan',
+      raw_name:'Rose', count:1, coins:1, gift_id:5655 });
+    const tick = () => {
+      const list = demo === '1' ? rules : [rules[+demo]].filter(Boolean);
+      if (!list.length) return;
+      const r = list[Math.floor(Math.random()*list.length)];
+      const ev = fake();
+      if (r.gift_name) ev.raw_name = r.gift_name;
+      if (r.gift_id) ev.gift_id = r.gift_id;
+      enqueue(r, ev);
+      setTimeout(tick, 7000);
+    };
+    setTimeout(tick, 800);
+  }
+})();
+</script>
+</body>
+</html>

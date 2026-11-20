@@ -2359,6 +2359,44 @@ pub async fn save_goals(
     Ok(())
 }
 
+/// Список правил анимаций для редактора на странице Виджетов.
+#[tauri::command]
+pub async fn get_anim_rules(state: State<'_, AppState>) -> Result<Value, String> {
+    Ok(json!({ "rules": state.settings.lock().await.data.anims }))
+}
+
+/// Replaces the whole animation-rule list (UI edits locally then saves).
+/// Caps at 50 rules — оверлей гоняет их по каждому событию подарка.
+#[tauri::command]
+pub async fn save_anim_rules(
+    mut rules: Vec<crate::types::AnimRule>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    if rules.len() > 50 {
+        return Err("Не больше 50 правил".into());
+    }
+    for r in rules.iter_mut() {
+        r.label = r.label.trim().chars().take(60).collect();
+        r.gift_name = r.gift_name.trim().chars().take(80).collect();
+        if r.id.is_empty() {
+            r.id = uuid::Uuid::new_v4().to_string();
+        }
+        if !matches!(r.mode.as_str(), "each" | "series") {
+            r.mode = "series".into();
+        }
+        r.start_ms = r.start_ms.min(600_000);
+        r.end_ms = r.end_ms.min(600_000);
+        r.duration_ms = r.duration_ms.min(120_000);
+        r.cooldown_ms = r.cooldown_ms.min(3_600_000);
+        r.volume = r.volume.clamp(0.0, 1.0);
+        r.scale = r.scale.clamp(0.2, 3.0);
+    }
+    let mut s = state.settings.lock().await;
+    s.data.anims = rules;
+    s.save().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Zeroes all goal counters and re-arms completed goals («новый стрим»).
 #[tauri::command]
 pub async fn reset_goals(state: State<'_, AppState>) -> Result<(), String> {

@@ -357,6 +357,11 @@ export const getGoals = () =>
   );
 
 /** Replaces the whole goal list. */
+export const getAnimRules = () =>
+  cmd<{ rules: import('./types').AnimRule[] }>('get_anim_rules');
+/** Replaces the whole gift→animation rule list (animbox widget). */
+export const saveAnimRules = (rules: import('./types').AnimRule[]) =>
+  cmd<void>('save_anim_rules', { rules });
 export const saveGoals = (goals: import('./types').StreamGoal[]) =>
   cmd<void>('save_goals', { goals });
 

@@ -206,3 +206,22 @@ share|subscribe`, поля `vip|fan_level|is_moderator|is_superfan|gift_id|coins
   идёт минуты, пользователь не хочет ждать блокирующий вызов.
 
 - ВАЖНО: tauri.conf.json копирует `tools/tiktok-sidecar/dist` в `<target>/debug|release/tiktok-sidecar/` при tauri build/dev — после пересборки бандла esbuild'ом обновлять и эту копию (или собирать через tauri), иначе лаунчер запускает СТАРЫЙ sidecar.js.
+
+## Анимации подарков (animbox)
+
+- Правила `settings.anims: Vec<AnimRule>` (types.rs): `gift_name`/`gift_id`,
+  `media_id` (медиатека, пусто = встроенная «рука из крана с розой»),
+  `mode each|series`, `min_coins`, `duration_ms`, `volume`, `scale`,
+  `position`, `cooldown_ms`. Команды: `get_anim_rules` / `save_anim_rules`.
+- `GET /anim/cfg?t=` → `{rules, media:[{id,kind,ext}]}` (только id из правил).
+- Виджет `public/widgets/animbox.html`: WS `raw` (bridge.js эмитит
+  `io().on('raw')` — полный RawStreamEvent), очередь 1-за-раз, `?demo=1`
+  крутит все правила, `?demo=<idx>` — одно; `each` слушает `gift`+`gift_tick`.
+- UI: WidgetsPage → карточка «Анимации» (автосейв 800мс) + виджет animbox.
+
+## settings.json — устойчивость
+
+- `SettingsStore::load` терпит UTF-8 BOM (Notepad/PS-правки), `save()`
+  делает снапшот `settings.json.bak` перед перезаписью.
+- НЕ редактировать settings.json через PowerShell `Set-Content -Encoding UTF8`
+  (PS5.1 пишет BOM). Править через python `encoding='utf-8'` или [IO.File]::WriteAllText.

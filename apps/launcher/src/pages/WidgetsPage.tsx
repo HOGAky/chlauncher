@@ -8,9 +8,11 @@
  * so they work without trigger rules.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Copy, ExternalLink, Palette } from 'lucide-react';
+import { Copy, ExternalLink, Palette, Play, Plus, Sparkles, Trash2, Upload } from 'lucide-react';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { open as pickFile } from '@tauri-apps/plugin-dialog';
 import * as api from '../api';
+import type { AnimRule, MediaItem } from '../types';
 import { useApp } from '../App';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -59,6 +61,7 @@ const METRIC_OPTS: [string, string][] = [
 ];
 
 const WIDGETS: WidgetDef[] = [
+  { id: 'animbox', file: 'animbox.html', name: 'Анимации подарков', desc: 'Подарок → анимация на экране: видео/GIF из медиатеки или встроенная «рука с розой». Правила — в разделе «Анимации» выше' },
   { id: 'likes', file: 'likes.html', name: 'Топ по лайкам', desc: 'Счётчик лайков, цель эфира, топ-3 таперов', params: [
     { key: 'goal', label: 'Цель лайков', type: 'number', ph: '500000' },
   ] },
@@ -225,6 +228,7 @@ export default function WidgetsPage() {
       {base && (
         <>
           {/* Shared gift-name suggestions for all gift-type params. */}
+          <AnimsSection base={base} token={token} />
           <datalist id="ttw-gift-names">
             {giftNames.map((n) => (
               <option key={n} value={n} />
@@ -426,6 +430,217 @@ function WidgetCard({
           >
             <ExternalLink size={12} />
           </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ================= Анимации: правила «подарок → анимация» ================= */
+
+const ANIM_POS: [string, string][] = [
+  ['bottom', 'Снизу'], ['center', 'Центр'], ['top', 'Сверху'],
+  ['left', 'Слева'], ['right', 'Справа'],
+  ['top-left', 'Сверху слева'], ['top-right', 'Сверху справа'],
+  ['bottom-left', 'Снизу слева'], ['bottom-right', 'Снизу справа'],
+];
+const ANIM_MEDIA_KINDS = new Set(['video', 'gif', 'image']);
+
+function newRule(): AnimRule {
+  return {
+    id: '', label: '', enabled: true, gift_name: 'Rose', gift_id: null,
+    media_id: null, min_coins: 0, mode: 'series', duration_ms: 0,
+    start_ms: 0, end_ms: 0,
+    volume: 1, scale: 1, position: 'bottom', cooldown_ms: 0,
+  };
+}
+
+function AnimsSection({ base, token }: { base: string; token: string }) {
+  const [rules, setRules] = useState<AnimRule[]>([]);
+  const [media, setMedia] = useState<MediaItem[]>([]);
+  const [note, setNote] = useState<string | null>(null);
+  const saveT = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    api.getAnimRules().then((r) => setRules(r.rules)).catch(() => {});
+    api.mediaList().then(setMedia).catch(() => {});
+  }, []);
+
+  const save = (next: AnimRule[]) => {
+    if (saveT.current) clearTimeout(saveT.current);
+    saveT.current = setTimeout(() => {
+      api.saveAnimRules(next)
+        .then(() => setNote('Сохранено'))
+        .catch((e) => setNote(`Ошибка: ${e}`));
+    }, 800);
+  };
+  const setAll = (next: AnimRule[]) => { setRules(next); save(next); };
+  const patch = (id: string, p: Partial<AnimRule>) =>
+    setAll(rules.map((r) => (r.id === id ? { ...r, ...p } : r)));
+
+  const animMedia = media.filter((m) => ANIM_MEDIA_KINDS.has(m.kind));
+
+  const upload = async (r: AnimRule) => {
+    const picked = await pickFile({
+      multiple: false,
+      filters: [{ name: 'Анимация (webm, mp4, gif, png, webp)', extensions: ['webm', 'mp4', 'mov', 'gif', 'apng', 'png', 'webp'] }],
+    });
+    if (!picked || typeof picked !== 'string') return;
+    try {
+      const item = await api.mediaImport(picked);
+      setMedia((m) => [...m, item]);
+      patch(r.id, { media_id: item.id });
+      setNote(`«${item.name}» добавлено в медиатеку`);
+    } catch (e) {
+      setNote(`Импорт: ${e}`);
+    }
+  };
+
+  const preview = (idx: number) => {
+    const u = `${base}/widgets/animbox.html?t=${encodeURIComponent(token)}&demo=${idx}`;
+    openUrl(u).catch(() => navigator.clipboard?.writeText(u).catch(() => {}));
+  };
+
+  const num = (v: number | null | undefined) => (v == null ? '' : String(v));
+  const inp = 'bg-input rounded px-2 py-1 text-xs w-full';
+
+  return (
+    <Card>
+      <CardHeader className="py-2 px-3">
+        <CardTitle className="text-sm flex items-center gap-1.5">
+          <Sparkles size={14} /> Анимации
+        </CardTitle>
+        <p className="text-[0.68rem] text-muted-foreground leading-tight">
+          Правила «подарок → анимация» для виджета <b>animbox</b> (карточка ниже).
+          Загрузите видео с альфой (webm/gif) — или оставьте «встроенную»:
+          из крана выезжает рука с увядшей розой, которая расцветает.
+        </p>
+      </CardHeader>
+      <CardContent className="px-3 pb-3 flex flex-col gap-2">
+        {rules.length === 0 && (
+          <div className="text-xs text-muted-foreground">
+            Пусто — добавьте правило (например, Rose → встроенная рука с розой).
+          </div>
+        )}
+        {rules.map((r, idx) => (
+          <div key={r.id} className="rounded border border-border p-2 flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={r.enabled}
+                onChange={(e) => patch(r.id, { enabled: e.target.checked })}
+                title="Правило включено"
+              />
+              <input
+                className={inp + ' flex-1'}
+                placeholder="Название правила"
+                value={r.label}
+                onChange={(e) => patch(r.id, { label: e.target.value })}
+              />
+              <Button size="sm" variant="ghost" className="px-2" title="Предпросмотр правила"
+                onClick={() => preview(idx)}>
+                <Play size={12} />
+              </Button>
+              <Button size="sm" variant="ghost" className="px-2 text-red-400" title="Удалить"
+                onClick={() => setAll(rules.filter((x) => x.id !== r.id))}>
+                <Trash2 size={12} />
+              </Button>
+            </div>
+            <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
+              <label className="flex flex-col gap-0.5">
+                <span className="text-[0.62rem] text-muted-foreground">Подарок (имя, пусто = любой)</span>
+                <input className={inp} list="ttw-gift-names" placeholder="Rose"
+                  value={r.gift_name}
+                  onChange={(e) => patch(r.id, { gift_name: e.target.value })} />
+              </label>
+              <label className="flex flex-col gap-0.5">
+                <span className="text-[0.62rem] text-muted-foreground">ID подарка (точно, необяз.)</span>
+                <input className={inp} type="number" min={0} placeholder="5655"
+                  value={num(r.gift_id)}
+                  onChange={(e) => patch(r.id, { gift_id: e.target.value ? +e.target.value : null })} />
+              </label>
+              <label className="flex flex-col gap-0.5">
+                <span className="text-[0.62rem] text-muted-foreground">Анимация</span>
+                <div className="flex gap-1">
+                  <select className={inp} value={r.media_id ?? ''}
+                    onChange={(e) => patch(r.id, { media_id: e.target.value || null })}>
+                    <option value="">Встроенная: рука с розой</option>
+                    {animMedia.map((m) => (
+                      <option key={m.id} value={m.id}>{m.name} ({m.ext})</option>
+                    ))}
+                  </select>
+                  <Button size="sm" variant="outline" className="px-2" title="Загрузить файл"
+                    onClick={() => upload(r)}>
+                    <Upload size={12} />
+                  </Button>
+                </div>
+              </label>
+              <label className="flex flex-col gap-0.5">
+                <span className="text-[0.62rem] text-muted-foreground">Срабатывание</span>
+                <select className={inp} value={r.mode}
+                  onChange={(e) => patch(r.id, { mode: e.target.value as AnimRule['mode'] })}>
+                  <option value="series">За серию подарков</option>
+                  <option value="each">Каждый подарок серии</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-0.5">
+                <span className="text-[0.62rem] text-muted-foreground">Мин. монет</span>
+                <input className={inp} type="number" min={0}
+                  value={num(r.min_coins)}
+                  onChange={(e) => patch(r.id, { min_coins: +e.target.value || 0 })} />
+              </label>
+              <label className="flex flex-col gap-0.5">
+                <span className="text-[0.62rem] text-muted-foreground">Позиция на экране</span>
+                <select className={inp} value={r.position}
+                  onChange={(e) => patch(r.id, { position: e.target.value })}>
+                  {ANIM_POS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              </label>
+              <label className="flex flex-col gap-0.5">
+                <span className="text-[0.62rem] text-muted-foreground">Длит., мс (0 = авто)</span>
+                <input className={inp} type="number" min={0} step={500}
+                  value={num(r.duration_ms)}
+                  onChange={(e) => patch(r.id, { duration_ms: +e.target.value || 0 })} />
+              </label>
+              <label className="flex flex-col gap-0.5">
+                <span className="text-[0.62rem] text-muted-foreground">Видео: старт, мс</span>
+                <input className={inp} type="number" min={0} step={500}
+                  value={num(r.start_ms)}
+                  onChange={(e) => patch(r.id, { start_ms: +e.target.value || 0 })} />
+              </label>
+              <label className="flex flex-col gap-0.5">
+                <span className="text-[0.62rem] text-muted-foreground">Видео: конец, мс</span>
+                <input className={inp} type="number" min={0} step={500}
+                  value={num(r.end_ms)}
+                  onChange={(e) => patch(r.id, { end_ms: +e.target.value || 0 })} />
+              </label>
+              <label className="flex flex-col gap-0.5">
+                <span className="text-[0.62rem] text-muted-foreground">Масштаб ×</span>
+                <input className={inp} type="number" min={0.2} max={3} step={0.1}
+                  value={num(r.scale)}
+                  onChange={(e) => patch(r.id, { scale: +e.target.value || 1 })} />
+              </label>
+              <label className="flex flex-col gap-0.5">
+                <span className="text-[0.62rem] text-muted-foreground">Громкость 0–1</span>
+                <input className={inp} type="number" min={0} max={1} step={0.1}
+                  value={num(r.volume)}
+                  onChange={(e) => patch(r.id, { volume: +e.target.value })} />
+              </label>
+              <label className="flex flex-col gap-0.5">
+                <span className="text-[0.62rem] text-muted-foreground">Кулдаун, мс</span>
+                <input className={inp} type="number" min={0} step={500}
+                  value={num(r.cooldown_ms)}
+                  onChange={(e) => patch(r.id, { cooldown_ms: +e.target.value || 0 })} />
+              </label>
+            </div>
+          </div>
+        ))}
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" className="text-xs"
+            onClick={() => setAll([...rules, newRule()])}>
+            <Plus size={12} /> Добавить правило
+          </Button>
+          {note && <span className="text-[0.68rem] text-muted-foreground">{note}</span>}
         </div>
       </CardContent>
     </Card>

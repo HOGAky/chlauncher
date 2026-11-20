@@ -116,6 +116,9 @@
   // ---- обработка одного события (raw — из канала "raw", mapped — "events") ----
   function handle(ev) {
     if (!ev || !ev.event_kind) return;
+    // 'raw' — полное событие (gift_id, count, coins, vip…): виджетам,
+    // которым нужен точный матчинг (animbox), до маппинга в alert/state.
+    emit('raw', ev);
     const user = ev.user || 'viewer';
     const avatar = ev.avatar_url || '';
     const kind = ev.event_kind;

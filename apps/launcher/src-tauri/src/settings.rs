@@ -84,6 +84,10 @@ pub struct Settings {
     /// see `goals.rs`.
     #[serde(default)]
     pub goals: Vec<crate::types::StreamGoal>,
+    /// Правила «подарок → анимация» для виджета `animbox.html` —
+    /// отдаются виджету через `/anim/cfg`.
+    #[serde(default)]
+    pub anims: Vec<crate::types::AnimRule>,
     /// Subathon countdown config — see `subathon.rs`.
     #[serde(default)]
     pub subathon: crate::types::SubathonCfg,
@@ -499,9 +503,11 @@ impl SettingsStore {
     pub fn load(dir: &std::path::Path) -> Self {
         let path = dir.join("settings.json");
         Self::versioned_backup(&path);
+        // BOM-толерантность: Notepad/PowerShell пишут UTF-8 BOM,
+        // который для serde_json — мусор в нулевой позиции.
         let mut data: Settings = fs::read_to_string(&path)
             .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
+            .and_then(|s| serde_json::from_str(s.trim_start_matches('\u{feff}')).ok())
             .unwrap_or_default();
         if data.overlay_token.is_empty() {
             // 64 hex chars = 32 random bytes — used as the `?t=` overlay key.
@@ -572,6 +578,11 @@ impl SettingsStore {
     pub fn save(&self) -> std::io::Result<()> {
         if let Some(parent) = self.path.parent() {
             fs::create_dir_all(parent)?;
+        }
+        // Прежняя копия — settings.json.bak: внешняя правка с битым
+        // JSON не должна безвозвратно стирать конфиг пользователя.
+        if self.path.exists() {
+            let _ = fs::copy(&self.path, self.path.with_extension("json.bak"));
         }
         let tmp = self.path.with_extension("json.tmp");
         fs::write(&tmp, serde_json::to_string_pretty(&self.data)?)?;

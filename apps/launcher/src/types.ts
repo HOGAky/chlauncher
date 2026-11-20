@@ -305,6 +305,29 @@ export interface MediaItem {
   duration_ms?: number | null;
 }
 
+/** Правило «подарок → анимация» виджета animbox (settings.anims). */
+export interface AnimRule {
+  id: string;
+  label: string;
+  enabled: boolean;
+  gift_name: string;
+  gift_id?: number | null;
+  /** MediaItem.id видео/GIF/картинки; null/пусто = встроенная «рука с розой». */
+  media_id?: string | null;
+  min_coins: number;
+  /** 'series' — раз на серию подарка; 'each' — на каждый юнит стрика. */
+  mode: 'each' | 'series';
+  /** Тримминг видео: играть с start_ms до end_ms (0/0 = целиком). */
+  start_ms?: number;
+  end_ms?: number;
+  /** 0 = до конца ассета / дефолт виджета. */
+  duration_ms: number;
+  volume: number;
+  scale: number;
+  position: string;
+  cooldown_ms: number;
+}
+
 /** One trigger rule in a streamer profile. */
 export interface TriggerRule {
   id: string;

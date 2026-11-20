@@ -430,6 +430,7 @@ pub async fn start_overlay_server(
         .route("/tts/{file}", get(serve_tts))
         .route("/overlay-close", get(overlay_close))
         .route("/timer/cmd", post(timer_cmd))
+        .route("/anim/cfg", get(serve_anim_cfg))
         .route("/health", get(|| async { "ok" }))
         .route("/ws", get(ws_upgrade))
         .with_state(state);
@@ -497,6 +498,32 @@ async fn timer_cmd(
         other => return (StatusCode::BAD_REQUEST, format!("unknown action: {other}")).into_response(),
     }
     Json(serde_json::json!({"ok": true})).into_response()
+}
+
+/// `GET /anim/cfg?t=` — правила «подарок → анимация» для виджета
+/// `animbox.html`: список `AnimRule` + карта media-id → {kind, ext},
+/// чтобы виджет знал, рендерить `<video>` или `<img>`.
+async fn serve_anim_cfg(
+    Query(q): Query<HashMap<String, String>>,
+    State(st): State<OverlayState>,
+) -> Response {
+    if !token_ok(q.get("t").map(String::as_str), &st.token) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let s = st.settings.lock().await;
+    let rules = s.data.anims.clone();
+    let ids: std::collections::HashSet<&str> = rules
+        .iter()
+        .filter_map(|r| r.media_id.as_deref())
+        .collect();
+    let media: Vec<serde_json::Value> = s
+        .data
+        .media
+        .iter()
+        .filter(|m| ids.contains(m.id.as_str()))
+        .map(|m| serde_json::json!({"id": m.id, "kind": m.kind, "ext": m.ext}))
+        .collect();
+    Json(serde_json::json!({"rules": rules, "media": media})).into_response()
 }
 
 /// Token gate + embedded page response for the `/overlay*` routes.

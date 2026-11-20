@@ -292,6 +292,73 @@ pub struct MediaItem {
     pub duration_ms: Option<u64>,
 }
 
+/// Правило «подарок → анимация» для оверлея `/widgets/animbox.html`.
+/// Ассет — файл медиатеки (`/media/<id>`) с альфой (webm/gif/png);
+/// без `media_id` виджет рисует встроенную процедурную анимацию
+/// «рука протягивает розу, которая расцветает».
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnimRule {
+    pub id: String,
+    /// Подпись в списке правил (UI).
+    #[serde(default)]
+    pub label: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Подстрока имени подарка (`raw_name`), регистр не важен;
+    /// пусто + `gift_id: None` = любой подарок.
+    #[serde(default)]
+    pub gift_name: String,
+    /// Точный TikTok `gift_id` — переживает локализацию имён подарков.
+    #[serde(default)]
+    pub gift_id: Option<i64>,
+    /// `MediaItem.id` видео/GIF/картинки; пусто = встроенная «рука с розой».
+    #[serde(default)]
+    pub media_id: Option<String>,
+    /// Мин. стоимость подарка в монетах за событие (0 = любой).
+    #[serde(default)]
+    pub min_coins: i64,
+    /// `"series"` — раз на серию (кадр `gift`), `"each"` — на каждый
+    /// юнит стрика (кадры `gift_tick`).
+    #[serde(default = "default_anim_mode")]
+    pub mode: String,
+    /// Тримминг видео-монтажа: играть с `start_ms` до `end_ms`
+    /// (0/0 = файл целиком). Для ассетов-наборов анимаций подряд.
+    #[serde(default)]
+    pub start_ms: u64,
+    #[serde(default)]
+    pub end_ms: u64,
+    /// Максимум показа на экране, мс; 0 = до конца ассета/дефолт виджета.
+    #[serde(default)]
+    pub duration_ms: u64,
+    /// Громкость видео со звуком 0..1.
+    #[serde(default = "default_anim_volume")]
+    pub volume: f32,
+    /// Масштаб 0.2..3 относительно кадра виджета.
+    #[serde(default = "default_anim_scale")]
+    pub scale: f32,
+    /// Якорь на экране: `center|top|bottom|left|right|top-left|top-right|
+    /// bottom-left|bottom-right`.
+    #[serde(default = "default_anim_pos")]
+    pub position: String,
+    /// Персональный кулдаун правила, мс — повторный триггер раньше срока
+    /// пропускается (0 = без кулдауна).
+    #[serde(default)]
+    pub cooldown_ms: u64,
+}
+
+fn default_anim_mode() -> String {
+    "series".into()
+}
+fn default_anim_volume() -> f32 {
+    1.0
+}
+fn default_anim_scale() -> f32 {
+    1.0
+}
+fn default_anim_pos() -> String {
+    "bottom".into()
+}
+
 /// A stream-level goal — "300 roses → spawn boss" (§goals).
 ///
 /// Unlike per-rule accumulators (`every_n`, reset on each fire), a goal
