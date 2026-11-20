@@ -178,14 +178,13 @@ const vipOf = (d) => {
 };
 const isModeratorOf = (d) =>
   !!(identityOf(d).isModeratorOfAnchor || attrsOf(d).isModerator);
-// «Суперфанат» в правилах озвучки — super-fan, subscriber или top-gifter.
+// «Суперфанат» в правилах озвучки — только настоящий super-fan/top-gifter.
+// isSubscriberOfAnchor и isGiftGiverOfAnchor сюда НЕ входят: подписчик и
+// любой, кто хоть раз дарил подарок, — не суперфанат, иначе байпас правила
+// min_level открывался почти всем постоянным зрителям.
 const isSuperfanOf = (d) => {
   const a = attrsOf(d);
-  const i = identityOf(d);
-  return !!(
-    a.isSuperFan || a.isSubscriber || a.isTopGifter ||
-    i.isSubscriberOfAnchor || i.isGiftGiverOfAnchor
-  );
+  return !!(a.isSuperFan || a.isTopGifter);
 };
 
 // Уровень «команды» (fan club). fansClub/fansClubInfo на chat-событиях
