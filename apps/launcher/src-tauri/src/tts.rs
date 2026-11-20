@@ -18,7 +18,8 @@
 //! raw comment/gift ─► Tts::note_event (whitelist/blacklist, read_* modes)
 //! rule fire        ─► Tts::speak_rule  (independent of read_*, §6.2)
 //!                   ─► queue (queue_max, drop-oldest, whitelist priority)
-//!                   ─► emotions §6.4 (😂→spoken laughter+cheerful, CAPS→loud)
+//!                   ─► emotions §6.4 (😂→spoken laughter+cheerful, emoji→
+//!                     vocal reactions + phrase intonation, CAPS→loud)
 //!                   ─► filters (blocklist/links/emoji/max_chars)
 //!                   ─► cooldowns (global + per-user, whitelist bypass)
 //!                   ─► engine.synth → bytes → device | /tts/<id>.<ext>
@@ -232,6 +233,9 @@ impl SapiEngine {
             "whisper" => (rate * 0.85, volume * 0.4),
             "loud" => (rate * 1.05, 1.0),
             "cheerful" => (rate * 1.1, volume),
+            "sad" => (rate * 0.88, volume * 0.85),
+            "angry" => (rate * 1.05, 1.0),
+            "excited" => (rate * 1.15, volume),
             _ => (rate, volume),
         }
     }
@@ -400,7 +404,7 @@ pub struct CustomVoice {
     pub style: Option<&'static str>,
     /// Фирменный смех — текст, который произносится на месте 😂/«ахах».
     pub laugh: &'static str,
-    /// Речевая привычка: "drunk" | "grandpa" | "witch" | "" .
+    /// Речевая привычка: "drunk" | "grandpa" | "witch" | "cutie" | "" .
     pub quirk: &'static str,
     pub gender: &'static str,
 }
@@ -647,6 +651,152 @@ const CUSTOM_VOICES: &[CustomVoice] = &[
         quirk: "",
         gender: "Male",
     },
+    // --- Ещё женские персонажи ---
+    CustomVoice {
+        id: "custom:liza",
+        label: "Милашка Лиза",
+        engine: "silero",
+        base: "baya",
+        rate: 1.08,
+        pitch: 1.28,
+        style: Some("cheerful"),
+        laugh: "хи-хи-хи!",
+        quirk: "",
+        gender: "Female",
+    },
+    CustomVoice {
+        id: "custom:uchilka",
+        label: "Училка Вера",
+        engine: "silero",
+        base: "xenia",
+        rate: 0.95,
+        pitch: 0.92,
+        style: None,
+        laugh: "хм-хм… хи-хи",
+        quirk: "",
+        gender: "Female",
+    },
+    CustomVoice {
+        id: "custom:siren",
+        label: "Сирень",
+        engine: "silero",
+        base: "kseniya",
+        rate: 0.88,
+        pitch: 0.8,
+        style: None,
+        laugh: "ха-ха…",
+        quirk: "",
+        gender: "Female",
+    },
+    CustomVoice {
+        id: "custom:vizg",
+        label: "Визгунья Таня",
+        engine: "silero",
+        base: "baya",
+        rate: 1.22,
+        pitch: 1.5,
+        style: Some("cheerful"),
+        laugh: "и-и-хи-хи-хи!",
+        quirk: "",
+        gender: "Female",
+    },
+    CustomVoice {
+        id: "custom:tihaya",
+        label: "Тихая Лена (Piper)",
+        engine: "piper",
+        base: "ru_RU-irina-medium",
+        rate: 0.88,
+        pitch: 0.95,
+        style: None,
+        laugh: "хи-хи…",
+        quirk: "",
+        gender: "Female",
+    },
+    CustomVoice {
+        id: "custom:sestra",
+        label: "Старшая сестра",
+        engine: "rvc",
+        base: "Gensyha",
+        rate: 0.95,
+        pitch: 0.88,
+        style: None,
+        laugh: "ха-ха-ха…",
+        quirk: "",
+        gender: "Female",
+    },
+    CustomVoice {
+        id: "custom:pevicha",
+        label: "Певичка Настя",
+        engine: "silero",
+        base: "kseniya",
+        rate: 0.9,
+        pitch: 1.15,
+        style: Some("cheerful"),
+        laugh: "хи-хи-хи!",
+        quirk: "",
+        gender: "Female",
+    },
+    // --- Милые мужские персонажи ---
+    CustomVoice {
+        id: "custom:misha",
+        label: "Милый Миша",
+        engine: "silero",
+        base: "eugene",
+        rate: 1.0,
+        pitch: 1.12,
+        style: None,
+        laugh: "хи-хи!",
+        quirk: "cutie",
+        gender: "Male",
+    },
+    CustomVoice {
+        id: "custom:pasha",
+        label: "Плюшевый Паша",
+        engine: "rvc",
+        base: "BigBabyTape",
+        rate: 0.92,
+        pitch: 1.2,
+        style: None,
+        laugh: "хэ-хэ-хэ!",
+        quirk: "cutie",
+        gender: "Male",
+    },
+    CustomVoice {
+        id: "custom:slavik",
+        label: "Сонный Слава",
+        engine: "silero",
+        base: "aidar",
+        rate: 0.85,
+        pitch: 0.95,
+        style: None,
+        laugh: "ха… ха-ха",
+        quirk: "",
+        gender: "Male",
+    },
+    CustomVoice {
+        id: "custom:znayka",
+        label: "Знайка",
+        engine: "silero",
+        base: "aidar",
+        rate: 1.12,
+        pitch: 1.2,
+        style: None,
+        laugh: "хэ-хэ!",
+        quirk: "",
+        gender: "Male",
+    },
+    CustomVoice {
+        id: "custom:pupsik",
+        label: "Пупсик (Piper)",
+        engine: "piper",
+        base: "ru_RU-denis-medium",
+        rate: 1.02,
+        pitch: 1.15,
+        style: None,
+        laugh: "хи-хи-хи!",
+        quirk: "cutie",
+        gender: "Male",
+    },
 ];
 
 /// `custom:*` id → пресет персонажа; None для обычных id.
@@ -684,6 +834,9 @@ fn express_as(style: &str) -> Option<&'static str> {
     match style {
         "whisper" => Some("whispered"),
         "cheerful" => Some("cheerful"),
+        "sad" => Some("sad"),
+        "angry" => Some("angry"),
+        "excited" => Some("excited"),
         _ => None,
     }
 }
@@ -695,6 +848,9 @@ fn edge_style_tweak(style: &str) -> (f32, f32, f32) {
         "whisper" => (0.9, 0.45, 0.9),
         "loud" => (1.05, 1.6, 1.05),
         "cheerful" => (1.08, 1.1, 1.15),
+        "sad" => (0.88, 0.9, 0.82),
+        "angry" => (1.05, 1.4, 0.85),
+        "excited" => (1.15, 1.15, 1.25),
         _ => (1.0, 1.0, 1.0),
     }
 }
@@ -1249,6 +1405,9 @@ fn piper_args(spec: &SpeechSpec) -> (f32, f32, f32) {
         "whisper" => (length * 1.05, 0.45, 0.55),
         "loud" => (length * 0.95, 0.8, 0.9),
         "cheerful" => (length * 0.95, 0.85, 1.0),
+        "sad" => (length * 1.12, 0.4, 0.5),
+        "angry" => (length * 0.95, 0.85, 0.9),
+        "excited" => (length * 0.9, 0.9, 1.05),
         _ => (length, 0.667, 0.8),
     }
 }
@@ -1840,6 +1999,9 @@ impl TtsEngine for GeminiEngine {
                 "whisper" => how.push("in a whisper"),
                 "loud" => how.push("loudly and energetically"),
                 "cheerful" => how.push("cheerfully"),
+                "sad" => how.push("sadly"),
+                "angry" => how.push("angrily"),
+                "excited" => how.push("excitedly"),
                 _ => {}
             }
             if spec.rate < 0.85 {
@@ -2029,19 +2191,29 @@ fn is_laugh_emoji(c: char) -> bool {
         | '\u{1F923}'            // 🤣
         | '\u{1F604}'..='\u{1F606}' // 😄 😅 😆
         | '\u{1F639}'            // 😹
-        | '\u{1F61B}'..='\u{1F61D}' // 😛 😜 😝
     )
 }
 
 /// Text laughter ("ахах", "лол", "xd", "рофл"…) → cheerful style.
 /// Матчим по границам слов — «лол» внутри «колол»/«приколол» смехом
-/// не считается. «ахахахахах» любой длины — тоже смех (все а/х).
+/// не считается. «ахахахахах» любой длины — тоже смех (все а/х/лат. a/x,
+/// ≥4 букв — «аха» короткое не считаем). Одиночное «ха»/«he» — не смех,
+/// а вот «ха-ха-ха» / «he he» (≥2 токена-слога) — да.
 fn has_laugh_text(low: &str) -> bool {
-    low.split(|c: char| !c.is_alphanumeric()).any(|w| {
+    let mut giggle_syllables = 0u32;
+    let hit = low.split(|c: char| !c.is_alphanumeric()).any(|w| {
+        if matches!(
+            w,
+            "ха" | "ах" | "хи" | "хо" | "хэ" | "хе" | "ha" | "he" | "hi" | "ho"
+        ) {
+            giggle_syllables += 1;
+            return false;
+        }
         matches!(w, "ахах" | "хаха" | "ахха" | "лол" | "рофл" | "xd")
-            || (w.chars().count() >= 3
-                && w.chars().all(|c| matches!(c, 'а' | 'х')))
-    })
+            || (w.chars().count() >= 4
+                && w.chars().all(|c| matches!(c, 'а' | 'х' | 'a' | 'x')))
+    });
+    hit || giggle_syllables >= 2
 }
 
 /// ≥6 letters of which ≥80% are uppercase → the viewer is SHOUTING.
@@ -2086,10 +2258,95 @@ fn short_laugh(laugh: &str) -> &str {
         .unwrap_or(laugh)
 }
 
+/// Эмодзи → вокальная реакция (что произнести) + интонация фразы.
+/// Группа одинаковых эмодзи произносит реакцию один раз; смешанные —
+/// по одной реакции на каждую серию.
+fn emoji_hit(c: char) -> Option<(&'static str, Option<&'static str>)> {
+    Some(match c {
+        // Грусть/слёзы — 💔 перечислено явно, т.к. входит в диапазон сердец.
+        '\u{1F62D}' | '\u{1F622}' | '\u{1F63F}' | '\u{1F614}' | '\u{1F61E}'
+        | '\u{1F625}' | '\u{1F613}' | '\u{1F494}' | '\u{2639}' => ("ох-ох… ", Some("sad")),
+        '\u{1F97A}' => ("ну-у… ", Some("sad")), // 🥺
+        '\u{1F64F}' => ("умоляю… ", Some("sad")),
+        // Любовь: сердечки, влюблённые лица, поцелуй.
+        '\u{2764}' | '\u{1F60D}' | '\u{1F970}' | '\u{1F618}' | '\u{1F63B}'
+        | '\u{1F493}' | '\u{1F495}'..='\u{1F49F}' | '\u{1F48C}' | '\u{1F9E1}'
+        | '\u{1F90C}' | '\u{1F90D}' | '\u{1F90E}' | '\u{1FA75}' | '\u{1FA76}'
+        | '\u{1FA77}' | '\u{1FAF6}' => ("муа! ", Some("cheerful")),
+        '\u{1F917}' => ("обнимашки! ", Some("cheerful")),
+        // Злость.
+        '\u{1F621}' | '\u{1F620}' | '\u{1F92C}' | '\u{1F47F}' | '\u{1F4A2}'
+        | '\u{1F624}' => ("гр-р! ", Some("angry")),
+        // Шок/удивление.
+        '\u{1F631}' | '\u{1F628}' | '\u{1F630}' | '\u{1F632}' | '\u{1F62E}'
+        | '\u{1F62F}' | '\u{1F626}' | '\u{1F627}' | '\u{1F629}' | '\u{1F62B}'
+        | '\u{1F633}' | '\u{1F92F}' | '\u{1FAE2}' => ("ого! ", Some("excited")),
+        // Праздник.
+        '\u{1F973}' | '\u{1F389}' | '\u{1F38A}' | '\u{1F37E}' | '\u{1F382}'
+        | '\u{1F386}' | '\u{1F387}' => ("ура-а! ", Some("cheerful")),
+        // Одобрение/сила/корона.
+        '\u{1F44F}' | '\u{1F64C}' | '\u{1F44D}' | '\u{1F525}' | '\u{1F4AA}'
+        | '\u{1F4AF}' | '\u{1F451}' => ("ого! ", Some("cheerful")),
+        // Сон/зевок, отвращение, жуть.
+        '\u{1F634}' | '\u{1F4A4}' | '\u{1F971}' => ("а-а-а… ", None),
+        '\u{1F922}' | '\u{1F92E}' | '\u{1F4A9}' => ("фу-у! ", None),
+        '\u{1F47B}' | '\u{1F480}' | '\u{2620}' => ("у-у-у… ", Some("sad")),
+        // Задумчивость/скепсис.
+        '\u{1F914}' | '\u{1F9D0}' | '\u{1F928}' | '\u{1F644}' | '\u{1F60F}'
+        | '\u{1F440}' => ("хм-м… ", None),
+        // Дурачество (языки, кривляние).
+        '\u{1F61B}' | '\u{1F61C}' | '\u{1F61D}' | '\u{1F92A}' | '\u{1F609}' => {
+            ("бл-э! ", Some("cheerful"))
+        }
+        // Жара/холод.
+        '\u{1F975}' => ("ф-ф-у! ", None),
+        '\u{1F976}' => ("б-р-р! ", None),
+        // Деньги.
+        '\u{1F911}' | '\u{1F4B0}' | '\u{1F4B5}' | '\u{1F4B8}' | '\u{1F48E}' => {
+            ("о-о-о! ", Some("excited"))
+        }
+        // Цветы — нюхает.
+        '\u{1F339}' | '\u{1F337}' | '\u{1F338}' | '\u{1F33A}' | '\u{1F490}' => {
+            ("м-м… ", None)
+        }
+        // Животные — звуки.
+        '\u{1F431}' | '\u{1F408}' | '\u{1F63A}' | '\u{1F638}' | '\u{1F63C}'
+        | '\u{1F63D}' | '\u{1F63E}' | '\u{1F640}' => ("мяу! ", Some("cheerful")),
+        '\u{1F436}' | '\u{1F415}' | '\u{1F9AE}' => ("гав! ", Some("cheerful")),
+        '\u{1F439}' | '\u{1F42D}' | '\u{1F430}' | '\u{1F407}' => ("пи-пи! ", None),
+        '\u{1F438}' => ("ква! ", None),
+        '\u{1F437}' | '\u{1F416}' => ("хрю! ", None),
+        '\u{1F42E}' | '\u{1F404}' => ("му-у! ", None),
+        '\u{1F414}' | '\u{1F423}' | '\u{1F424}' | '\u{1F425}' => ("пи-пи-пи! ", None),
+        '\u{1F984}' => ("и-го-го! ", Some("cheerful")),
+        '\u{1F916}' | '\u{1F47D}' => ("бип-буп! ", None),
+        // Махалка — приветствие.
+        '\u{1F44B}' | '\u{1F590}' => ("привет! ", None),
+        _ => return None,
+    })
+}
+
+/// Более сильная интонация побеждает: angry/sad > excited > cheerful.
+fn style_pick(cur: Option<&'static str>, new: &'static str) -> &'static str {
+    fn rank(s: &str) -> u8 {
+        match s {
+            "angry" | "sad" => 3,
+            "excited" => 2,
+            _ => 1,
+        }
+    }
+    match cur {
+        Some(c) if rank(c) >= rank(new) => c,
+        _ => new,
+    }
+}
+
 fn apply_emotions(raw: &str, laugh: &str) -> (String, Option<&'static str>) {
-    let mut t = String::with_capacity(raw.len() + 24);
+    let mut t = String::with_capacity(raw.len() + 40);
     let mut prev_laugh = false;
+    let mut prev_hit: Option<&'static str> = None;
     let mut emoji_laughed = false;
+    let mut emo_style: Option<&'static str> = None;
     for c in raw.chars() {
         // Swallow combining marks of a laughing emoji too.
         if is_laugh_emoji(c) || (prev_laugh && (c == '\u{FE0F}' || c == '\u{200D}')) {
@@ -2100,10 +2357,33 @@ fn apply_emotions(raw: &str, laugh: &str) -> (String, Option<&'static str>) {
                 t.push(' ');
             }
             prev_laugh = true;
+            prev_hit = None;
             emoji_laughed = true;
-        } else {
-            prev_laugh = false;
-            t.push(c);
+            continue;
+        }
+        prev_laugh = false;
+        // Модификаторы внутри серии эмодзи (тон кожи, VS16, ZWJ) — глотаем.
+        if prev_hit.is_some()
+            && (c == '\u{FE0F}'
+                || c == '\u{200D}'
+                || ('\u{1F3FB}'..='\u{1F3FF}').contains(&c))
+        {
+            continue;
+        }
+        match emoji_hit(c) {
+            Some((spoken, st)) => {
+                if prev_hit != Some(spoken) {
+                    t.push_str(spoken);
+                }
+                prev_hit = Some(spoken);
+                if let Some(s) = st {
+                    emo_style = Some(style_pick(emo_style, s));
+                }
+            }
+            None => {
+                prev_hit = None;
+                t.push(c);
+            }
         }
     }
     let low = raw.to_lowercase();
@@ -2120,6 +2400,9 @@ fn apply_emotions(raw: &str, laugh: &str) -> (String, Option<&'static str>) {
             t.push(LAUGH_CLOSE);
         }
         return (t, Some("cheerful"));
+    }
+    if let Some(s) = emo_style {
+        return (t, Some(s));
     }
     if is_shouting(raw) {
         return (t, Some("loud"));
@@ -2178,7 +2461,7 @@ fn drunk_text(text: &str, laugh: &str) -> String {
             }
         }
     }
-    if qchance(&mut r, 15) {
+    if qchance(&mut r, 8) {
         out.push_str(" …");
         out.push(LAUGH_OPEN);
         out.push_str(short_laugh(laugh));
@@ -2214,11 +2497,30 @@ fn witch_text(text: &str, laugh: &str) -> String {
             out.push('и');
         }
     }
-    if qchance(&mut r, 30) {
+    if qchance(&mut r, 15) {
         out.push_str(" …");
         out.push(LAUGH_OPEN);
         out.push_str(short_laugh(laugh));
         out.push(LAUGH_CLOSE);
+    }
+    out
+}
+
+/// Милый: тянет «о»/«у» («мил-о-о») и иногда мнётся в начале фразы.
+/// Смеха сам по себе не вставляет.
+fn cutie_text(text: &str, _laugh: &str) -> String {
+    let mut r = qrng(text);
+    let mut out = String::with_capacity(text.len() + 16);
+    match qnext(&mut r) % 4 {
+        0 => out.push_str("М-м… "),
+        1 => out.push_str("Ну… "),
+        _ => {}
+    }
+    for c in text.chars() {
+        out.push(c);
+        if matches!(c, 'о' | 'у' | 'О' | 'У') && qchance(&mut r, 15) {
+            out.push(c.to_lowercase().next().unwrap_or(c));
+        }
     }
     out
 }
@@ -2228,6 +2530,7 @@ fn apply_quirk(text: &str, quirk: &str, laugh: &str) -> String {
         "drunk" => drunk_text(text, laugh),
         "grandpa" => grandpa_text(text, laugh),
         "witch" => witch_text(text, laugh),
+        "cutie" => cutie_text(text, laugh),
         _ => text.to_string(),
     }
 }
@@ -3203,6 +3506,39 @@ mod tests {
         assert_eq!(s2, Some("loud"));
         let (_, s3) = apply_emotions("обычное сообщение", "ха-ха-ха!");
         assert_eq!(s3, None);
+        // Слоговой смех «ха-ха-ха» ловится, одиночное «ха» — нет.
+        let (_, s4) = apply_emotions("ха-ха-ха ты чо", "хи-хи!");
+        assert_eq!(s4, Some("cheerful"));
+        let (_, s5) = apply_emotions("ха ну да", "хи-хи!");
+        assert_eq!(s5, None);
+        // «аха» (длинный а/х-токен <4) — не смех, «ахаха» — смех.
+        let (_, s6) = apply_emotions("аха понял", "хи-хи!");
+        assert_eq!(s6, None);
+        let (_, s7) = apply_emotions("ахаха точно", "хи-хи!");
+        assert_eq!(s7, Some("cheerful"));
+    }
+
+    #[test]
+    fn emoji_reactions_and_intonation() {
+        // Сердечко → «муа!» + cheerful; группа сердец — одна реакция.
+        let (t1, s1) = apply_emotions("люблю стрим ❤️❤️😍", "ха-ха-ха!");
+        assert_eq!(s1, Some("cheerful"));
+        assert_eq!(t1.matches("муа!").count(), 1);
+        assert!(!t1.contains('❤') && !t1.contains('😍'));
+        // Грустный эмодзи → реакция + интонация sad.
+        let (t2, s2) = apply_emotions("жалко 😭", "ха-ха-ха!");
+        assert_eq!(s2, Some("sad"));
+        assert!(t2.contains("ох-ох"));
+        // Злость сильнее радости: 😂 нет, но 😡+❤ → angry.
+        let (_, s3) = apply_emotions("❤️ 😡", "ха-ха-ха!");
+        assert_eq!(s3, Some("angry"));
+        // Животные → звуки.
+        let (t4, _) = apply_emotions("🐱🐶", "ха-ха-ха!");
+        assert!(t4.contains("мяу!") && t4.contains("гав!"));
+        // Без эмодзи реакций нет и стиля нет.
+        let (t5, s5) = apply_emotions("просто текст", "ха-ха-ха!");
+        assert_eq!(s5, None);
+        assert_eq!(t5, "просто текст");
     }
 
     #[test]
