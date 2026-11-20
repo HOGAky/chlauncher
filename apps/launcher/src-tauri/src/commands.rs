@@ -2230,7 +2230,11 @@ fn overlay_page_known(page: &str, data_dir: &std::path::Path) -> bool {
         return true;
     }
     match page.strip_prefix("overlay/game/") {
-        Some(id) => crate::builtin_games::exists(id, data_dir),
+        // Remote link-packs register in the catalogue but have no
+        // overlay page — no capture window for them.
+        Some(id) => crate::game_packs::find(id, data_dir)
+            .map(|p| !p.is_remote())
+            .unwrap_or(false),
         None => false,
     }
 }

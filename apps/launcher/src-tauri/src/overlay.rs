@@ -589,13 +589,7 @@ async fn serve_widget(
     if is_page && !token_ok(q.get("t").map(String::as_str), &st.token) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    let ok = !path.is_empty()
-        && path.len() <= 256
-        && !path.contains("..")
-        && path
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/'));
-    if !ok {
+    if !crate::game_packs::safe_relpath(&path) {
         return StatusCode::NOT_FOUND.into_response();
     }
     let Some(dir) = &st.widgets_dir else {
@@ -644,6 +638,7 @@ async fn serve_pack_game(
     }
     let ok = !id.is_empty()
         && id.len() <= 64
+        && !id.starts_with('.')
         && id
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
@@ -670,13 +665,7 @@ async fn serve_game_asset(
     Path(path): Path<String>,
     State(st): State<OverlayState>,
 ) -> Response {
-    let ok = !path.is_empty()
-        && path.len() <= 256
-        && !path.contains("..")
-        && path
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/'));
-    if !ok {
+    if !crate::game_packs::safe_relpath(&path) {
         return StatusCode::NOT_FOUND.into_response();
     }
     let mime = match std::path::Path::new(&path)

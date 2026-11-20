@@ -125,6 +125,12 @@ impl GamePack {
     /// Resolved page file path, if the pack ships one.
     pub fn page_path(&self) -> Option<PathBuf> {
         if let Some(p) = &self.manifest.page {
+            // Manifest-declared page must stay inside the pack dir —
+            // "../foo.html" or "/abs/path" is rejected, not resolved.
+            if !safe_relpath(p) {
+                tracing::warn!(page = %p, pack = %self.dir_name, "unsafe page path in game.json ignored");
+                return None;
+            }
             let path = self.dir.join(p);
             return path.is_file().then_some(path);
         }
@@ -167,6 +173,22 @@ fn slug_ok(name: &str) -> bool {
         && name
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        && !name.starts_with('.')
+}
+
+/// Disk-path safety for anything served below a root: charset whitelist
+/// plus EVERY component must be `Normal` — this rejects `..`, leading
+/// `/` (absolute escape — `root.join("/x")` drops the root!), `C:`,
+/// `\` separators and `.` segments on every platform.
+pub(crate) fn safe_relpath(path: &str) -> bool {
+    !path.is_empty()
+        && path.len() <= 256
+        && path
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/'))
+        && std::path::Path::new(path)
+            .components()
+            .all(|c| matches!(c, std::path::Component::Normal(_)))
 }
 
 /// Bundled games root (`public/games`). Lookup order: env override →
@@ -313,6 +335,36 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn safe_relpath_rejects_traversal() {
+        assert!(safe_relpath("sprites/back.png"));
+        assert!(safe_relpath("a/b/c.json"));
+        for bad in [
+            "../secret", "a/../../x", "/etc/passwd", "/abs", "..", ".", "//x",
+            "C:\\Windows\\x", "a\\b", "x/../y",
+        ] {
+            assert!(!safe_relpath(bad), "{bad} must be rejected");
+        }
+    }
+
+    #[test]
+    fn manifest_page_cannot_escape_pack_dir() {
+        let base = tmp_root("pageesc");
+        let dir = base.join("games").join("evil");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("overlay.html"), "<b>x</b>").unwrap();
+        std::fs::write(
+            dir.join("game.json"),
+            r#"{"id":"evil","page":"../../secret.html"}"#,
+        )
+        .unwrap();
+        let packs = scan(&base);
+        let pack = packs.iter().find(|p| p.id == "evil").unwrap();
+        assert_eq!(pack.manifest.page.as_deref(), Some("../../secret.html"));
+        assert!(pack.page_path().is_none()); // unsafe path → None, no page
+        std::fs::remove_dir_all(&base).ok();
     }
 
     #[test]
