@@ -62,6 +62,10 @@ pub struct TtsJob {
     pub bypass_cooldown: bool,
     /// Whitelisted viewers go in front of regular phrases (§6.5).
     pub priority: bool,
+    /// Ник адресата ответа (уже очищенный). Подставляется в начало фразы
+    /// ПОСЛЕ apply_emotions — иначе ник «ха-ха»/«ахах»/«xaxa» сам
+    /// триггернул бы детектор смеха.
+    pub reply_to: String,
 }
 
 /// Everything an engine needs to produce one audio clip.
@@ -2386,7 +2390,23 @@ fn apply_emotions(raw: &str, laugh: &str) -> (String, Option<&'static str>) {
             }
         }
     }
-    let low = raw.to_lowercase();
+    // Сканируем текст без вставленных quirk'ами laugh-сегментов —
+    // иначе «хи-хи-хи» персонажа само ретриггернуло бы смех в конце.
+    let low: String = {
+        let mut s = String::with_capacity(t.len());
+        let mut in_laugh = false;
+        for c in t.chars() {
+            if c == LAUGH_OPEN {
+                in_laugh = true;
+            } else if c == LAUGH_CLOSE {
+                in_laugh = false;
+            } else if !in_laugh {
+                s.push(c);
+            }
+        }
+        s
+    }
+    .to_lowercase();
     if emoji_laughed || has_laugh_text(&low) {
         // Textual laughter with no emoji still deserves a snicker — a
         // short marked giggle appended at the end.
@@ -2822,6 +2842,7 @@ impl Tts {
                         style: None,
                         bypass_cooldown: false,
                         priority: false,
+                        reply_to: String::new(),
                     });
                 }
                 self.dispatch_gift_sounds(&cfg, raw).await;
@@ -2877,18 +2898,17 @@ impl Tts {
                         None => {}
                     }
                 }
-                let mut phrase = if cfg.read_comments == "prefix" && !whitelisted {
+                let phrase = if cfg.read_comments == "prefix" && !whitelisted {
                     text.trim_start_matches(&cfg.comment_prefix).to_string()
                 } else {
                     text
                 };
-                // Обычный комментарий читается как есть — только текст.
                 // Ответ на комментарий: «{ник адресата}, {текст}» —
-                // чтобы было слышно, кому отвечают. Тумблер
-                // `read_nickname` гасит и этот префикс.
-                // Ник из CJK/эмодзи (напр. «❤햄스터❤») синтезатор не
-                // прочитает — оставляем только кириллицу/латиницу/цифры,
-                // пустой результат = без префикса.
+                // чтобы было слышно, кому отвечают. Ник из CJK/эмодзи
+                // (напр. «❤햄스터❤») синтезатор не прочитает — оставляем
+                // только кириллицу/латиницу/цифры, пустой результат = без
+                // префикса. Префикс добавляется в воркере ПОСЛЕ
+                // apply_emotions — ник «ахах» не должен сам триггерить смех.
                 let reply_to: String = raw
                     .reply_to
                     .trim()
@@ -2899,9 +2919,6 @@ impl Tts {
                             || *c == '_'
                     })
                     .collect();
-                if cfg.read_nickname && !reply_to.is_empty() {
-                    phrase = format!("{reply_to}, {phrase}");
-                }
                 let prio = whitelisted && cfg.whitelist_priority;
                 self.enqueue(TtsJob {
                     user: raw.user.clone(),
@@ -2911,6 +2928,7 @@ impl Tts {
                     style: None,
                     bypass_cooldown: prio,
                     priority: prio,
+                    reply_to,
                 });
             }
             _ => {}
@@ -2964,6 +2982,7 @@ impl Tts {
                     style: None,
                     bypass_cooldown: true,
                     priority: false,
+                    reply_to: String::new(),
                 });
             }
             return;
@@ -3054,6 +3073,7 @@ impl Tts {
             style,
             bypass_cooldown: true,
             priority: false,
+            reply_to: String::new(),
         });
     }
 
@@ -3301,6 +3321,14 @@ impl Tts {
                 apply_emotions(&quirked, &laugh)
             } else {
                 (quirked, None)
+            };
+            // Ник адресата — после эмодзи-анализа: «xaxa_228, привет»
+            // не должен сам включать смех. Тумблер `read_nickname` гасит
+            // префикс.
+            let emo_text = if cfg.read_nickname && !job.reply_to.is_empty() {
+                format!("{}, {}", job.reply_to, emo_text)
+            } else {
+                emo_text
             };
             // Filter BEFORE stamping cooldowns — a vetoed phrase must not
             // consume the viewer's/user's cooldown (§6.3).
