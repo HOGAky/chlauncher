@@ -518,6 +518,7 @@ function draw() {
   drawGauge();
   drawFlashBeam();
   ctx.restore();
+  refreshGoal();   // живой бар прогресса (внутри — кеш, DOM не дёргается зря)
 }
 
 function drawRoom() {
@@ -888,18 +889,27 @@ function buildHints() {
   }
 }
 
-/* Строка цели: «ЦЕЛЬ fed/N» + прогресс-бар + топ-донатер справа.
- * Без цели — просто счётчик «Накормлен: fed». */
+/* Строка цели: «ЦЕЛЬ fed/N» (или счётчик «Накормлен: fed») + живой
+ * прогресс-бар — заполняется УГЛОМ до следующей покормки (0→180°),
+ * сбрасывается когда Патрик съедает. Топ-донатер справа. Вызывается
+ * каждый кадр, DOM трогаем только при смене значений. */
+let _goalCache = '';
 function refreshGoal() {
-  const el = document.getElementById('goal');
   const top = GameKit.leaderboard(S.donors, 1)[0];
+  const g = (S.goal | 0);
+  const done = g > 0 && S.fed >= g;
+  const key = `${g}|${S.fed}|${Math.round(S.angle * 2)}|${top ? top.user : ''}|${done}`;
+  if (key === _goalCache) return;
+  _goalCache = key;
   document.getElementById('goalD').textContent =
     top ? `${S.skin.texts.topDonor}: @${top.user}` : '';
-  const g = (S.goal | 0);
-  document.getElementById('goalT').textContent = g ? 'ЦЕЛЬ' : S.skin.texts.fedCounter;
+  document.getElementById('goalT').textContent =
+    done ? 'ЦЕЛЬ ВЫПОЛНЕНА!' : g ? 'ЦЕЛЬ' : S.skin.texts.fedCounter;
   document.getElementById('goalV').textContent = g ? `${S.fed}/${g}` : `${S.fed}`;
-  document.getElementById('goalB').style.width = g ? `${Math.min(100, S.fed / g * 100)}%` : '0%';
-  el.style.display = 'block';
+  // бар = прогресс до следующей капусточки (угол), при выполненной цели — полный
+  document.getElementById('goalB').style.width =
+    done ? '100%' : `${Math.min(100, S.angle / 180 * 100)}%`;
+  document.getElementById('goal').style.display = 'block';
 }
 
 /* дебаг-панель */
