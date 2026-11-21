@@ -338,11 +338,27 @@ export default async function authRoutes(app, { db, authenticate }) {
         const userId = request.auth.userId;
         const clash = db
           .prepare(
-            `SELECT user_id FROM tiktok_bindings
+            `SELECT user_id, auth_method, tiktok_uid FROM tiktok_bindings
              WHERE (tiktok_uid = ? OR (username = ? AND verified = 1)) AND user_id != ?`
           )
           .get(info.uid, username, userId);
-        if (clash) return reply.code(409).send({ error: 'USERNAME_TAKEN' });
+        if (clash) {
+          // Proof asymmetry: a 'simple' verification (bio code / chat
+          // comment) is client-reported and spoofable — it must never
+          // lock the real owner out of a server-verified cookie bind.
+          // Downgrade the weak row; strong proofs (cookie/oauth, or a
+          // matching uid) still hold the username.
+          const weakProof =
+            clash.auth_method === 'simple' &&
+            String(clash.tiktok_uid ?? '') !== String(info.uid);
+          if (!weakProof) {
+            return reply.code(409).send({ error: 'USERNAME_TAKEN' });
+          }
+          db.prepare(
+            `UPDATE tiktok_bindings SET verified = 0, verify_code = NULL,
+               code_expires_at = NULL, updated_at = ? WHERE user_id = ?`
+          ).run(now, clash.user_id);
+        }
         db.prepare(
           `INSERT INTO tiktok_bindings
              (user_id, username, verified, bound_at, verified_at, updated_at,
