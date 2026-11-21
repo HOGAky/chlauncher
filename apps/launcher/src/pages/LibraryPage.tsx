@@ -24,7 +24,7 @@ const RESOLUTIONS: { label: string; w: number; h: number }[] = [
 ];
 
 export default function LibraryPage() {
-  const { subscription, boot } = useApp();
+  const { subscription, boot, overlayUrl } = useApp();
   const active = subscription?.status === 'active';
   const [games, setGames] = useState<LibraryEntry[]>([]);
   // Folder-pack catalogue (bundled public/games + <app-data>/games):
@@ -37,6 +37,14 @@ export default function LibraryPage() {
   const [error, setError] = useState<string | null>(null);
   // Вкладка каталога: «все» | только доступные бесплатно | только по тарифу.
   const [tab, setTab] = useState<'all' | 'free' | 'paid'>('all');
+
+  /** Card icon URL — pack icon file via /games-assets on the local overlay server. */
+  const iconUrl = (p: BuiltinGameMeta) => {
+    const origin = overlayUrl.match(/^(https?:\/\/[^/]+)/)?.[1];
+    return p.icon && p.assets_base && origin
+      ? `${origin}/games-assets/${p.assets_base}/${p.icon}`
+      : null;
+  };
 
   const refresh = useCallback(() => {
     api.listGames().then((r) => setGames(r.games)).catch((e) => setError(humanError(e)));
@@ -219,8 +227,12 @@ export default function LibraryPage() {
               <RobloxCard key={p.id} />
             ) : (
               <Card key={p.id} className="overflow-hidden">
-                <div className="h-24 bg-gradient-to-br from-sky-500/30 to-indigo-500/30 flex items-end p-3">
-                  <span className="text-2xl font-black opacity-70">{p.title}</span>
+                <div className="h-24 bg-gradient-to-br from-sky-500/30 to-indigo-500/30 flex items-end justify-center p-2">
+                  {iconUrl(p) ? (
+                    <img src={iconUrl(p)!} alt="" className="h-full object-contain drop-shadow" />
+                  ) : (
+                    <span className="text-2xl font-black opacity-70">{p.title}</span>
+                  )}
                 </div>
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
@@ -238,8 +250,12 @@ export default function LibraryPage() {
             )
           ) : (
             <Card key={p.id} className="overflow-hidden">
-              <div className="h-24 bg-gradient-to-br from-emerald-500/30 to-teal-500/30 flex items-end p-3">
-                <span className="text-2xl font-black opacity-70">{p.title}</span>
+              <div className="h-24 bg-gradient-to-br from-emerald-500/30 to-teal-500/30 flex items-end justify-center p-2">
+                {iconUrl(p) ? (
+                  <img src={iconUrl(p)!} alt="" className="h-full object-contain drop-shadow" />
+                ) : (
+                  <span className="text-2xl font-black opacity-70">{p.title}</span>
+                )}
               </div>
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">

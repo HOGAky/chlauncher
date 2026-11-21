@@ -579,6 +579,24 @@ const MIGRATIONS = [
       );
     `);
   },
+  // Migration 15: interactive_games allow-lists predate the folder-pack
+  // catalogue — they named game ids that never actually shipped as
+  // playable. `patrick_cabbage` is the flagship interactive game and
+  // wasn't in ANY plan → every account saw the lock icon. Union it
+  // into every plan's list (extra ids are harmless — hidden packs
+  // just aren't in the launcher registry).
+  (db) => {
+    const rows = db.prepare('SELECT code, entitlements FROM plans').all();
+    const upd = db.prepare('UPDATE plans SET entitlements = ? WHERE code = ?');
+    for (const r of rows) {
+      let ent;
+      try { ent = JSON.parse(r.entitlements || '{}'); } catch { continue; }
+      const list = Array.isArray(ent.interactive_games) ? ent.interactive_games : [];
+      if (!list.includes('patrick_cabbage')) list.push('patrick_cabbage');
+      ent.interactive_games = list;
+      upd.run(JSON.stringify(ent), r.code);
+    }
+  },
 ];
 
 /** Runs all pending migrations in order. Idempotent via user_version. */
