@@ -22,7 +22,8 @@
     "eat": "sprites/eat.png",
     "angry": "sprites/angry.png",
     "hand": "sprites/hand_cabbage.png",
-    "custom": "sprites/custom.png"
+    "custom": "sprites/custom.png",
+    "cabbage": "sprites/cabbage.png"
   },
   "sfx": {
     "call": [

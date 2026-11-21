@@ -65,7 +65,10 @@
   #devpanel img{max-width:64px;max-height:64px;border-radius:8px;margin-top:4px;display:none}
   #pause{position:absolute;inset:0;display:none;place-items:center;font:800 80px system-ui;
     background:rgba(0,0,0,.5);text-shadow:0 4px 18px #000}
+  /* видео-фон: комната из исходного видео мема */
+  #bgv{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:-1}
 </style></head><body>
+<video id="bgv" muted loop playsinline></video>
 <canvas id="cv"></canvas>
 <div id="stage">
   <div id="cards"></div>
@@ -125,7 +128,7 @@ const DEF_SKIN = {   // дефолты, если skin.json недоступен
   texts: { heroTitle: 'ГЕРОЙ', megaTitle: 'ХОЗЯИН ПАТРИКА', fedCounter: 'Накормлен', topDonor: 'Топ донатер' },
   sprites: { back: 'sprites/back.png', peek: 'sprites/peek.png', almost: 'sprites/almost.png',
              eat: 'sprites/eat.png', angry: 'sprites/angry.png', hand: 'sprites/hand_cabbage.png',
-             custom: 'sprites/custom.png' },
+             cabbage: 'sprites/cabbage.png', custom: 'sprites/custom.png' },
   sfx: { call: ['sfx/ptrick.mp3', 'sfx/paaatrik.mp3'], cabbage: 'sfx/cabbage.mp3', crunch: 'sfx/crunch.mp3',
          patrick: 'sfx/patrick.mp3', kapustochka: 'sfx/kapustochka.mp3',
          trollGross: 'sfx/troll_gross.mp3', trollVacuum: 'sfx/troll_vacuum.mp3', mega: 'sfx/mega.mp3' },
@@ -152,6 +155,15 @@ async function loadConfig() {
     if (row.name && row.image) S.giftIcons[row.name.toLowerCase()] = `/${row.image}?t=${encodeURIComponent(TOKEN)}`;
   }
   S.eng = new GameKit.Engine(S.cfg);
+  // Видео-фон — исходное видео мема. В chroma-режиме (?bg=) видео не
+  // подключаем: фон должен остаться чистым для keying.
+  if (!BG) {
+    const bgv = document.getElementById('bgv');
+    bgv.addEventListener('playing', () => { S.videoBg = true; });
+    bgv.addEventListener('error', () => bgv.remove());
+    bgv.src = `${S.skin.assetBase}/bg.mp4`;
+    bgv.play().catch(() => bgv.remove());
+  }
 }
 
 function giftIcon(name) { return S.giftIcons[String(name || '').toLowerCase()] || null; }
@@ -475,7 +487,7 @@ function draw() {
   const shx = (Math.random() - 0.5) * S.shake, shy = (Math.random() - 0.5) * S.shake;
   ctx.translate(-W / 2 + shx + tremble, -H / 2 + shy);
 
-  drawRoom();
+  if (!S.videoBg) drawRoom();   // видео-фон играет — комнату не рисуем
   sweat();
   drawHand();
   drawPatrick();
@@ -605,6 +617,13 @@ function drawPatrick() {
     const r = 300, img = spr.img;
     const ar = img.width / img.height;
     ctx.drawImage(img, -r * ar, -r * 1.55, r * ar * 2, r * 2);
+    // лист у рта, пока жуёт
+    const leaf = SPR.cabbage;
+    if (S.state === 'eat' && leaf && leaf.img) {
+      const munch = Math.sin(now * 14) * r * 0.05;
+      const lw = r * 0.6, lar = leaf.img.width / leaf.img.height;
+      ctx.drawImage(leaf.img, -r * 0.9, r * 0.12 + munch, lw, lw / lar);
+    }
   } else {
     drawRabbitProc(S.state, 190, now);
   }
@@ -630,12 +649,18 @@ function drawHand() {
     ctx.fillStyle = '#e8b58a';                                        // рука
     ctx.beginPath(); ctx.roundRect(-40, 60, 80, 300, 36); ctx.fill();
     ctx.beginPath(); ctx.ellipse(0, 46, 52, 42, 0, 0, 7); ctx.fill();
-    ctx.fillStyle = '#7ed957';                                        // лист капусты
-    ctx.beginPath(); ctx.ellipse(0, -20, 95, 62, -0.15, 0, 7); ctx.fill();
-    ctx.fillStyle = '#5cb53f';
-    ctx.beginPath(); ctx.ellipse(0, -20, 62, 40, -0.15, 0, 7); ctx.fill();
-    ctx.strokeStyle = '#3f8f2a'; ctx.lineWidth = 5;
-    ctx.beginPath(); ctx.moveTo(-80, -8); ctx.quadraticCurveTo(0, -34, 80, -30); ctx.stroke();
+    const leaf = SPR.cabbage;
+    if (leaf && leaf.img) {                                           // настоящий лист
+      const lw = 210, lar = leaf.img.width / leaf.img.height;
+      ctx.drawImage(leaf.img, -lw / 2, -20 - lw / lar / 2, lw, lw / lar);
+    } else {                                                          // фолбэк — эллипсы
+      ctx.fillStyle = '#7ed957';
+      ctx.beginPath(); ctx.ellipse(0, -20, 95, 62, -0.15, 0, 7); ctx.fill();
+      ctx.fillStyle = '#5cb53f';
+      ctx.beginPath(); ctx.ellipse(0, -20, 62, 40, -0.15, 0, 7); ctx.fill();
+      ctx.strokeStyle = '#3f8f2a'; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(-80, -8); ctx.quadraticCurveTo(0, -34, 80, -30); ctx.stroke();
+    }
   }
   ctx.restore();
 }
@@ -801,7 +826,7 @@ function tickCards() {
 function showHero(title, user, avatar) {
   const h = document.getElementById('hero');
   document.getElementById('heroT').textContent = title + ': @' + user;
-  document.getElementById('heroU').textContent = S.megaOwner ? 'ЗОЛОТОЙ КОЧАН!' : 'Патрик ел!';
+  document.getElementById('heroU').textContent = S.megaOwner ? 'ЗОЛОТОЙ КОЧАН!' : 'Патрик съел капусточку!';
   const old = document.getElementById('heroA');
   if (old) old.remove();
   let av;

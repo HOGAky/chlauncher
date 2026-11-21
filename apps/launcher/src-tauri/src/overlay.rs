@@ -680,6 +680,7 @@ async fn serve_game_asset(
         "webp" => "image/webp",
         "svg" => "image/svg+xml",
         "mp3" | "wav" | "ogg" => "audio/mpeg",
+        "mp4" | "webm" => "video/mp4",
         _ => return StatusCode::NOT_FOUND.into_response(),
     };
     // User packs override bundled ones — same precedence as the registry.
