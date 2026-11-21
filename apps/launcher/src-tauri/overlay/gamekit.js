@@ -132,7 +132,11 @@
      * the map is hard-capped so memory stays flat on long streams.
      */
     _dedupe(ev, now) {
-      const key = `${ev.event_kind}|${ev.user}|${ev.raw_name}|${ev.coins || 0}|${ev.count || 1}`;
+      // ts_ms in the key: only a true re-delivery (identical timestamp)
+      // counts as a replay. Legit repeats — two «патрик» comments or
+      // identical Roses seconds apart — share the tuple but never the
+      // timestamp, and must not be eaten as fake dupes.
+      const key = `${ev.event_kind}|${ev.user}|${ev.raw_name}|${ev.coins || 0}|${ev.count || 1}|${ev.ts_ms || 0}`;
       const seen = this.seen.get(key);
       if (seen !== undefined && now - seen < 10000) return true;
       this.seen.set(key, now);
