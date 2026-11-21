@@ -5,16 +5,133 @@
   "round_sec": 300,
   "volume": 0.7,
   "rules": [
-    {"event":"gift","match":{"names":["Rose"]},"action":{"type":"spawn_enemy","count":1,"tier":"weak"}},
-    {"event":"gift","match":{"names":["Finger Heart"]},"action":{"type":"spawn_enemy","count":3,"tier":"weak"}},
-    {"event":"gift","match":{"names":["TikTok"]},"action":{"type":"spawn_enemy","count":10,"tier":"weak"}},
-    {"event":"gift","match":{"names":["Rosa"]},"action":{"type":"spawn_enemy","count":1,"tier":"miniboss"}},
-    {"event":"gift","match":{"names":["Galaxy"]},"action":{"type":"meteor"},"cooldownMs":5000},
-    {"event":"gift","match":{"names":["Lion"]},"action":{"type":"spawn_enemy","count":1,"tier":"boss"},"cooldownMs":10000},
-    {"event":"like","match":{},"action":{"type":"random_buff","per":50}},
-    {"event":"comment","match":{"commands":["!heal"]},"action":{"type":"heal","value":25},"perUserCdMs":60000},
-    {"event":"comment","match":{"commands":["!weapon"]},"action":{"type":"weapon"},"perUserCdMs":30000},
-    {"event":"follow","match":{},"action":{"type":"shield","sec":10}},
-    {"event":"share","match":{},"action":{"type":"slow","sec":10}}
-  ]
+    {
+      "event": "gift",
+      "match": {
+        "names": [
+          "Rose"
+        ]
+      },
+      "action": {
+        "type": "spawn_enemy",
+        "count": 1,
+        "tier": "weak"
+      }
+    },
+    {
+      "event": "gift",
+      "match": {
+        "names": [
+          "Finger Heart"
+        ]
+      },
+      "action": {
+        "type": "spawn_enemy",
+        "count": 3,
+        "tier": "weak"
+      }
+    },
+    {
+      "event": "gift",
+      "match": {
+        "names": [
+          "TikTok"
+        ]
+      },
+      "action": {
+        "type": "spawn_enemy",
+        "count": 10,
+        "tier": "weak"
+      }
+    },
+    {
+      "event": "gift",
+      "match": {
+        "names": [
+          "Rosa"
+        ]
+      },
+      "action": {
+        "type": "spawn_enemy",
+        "count": 1,
+        "tier": "miniboss"
+      }
+    },
+    {
+      "event": "gift",
+      "match": {
+        "names": [
+          "Galaxy"
+        ]
+      },
+      "action": {
+        "type": "meteor"
+      },
+      "cooldownMs": 5000
+    },
+    {
+      "event": "gift",
+      "match": {
+        "names": [
+          "Lion"
+        ]
+      },
+      "action": {
+        "type": "spawn_enemy",
+        "count": 1,
+        "tier": "boss"
+      },
+      "cooldownMs": 10000
+    },
+    {
+      "event": "like",
+      "match": {},
+      "action": {
+        "type": "random_buff",
+        "per": 50
+      }
+    },
+    {
+      "event": "comment",
+      "match": {
+        "commands": [
+          "!heal"
+        ]
+      },
+      "action": {
+        "type": "heal",
+        "value": 25
+      },
+      "perUserCdMs": 60000
+    },
+    {
+      "event": "comment",
+      "match": {
+        "commands": [
+          "!weapon"
+        ]
+      },
+      "action": {
+        "type": "weapon"
+      },
+      "perUserCdMs": 30000
+    },
+    {
+      "event": "follow",
+      "match": {},
+      "action": {
+        "type": "shield",
+        "sec": 10
+      }
+    },
+    {
+      "event": "share",
+      "match": {},
+      "action": {
+        "type": "slow",
+        "sec": 10
+      }
+    }
+  ],
+  "hidden": true
 }

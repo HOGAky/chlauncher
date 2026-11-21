@@ -81,6 +81,10 @@ pub struct PackManifest {
     pub launch: Option<serde_json::Value>,
     /// Default trigger rule table — feeds `BuiltinGameCfg.rules`.
     pub rules: Option<serde_json::Value>,
+    /// `true` = pack stays on disk but is invisible: not in the
+    /// catalogue, not launchable, `/overlay/game/<id>` → 404. For
+    /// unfinished/prototype games shipped in the repo.
+    pub hidden: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -98,6 +102,7 @@ struct RawManifest {
     tts: Option<String>,
     launch: Option<serde_json::Value>,
     rules: Option<serde_json::Value>,
+    hidden: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -163,6 +168,11 @@ impl GamePack {
     /// launches via `launch.kind` instead of a capture window.
     pub fn is_remote(&self) -> bool {
         self.manifest.pack_type.as_deref() == Some("remote")
+    }
+
+    /// `hidden: true` — on disk but out of the runtime entirely.
+    pub fn is_hidden(&self) -> bool {
+        self.manifest.hidden == Some(true)
     }
 }
 
@@ -238,6 +248,7 @@ fn parse_manifest(text: &str) -> PackManifest {
                 tts: raw.tts,
                 launch: raw.launch,
                 rules: raw.rules,
+                hidden: raw.hidden,
             }
         }
         Err(e) => {
@@ -269,13 +280,18 @@ fn scan_root(root: &Path, user: bool) -> Vec<GamePack> {
                 .and_then(|v| v["id"].as_str().map(str::to_string))
                 .filter(|s| slug_ok(s))
                 .unwrap_or_else(|| dir_name.clone());
-            out.push(GamePack {
+            let pack = GamePack {
                 id,
                 dir_name,
                 dir,
                 manifest: parse_manifest(&text),
                 user,
-            });
+            };
+            // `hidden: true` — prototype stays on disk, invisible to the
+            // catalogue, the overlay route and the window whitelist.
+            if !pack.is_hidden() {
+                out.push(pack);
+            }
         } else {
             // Manifest-less pack: registers only when it ships a page.
             let probe = GamePack {

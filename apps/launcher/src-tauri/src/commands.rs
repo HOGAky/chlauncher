@@ -703,8 +703,18 @@ pub async fn game_resume(state: State<'_, AppState>) -> Result<Value, String> {
 }
 
 #[tauri::command]
-pub async fn game_stop(state: State<'_, AppState>) -> Result<Value, String> {
-    Ok(json!({ "session": state.games.stop() }))
+pub async fn game_stop(state: State<'_, AppState>, app: AppHandle) -> Result<Value, String> {
+    let session = state.games.stop();
+    // Stopping a session must also drop its capture window — frameless
+    // always-on-top windows have no chrome, and "stop that leaves the
+    // window" reads as "can't close it" to the streamer.
+    if let Some(info) = &session {
+        let label = format!("overlay-overlay-game-{}", info.game_id);
+        if let Some(w) = app.get_webview_window(&label) {
+            let _ = w.close();
+        }
+    }
+    Ok(json!({ "session": session }))
 }
 
 /// Reads the per-game cfg blob (seeded with defaults on first call).

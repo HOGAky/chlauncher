@@ -169,6 +169,15 @@ export default function LibraryPage() {
             >
               Chroma
             </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={!!busy.__timer}
+              title="Закрыть окно захвата таймера"
+              onClick={act('__timer', 'close', () => api.closeOverlayWindow('overlay/timer'))}
+            >
+              <Square size={14} /> Закрыть
+            </Button>
           </CardFooter>
         </Card>
         {/* Folder packs (public/games + <app-data>/games): «pack» cards
@@ -239,6 +248,17 @@ export default function LibraryPage() {
                   })}
                 >
                   <MonitorPlay size={14} /> Chroma
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={!!busy[p.id]}
+                  title="Закрыть окно захвата этой игры"
+                  onClick={act(p.id, 'close', () =>
+                    api.closeOverlayWindow((p.overlay_path ?? '').replace(/^\//, ''))
+                  )}
+                >
+                  <Square size={14} /> Закрыть
                 </Button>
               </CardFooter>
             </Card>

@@ -5,16 +5,122 @@
   "round_sec": 300,
   "volume": 0.7,
   "rules": [
-    {"event":"gift","match":{"names":["Rose"]},"action":{"type":"add_apple","value":1}},
-    {"event":"gift","match":{"names":["Finger Heart"]},"action":{"type":"add_apple","value":2}},
-    {"event":"gift","match":{"names":["TikTok"]},"action":{"type":"add_apple","value":5}},
-    {"event":"gift","match":{"names":["Rosa"]},"action":{"type":"gold_apple","value":1}},
-    {"event":"gift","match":{"names":["Galaxy"]},"action":{"type":"storm","count":10},"cooldownMs":5000},
-    {"event":"gift","match":{"names":["Lion"]},"action":{"type":"speed","sec":15},"cooldownMs":10000},
-    {"event":"gift","match":{},"action":{"type":"grow","value":1,"per_coin":1}},
-    {"event":"subscribe","match":{},"action":{"type":"shrink","value":10}},
-    {"event":"like","match":{},"action":{"type":"add_apple","value":1,"per":200}},
-    {"event":"follow","match":{},"action":{"type":"grow","value":2}},
-    {"event":"share","match":{},"action":{"type":"gold_apple","value":1}}
-  ]
+    {
+      "event": "gift",
+      "match": {
+        "names": [
+          "Rose"
+        ]
+      },
+      "action": {
+        "type": "add_apple",
+        "value": 1
+      }
+    },
+    {
+      "event": "gift",
+      "match": {
+        "names": [
+          "Finger Heart"
+        ]
+      },
+      "action": {
+        "type": "add_apple",
+        "value": 2
+      }
+    },
+    {
+      "event": "gift",
+      "match": {
+        "names": [
+          "TikTok"
+        ]
+      },
+      "action": {
+        "type": "add_apple",
+        "value": 5
+      }
+    },
+    {
+      "event": "gift",
+      "match": {
+        "names": [
+          "Rosa"
+        ]
+      },
+      "action": {
+        "type": "gold_apple",
+        "value": 1
+      }
+    },
+    {
+      "event": "gift",
+      "match": {
+        "names": [
+          "Galaxy"
+        ]
+      },
+      "action": {
+        "type": "storm",
+        "count": 10
+      },
+      "cooldownMs": 5000
+    },
+    {
+      "event": "gift",
+      "match": {
+        "names": [
+          "Lion"
+        ]
+      },
+      "action": {
+        "type": "speed",
+        "sec": 15
+      },
+      "cooldownMs": 10000
+    },
+    {
+      "event": "gift",
+      "match": {},
+      "action": {
+        "type": "grow",
+        "value": 1,
+        "per_coin": 1
+      }
+    },
+    {
+      "event": "subscribe",
+      "match": {},
+      "action": {
+        "type": "shrink",
+        "value": 10
+      }
+    },
+    {
+      "event": "like",
+      "match": {},
+      "action": {
+        "type": "add_apple",
+        "value": 1,
+        "per": 200
+      }
+    },
+    {
+      "event": "follow",
+      "match": {},
+      "action": {
+        "type": "grow",
+        "value": 2
+      }
+    },
+    {
+      "event": "share",
+      "match": {},
+      "action": {
+        "type": "gold_apple",
+        "value": 1
+      }
+    }
+  ],
+  "hidden": true
 }
