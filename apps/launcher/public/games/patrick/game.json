@@ -3,18 +3,111 @@
   "title": "Патрик, на капусту!",
   "desc": "Вертикальная (9:16) игра-обиженка: зрители разворачивают Патрика к капусте подарками, тролли сбрасывают прогресс.",
   "icon": "icon.png",
-  "window": { "w": 405, "h": 720 },
+  "window": {
+    "w": 405,
+    "h": 720
+  },
   "round_sec": 0,
   "volume": 0.7,
   "tts": "patrick",
   "rules": [
-    {"event":"like","match":{},"action":{"type":"nudge","value":0.5,"per":1}},
-    {"event":"comment","match":{"contains":"патрик"},"action":{"type":"nudge","value":0.5},"cooldownMs":800},
-    {"event":"gift","match":{"names":["Rose"]},"action":{"type":"small","value":6}},
-    {"event":"gift","match":{"names":["Ice cream","Doughnut"]},"action":{"type":"mid","value":18}},
-    {"event":"gift","match":{"names":["Heart Me"]},"action":{"type":"pet","value":22,"sec":5}},
-    {"event":"gift","match":{"names":["Chili","Banana Peel"]},"action":{"type":"rotten","value":35},"cooldownMs":1200},
-    {"event":"gift","match":{"names":["Fan","Drums"]},"action":{"type":"vacuum"},"cooldownMs":3000},
-    {"event":"gift","match":{"names":["Galaxy","Crown"]},"action":{"type":"mega"},"cooldownMs":3000}
+    {
+      "event": "like",
+      "match": {},
+      "action": {
+        "type": "nudge",
+        "value": 0.15,
+        "per": 1
+      }
+    },
+    {
+      "event": "comment",
+      "match": {
+        "contains": "патрик"
+      },
+      "action": {
+        "type": "nudge",
+        "value": 0.5
+      },
+      "cooldownMs": 800
+    },
+    {
+      "event": "gift",
+      "match": {
+        "names": [
+          "Rose"
+        ]
+      },
+      "action": {
+        "type": "small",
+        "value": 6
+      }
+    },
+    {
+      "event": "gift",
+      "match": {
+        "names": [
+          "Ice cream",
+          "Doughnut"
+        ]
+      },
+      "action": {
+        "type": "mid",
+        "value": 18
+      }
+    },
+    {
+      "event": "gift",
+      "match": {
+        "names": [
+          "Heart Me"
+        ]
+      },
+      "action": {
+        "type": "pet",
+        "value": 22,
+        "sec": 5
+      }
+    },
+    {
+      "event": "gift",
+      "match": {
+        "names": [
+          "Chili",
+          "Banana Peel"
+        ]
+      },
+      "action": {
+        "type": "rotten",
+        "value": 35
+      },
+      "cooldownMs": 1200
+    },
+    {
+      "event": "gift",
+      "match": {
+        "names": [
+          "Fan",
+          "Drums"
+        ]
+      },
+      "action": {
+        "type": "vacuum"
+      },
+      "cooldownMs": 3000
+    },
+    {
+      "event": "gift",
+      "match": {
+        "names": [
+          "Galaxy",
+          "Crown"
+        ]
+      },
+      "action": {
+        "type": "mega"
+      },
+      "cooldownMs": 3000
+    }
   ]
 }

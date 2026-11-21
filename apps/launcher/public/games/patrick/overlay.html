@@ -27,7 +27,19 @@
   .dcard.bump{animation:bump .25s}
 
   /* нижняя сетка подсказок */
-  #hints{position:absolute;left:0;right:0;bottom:26px;display:flex;justify-content:center;gap:14px}
+  /* подсказки — вверху (под ником стримера), спидометр — внизу */
+  #hints{position:absolute;left:0;right:0;top:160px;display:flex;justify-content:center;gap:14px}
+  /* цель стрима: прогресс «накормить N раз» + топ-донатер */
+  #goal{position:absolute;left:80px;right:80px;top:352px;
+    background:rgba(14,12,34,.55);border:1px solid rgba(255,255,255,.12);
+    border-radius:18px;padding:10px 16px;backdrop-filter:blur(3px);display:none}
+  #goal .row{display:flex;justify-content:space-between;align-items:baseline;
+    font:700 24px system-ui;color:#fff;text-shadow:0 2px 8px #000}
+  #goal .row .v{font:800 26px monospace;color:#ffcf5a}
+  #goal .row .d{font:600 18px system-ui;color:#cfc8ee}
+  #goal .bar{height:14px;border-radius:7px;background:rgba(255,255,255,.14);margin-top:8px;overflow:hidden}
+  #goal .bar i{display:block;height:100%;width:0;border-radius:7px;
+    background:linear-gradient(90deg,#4da6ff,#ff9f43,#ff4d4d);transition:width .4s ease}
   .hint{width:150px;background:rgba(14,12,34,.55);border:1px solid rgba(255,255,255,.12);
     border-radius:16px;padding:10px 6px 8px;text-align:center;backdrop-filter:blur(3px)}
   .hint img{width:52px;height:52px;object-fit:contain;filter:drop-shadow(0 3px 6px rgba(0,0,0,.5))}
@@ -73,6 +85,7 @@
 <div id="stage">
   <div id="cards"></div>
   <div id="hints"></div>
+  <div id="goal"><div class="row"><span id="goalT">ЦЕЛЬ</span><span class="v" id="goalV">0/5</span><span class="d" id="goalD"></span></div><div class="bar"><i id="goalB"></i></div></div>
   <div id="hero"><div class="t" id="heroT"></div><div class="u" id="heroU"></div><img class="av" id="heroA" alt=""></div>
   <div id="debug"></div>
   <div id="devpanel">
@@ -83,6 +96,12 @@
       <img id="devAvatarPrev" alt="">
     </div>
     <div class="msg" id="devAvatarMsg">sprites/custom.png заменяет персонажа</div>
+    <div class="t" style="margin-top:8px">DEV · Цель (накормить)</div>
+    <div>
+      <input type="number" id="devGoal" min="0" placeholder="N" style="width:70px">
+      <button id="devGoalSet">OK</button>
+      <button id="devGoalClr">✕</button>
+    </div>
   </div>
   <div id="pause">ПАУЗА</div>
 </div>
@@ -155,6 +174,7 @@ async function loadConfig() {
     if (row.name && row.image) S.giftIcons[row.name.toLowerCase()] = `/${row.image}?t=${encodeURIComponent(TOKEN)}`;
   }
   S.eng = new GameKit.Engine(S.cfg);
+  S.goal = (S.skin.goal | 0) || 0;
   // Видео-фон — исходное видео мема. В chroma-режиме (?bg=) видео не
   // подключаем: фон должен остаться чистым для keying.
   if (!BG) {
@@ -305,6 +325,7 @@ function win() {
   Audio2.play('crunch');
   confetti(60);
   S.beam = 1;
+  refreshGoal();
 }
 
 function angry(ms = 1500) {
@@ -700,14 +721,15 @@ function drawParticles() {
   }
 }
 
-/* полукруглый спидометр 0–180° + счётчик + топ-донатер */
+/* спидометр 0–180° НИЖНЕЙ дугой — внизу сцены, над зоной комментов.
+ * Счётчик и топ-донатер живут в HTML-строке цели (#goal). */
 function drawGauge() {
-  const cx = 540, cy = 320, R = 330;
+  const cx = 540, cy = 1620, R = 250;
   const th = S.skin.theme;
   ctx.save();
-  ctx.lineWidth = 46; ctx.lineCap = 'round';
+  ctx.lineWidth = 40; ctx.lineCap = 'round';
   ctx.strokeStyle = 'rgba(255,255,255,.10)';
-  ctx.beginPath(); ctx.arc(cx, cy, R, Math.PI, 0); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI); ctx.stroke();   // нижняя дуга
   const frac = Math.max(0, Math.min(1, S.angle / 180));
   if (frac > 0.005) {
     const g = ctx.createLinearGradient(cx - R, 0, cx + R, 0);
@@ -716,26 +738,21 @@ function drawGauge() {
     ctx.beginPath(); ctx.arc(cx, cy, R, Math.PI, Math.PI + Math.PI * frac); ctx.stroke();
     // золотое свечение щита
     if (Date.now() < S.shieldUntil) {
-      ctx.strokeStyle = 'rgba(255,207,90,.5)'; ctx.lineWidth = 60;
+      ctx.strokeStyle = 'rgba(255,207,90,.5)'; ctx.lineWidth = 54;
       ctx.beginPath(); ctx.arc(cx, cy, R, Math.PI, Math.PI + Math.PI * frac); ctx.stroke();
-      ctx.lineWidth = 46;
+      ctx.lineWidth = 40;
     }
   }
   // стрелка
   const a = Math.PI + Math.PI * frac;
   const tremor = S.angle > 145 ? (Math.random() - 0.5) * 4 : 0;
-  ctx.strokeStyle = '#fff'; ctx.lineWidth = 9;
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 8;
   ctx.beginPath(); ctx.moveTo(cx, cy);
-  ctx.lineTo(cx + Math.cos(a) * (R - 60) + tremor, cy + Math.sin(a) * (R - 60)); ctx.stroke();
-  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cx, cy, 16, 0, 7); ctx.fill();
-  ctx.font = '800 64px system-ui'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+  ctx.lineTo(cx + Math.cos(a) * (R - 50) + tremor, cy + Math.sin(a) * (R - 50)); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cx, cy, 14, 0, 7); ctx.fill();
+  ctx.font = '800 58px system-ui'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
   ctx.shadowColor = '#000'; ctx.shadowBlur = 10;
-  ctx.fillText(`${Math.round(S.angle)}°`, cx, cy - 24);
-  ctx.font = '700 40px system-ui'; ctx.textAlign = 'left';
-  ctx.fillText(`${S.skin.texts.fedCounter}: ${S.fed}`, 40, 70);
-  const top = GameKit.leaderboard(S.donors, 1)[0];
-  ctx.textAlign = 'right';
-  ctx.fillText(top ? `${S.skin.texts.topDonor}: @${top.user}` : '', W - 40, 70);
+  ctx.fillText(`${Math.round(S.angle)}°`, cx, cy + 80);
   ctx.restore();
 }
 
@@ -871,6 +888,20 @@ function buildHints() {
   }
 }
 
+/* Строка цели: «ЦЕЛЬ fed/N» + прогресс-бар + топ-донатер справа.
+ * Без цели — просто счётчик «Накормлен: fed». */
+function refreshGoal() {
+  const el = document.getElementById('goal');
+  const top = GameKit.leaderboard(S.donors, 1)[0];
+  document.getElementById('goalD').textContent =
+    top ? `${S.skin.texts.topDonor}: @${top.user}` : '';
+  const g = (S.goal | 0);
+  document.getElementById('goalT').textContent = g ? 'ЦЕЛЬ' : S.skin.texts.fedCounter;
+  document.getElementById('goalV').textContent = g ? `${S.fed}/${g}` : `${S.fed}`;
+  document.getElementById('goalB').style.width = g ? `${Math.min(100, S.fed / g * 100)}%` : '0%';
+  el.style.display = 'block';
+}
+
 /* дебаг-панель */
 const dbg = document.getElementById('debug');
 function drawDebug() {
@@ -952,6 +983,14 @@ devFile && devFile.addEventListener('change', () => {
   devFile.value = '';
 });
 
+document.getElementById('devGoalSet').addEventListener('click', () => {
+  S.goal = Math.max(0, parseInt(document.getElementById('devGoal').value, 10) || 0);
+  refreshGoal();
+});
+document.getElementById('devGoalClr').addEventListener('click', () => {
+  S.goal = 0; document.getElementById('devGoal').value = ''; refreshGoal();
+});
+
 document.getElementById('devAvatarReset').addEventListener('click', () => {
   postAsset('sprites/custom.png', null)
     .then(() => { devMsg.textContent = 'Сброшено на спрайты/процедурного'; reloadCustomSprite(); })
@@ -971,6 +1010,7 @@ addEventListener('keydown', (e) => {
   if (e.key === 'r' || e.key === 'R' || e.key === 'к' || e.key === 'К') {
     S.angle = 0; S.fed = 0; S.donors = {}; S.particles = []; S.megaOwner = null;
     S.eatUntil = 0; S.angryUntil = 0; S.shieldUntil = 0;
+    refreshGoal();
     return;
   }
   const a = DEBUG_ACT[e.key];
@@ -983,6 +1023,7 @@ async function main() {
   loadSprites();
   await Audio2.probe();
   buildHints();
+  refreshGoal();
   S.callNext = Date.now() + 1500;
 
   GameKit.connect(['game'], (ev) => {
