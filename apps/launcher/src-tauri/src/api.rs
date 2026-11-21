@@ -232,7 +232,11 @@ impl ApiClient {
     ) -> Result<T, ApiError> {
         let mut r = self
             .http
-            .request(method, format!("{}{}", self.base(), path));
+            .request(method, format!("{}{}", self.base(), path))
+            // No client-wide timeout (downloads/upload streams bypass
+            // `req`), but a JSON call must never hang forever on a
+            // half-open socket — 25 s bounds every attempt.
+            .timeout(std::time::Duration::from_secs(25));
         if let Some(t) = token {
             r = r.bearer_auth(t);
         }
@@ -758,6 +762,9 @@ impl ApiClient {
             .http
             .get(format!("{}/api/games/{}/download", self.base(), slug))
             .bearer_auth(token)
+            // Generous bound — a zip streams in chunks, but a dead
+            // connection must not park the task forever.
+            .timeout(std::time::Duration::from_secs(600))
             .send()
             .await?;
         if res.status() == StatusCode::FORBIDDEN {
@@ -804,6 +811,7 @@ impl ApiClient {
             .http
             .get(format!("{}/api/mc/plugins/{}/download", self.base(), slug))
             .bearer_auth(token)
+            .timeout(std::time::Duration::from_secs(600))
             .send()
             .await?;
         if !res.status().is_success() {
@@ -907,6 +915,9 @@ impl ApiClient {
             .bearer_auth(token)
             .header("content-type", "application/octet-stream")
             .body(reqwest::Body::wrap_stream(body_stream))
+            // Same bound as downloads — chunk-streamed uploads can run
+            // minutes, a dead socket should still end.
+            .timeout(std::time::Duration::from_secs(600))
             .send()
             .await?;
         let status = res.status();

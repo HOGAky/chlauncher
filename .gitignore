@@ -57,3 +57,4 @@ tools/rvc-server/*-test*.wav
 # ����� �������� ����� � ���� � build.rs �������� ��� � �������.
 !tools/tiktok-sidecar/dist/
 !tools/tiktok-sidecar/dist/**
+*.whl
