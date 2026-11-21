@@ -35,6 +35,8 @@ export default function LibraryPage() {
     boot?.window_options ?? { width: 540, height: 960, borderless: true, always_on_top: true, chroma_key: false }
   );
   const [error, setError] = useState<string | null>(null);
+  // Вкладка каталога: «все» | только доступные бесплатно | только по тарифу.
+  const [tab, setTab] = useState<'all' | 'free' | 'paid'>('all');
 
   const refresh = useCallback(() => {
     api.listGames().then((r) => setGames(r.games)).catch((e) => setError(humanError(e)));
@@ -130,10 +132,35 @@ export default function LibraryPage() {
         </div>
       )}
 
+      {/* Вкладки: вместо бейджей «тариф» на каждой карточке — фильтр
+          сверху по доступности. */}
+      <div className="flex gap-1 border-b border-border">
+        {(
+          [
+            ['all', 'Все'],
+            ['free', 'Бесплатные'],
+            ['paid', 'По тарифу'],
+          ] as const
+        ).map(([k, label]) => (
+          <button
+            key={k}
+            onClick={() => setTab(k)}
+            className={`px-3 py-1.5 text-sm -mb-px border-b-2 transition-colors ${
+              tab === k
+                ? 'border-primary text-foreground font-medium'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {/* Built-in app — the stream timer; viewers extend the countdown
             via gifts/likes/subs. Rendered by /overlay/timer in a capture
             window, configured on the «Таймер» page. */}
+        {tab !== 'paid' && (
         <Card className="overflow-hidden border-primary/40">
           <div className="h-24 bg-gradient-to-br from-pink-500/30 to-violet-500/30 flex items-end p-3">
             <span className="text-2xl font-black opacity-70 flex items-center gap-2">
@@ -180,10 +207,13 @@ export default function LibraryPage() {
             </Button>
           </CardFooter>
         </Card>
+        )}
         {/* Folder packs (public/games + <app-data>/games): «pack» cards
             open a capture window, «remote» link-packs dispatch on
             launch.kind — «roblox» renders the full Roblox card. */}
-        {packs.map((p) =>
+        {packs
+          .filter((p) => tab === 'all' || (tab === 'free' ? p.allowed : !p.allowed))
+          .map((p) =>
           p.remote ? (
             p.launch?.kind === 'roblox' ? (
               <RobloxCard key={p.id} />
@@ -214,12 +244,11 @@ export default function LibraryPage() {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle>{p.title}</CardTitle>
-                  <div className="flex gap-1.5">
+                  {p.user_pack && (
                     <Badge variant="outline" title={p.assets_base ?? 'папка-пакет'}>
-                      {p.user_pack ? 'Своя папка' : 'Пакет'}
+                      Своя папка
                     </Badge>
-                    {!p.allowed && <Badge variant="destructive">Тариф</Badge>}
-                  </div>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground">окно захвата · LIVE</p>
               </CardHeader>
@@ -264,7 +293,9 @@ export default function LibraryPage() {
             </Card>
           )
         )}
-        {games.map((g) => {
+        {games
+          .filter((g) => tab === 'all' || (tab === 'free' ? g.is_free : !g.is_free))
+          .map((g) => {
           const isBusy = !!busy[g.slug];
           // §8.3: Free accounts play is_free titles; paid titles need an
           // active sub AND the paid_games entitlement (undefined = not
@@ -339,11 +370,25 @@ export default function LibraryPage() {
             </Card>
           );
         })}
-        {games.length === 0 && (
+        {games.length === 0 && packs.length === 0 && (
           <p className="text-sm text-muted-foreground col-span-full">
             Каталог пуст или сервер недоступен.
           </p>
         )}
+        {tab === 'paid' &&
+          packs.every((p) => p.allowed) &&
+          games.every((g) => g.is_free) && (
+            <p className="text-sm text-muted-foreground col-span-full">
+              Платных игр пока нет — весь каталог доступен бесплатно.
+            </p>
+          )}
+        {tab === 'free' &&
+          packs.every((p) => !p.allowed) &&
+          games.every((g) => !g.is_free) && (
+            <p className="text-sm text-muted-foreground col-span-full">
+              Бесплатных игр нет — все записи требуют тариф.
+            </p>
+          )}
       </div>
     </div>
   );

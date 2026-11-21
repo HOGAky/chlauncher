@@ -199,14 +199,6 @@ function GameCard({
         <CardTitle className="flex items-center gap-2 text-base">
           <Gamepad2 size={16} />
           {g.title}
-          {g.pack && (
-            <span
-              className="text-[10px] font-normal text-muted-foreground border border-border rounded px-1 py-px"
-              title={`Установлена папкой-пакетом: ${g.assets_base ?? ''}`}
-            >
-              пакет
-            </span>
-          )}
           {!g.allowed && <Lock size={14} className="text-amber-400" />}
         </CardTitle>
       </CardHeader>
