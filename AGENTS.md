@@ -115,6 +115,21 @@ share|subscribe`, поля `vip|fan_level|is_moderator|is_superfan|gift_id|coins
 - Перепроверка при старте: после автоконнекта статус перечитывается
   каждые 10с до ~60с, до 3 попыток (Error/Disconnected → реконнект,
   зависший Connecting → респавн = новый ролл ноды + fetchIsLive).
+- `IntegrationManager.tiktok_epoch` (AtomicU64) инкрементится на КАЖДЫЙ
+  connect/disconnect; стартовый супервизор снимает эпоху после своего
+  коннекта и выходит при её смене (или смене tiktok_username) — иначе
+  ручной отключ/другая комната перебивались бы ретраями до ~3 минут.
+- DonationAlerts: `run_da` эмитит `integration-status` live через
+  AppHandle (без эмита бейдж висел «Подключение…»); HTTP-нога 20с,
+  центрифуго-вотчдог 150с тишины → ошибка.
+- EOF сайдкара мапится по exit-коду: ≠0 → Error("сайдкар завершился"),
+  0 → Disconnected (сайдкар спроектирован «вечным», любой выход —
+  аномалия). Ingest: шумные kind (like/join/share/follow/gift_tick) —
+  `try_send` с дропом при переполнении 256-канала, важные — `send` с
+  10с таймаутом: backpressure не должен душить ping-вотчдог.
+- Сайдкар: `stdout.on('error')` → exit (EPIPE = лаунчер умер — иначе
+  зомби-процесс с мёртвым WS); uncaught/unhandled → строка `error` +
+  exit 1.
 - Перепроверка онлайна в сайдкаре: `fetchIsLive()` раз в 60с при живом
   сокете (ловит эфир, завершённый без streamEnd); ping несёт `connected`
   (isConnected сокета) — лаунчер понижает Live→Connecting при мёртвом

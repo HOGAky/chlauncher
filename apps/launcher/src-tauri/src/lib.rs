@@ -498,6 +498,13 @@ pub fn run() {
                         {
                             tracing::warn!(error = %e, attempt, "tiktok auto-connect failed");
                         }
+                        // Epoch guard: every manual connect/disconnect
+                        // bumps the counter. If it moved while we slept,
+                        // the user (or the session-capture flow) took
+                        // over — retrying now would kill their connect.
+                        let epoch = state.integrations.tiktok_epoch();
+                        let my_epoch =
+                            epoch.load(std::sync::atomic::Ordering::SeqCst);
                         // Re-check: poll the reported status for ~60 s.
                         // Connecting = the sidecar is up and waiting for
                         // the room to go live — normal, but the next round
@@ -505,6 +512,26 @@ pub fn run() {
                         let mut settled = false;
                         for _ in 0..6 {
                             tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                            if epoch.load(std::sync::atomic::Ordering::SeqCst) != my_epoch {
+                                tracing::info!(
+                                    "tiktok auto-connect: manual action superseded — \
+                                     supervisor stops"
+                                );
+                                return;
+                            }
+                            // Narrow window cover: a manual connect that
+                            // landed between our spawn and the epoch read
+                            // points the room handle elsewhere — bail.
+                            if state
+                                .integrations
+                                .tiktok_username
+                                .lock()
+                                .await
+                                .as_deref()
+                                != Some(username.as_str())
+                            {
+                                return;
+                            }
                             match *state.integrations.tiktok_status.lock().await {
                                 IntegrationStatus::Live | IntegrationStatus::Connected => {
                                     return;

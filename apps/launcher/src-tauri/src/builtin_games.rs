@@ -337,11 +337,13 @@ mod tests {
             .filter(|e| !e.user && !e.remote)
             .map(|e| e.id)
             .collect();
+        // Prototype packs are `hidden: true` — the only live bundled
+        // pack today is patrick_cabbage.
+        assert!(bundled.contains(&"patrick_cabbage".to_string()));
         let mut ent = Entitlements::default();
-        ent.interactive_games = Some(vec!["gift_tower".into()]);
+        ent.interactive_games = Some(vec!["patrick_cabbage".into()]);
         let allowed = allowed_games(&ent, &empty);
-        assert!(allowed.contains(&"gift_tower".to_string()));
-        assert!(!allowed.contains(&"boy_vs_girl".to_string()));
+        assert!(allowed.contains(&"patrick_cabbage".to_string()));
         ent.interactive_games = None;
         // None = «all bundled» + user/remote extras.
         assert!(bundled.iter().all(|id| allowed_games(&ent, &empty).contains(id)));
@@ -367,7 +369,9 @@ mod tests {
     fn default_rules_cover_spec_tables() {
         let empty = std::env::temp_dir().join(format!("chlg-rules-{}", std::process::id()));
         std::fs::create_dir_all(&empty).unwrap();
-        for id in ["gift_tower", "boy_vs_girl", "survive_horde", "patrick_cabbage"] {
+        // Only live (non-hidden) bundled packs — hidden prototypes are
+        // out of the catalogue by design, `find` never reaches them.
+        for id in ["patrick_cabbage"] {
             let c = default_cfg(id, &empty);
             let rules = c.rules.as_array().unwrap();
             assert!(!rules.is_empty(), "{id} needs default rules");

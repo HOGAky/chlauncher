@@ -44,6 +44,18 @@ const out = (obj) => {
     process.stdout.write(JSON.stringify(obj) + '\n');
   } catch { /* broken pipe — launcher gone */ }
 };
+// Broken pipe = the launcher is gone (crash or a kill that bypassed
+// kill_on_drop). Swallowing EPIPE would leave a zombie node process
+// holding a dead WebSocket forever — exit instead.
+process.stdout.on('error', () => process.exit(0));
+process.on('uncaughtException', (e) => {
+  out({ type: 'error', message: `sidecar crash: ${e?.message || e}` });
+  process.exit(1);
+});
+process.on('unhandledRejection', (e) => {
+  out({ type: 'error', message: `sidecar rejection: ${e?.message || e}` });
+  process.exit(1);
+});
 
 if (process.env.EULERSTREAM_API_KEY) {
   SignConfig.apiKey = process.env.EULERSTREAM_API_KEY;
@@ -432,7 +444,10 @@ const main = async () => {
   await run();
 };
 
-main();
+main().catch((e) => {
+  out({ type: 'error', message: `sidecar init: ${e?.message || e}` });
+  process.exit(1);
+});
 
 // Heartbeat so the launcher can tell a dead pipe from a quiet room.
 // `connected` reports real socket state — without it a silently dead

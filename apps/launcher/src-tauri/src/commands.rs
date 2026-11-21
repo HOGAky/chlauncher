@@ -1271,6 +1271,10 @@ pub async fn open_tiktok_login(app: AppHandle, state: State<'_, AppState>) -> Re
             }
             return;
         }
+        // 300 s without a sessionid — user never finished login; tell the
+        // UI so it doesn't wait on «tiktok-session-captured» forever. The
+        // window itself stays open (user may still be navigating).
+        let _ = app2.emit("tiktok-login-closed", true);
     });
     Ok(())
 }

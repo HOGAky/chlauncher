@@ -84673,6 +84673,15 @@ var out = (obj) => {
   } catch {
   }
 };
+process.stdout.on("error", () => process.exit(0));
+process.on("uncaughtException", (e) => {
+  out({ type: "error", message: `sidecar crash: ${e?.message || e}` });
+  process.exit(1);
+});
+process.on("unhandledRejection", (e) => {
+  out({ type: "error", message: `sidecar rejection: ${e?.message || e}` });
+  process.exit(1);
+});
 if (process.env.EULERSTREAM_API_KEY) {
   SignConfig2.apiKey = process.env.EULERSTREAM_API_KEY;
 }
@@ -84951,7 +84960,10 @@ var main = async () => {
   }, 6e4);
   await run();
 };
-main();
+main().catch((e) => {
+  out({ type: "error", message: `sidecar init: ${e?.message || e}` });
+  process.exit(1);
+});
 setInterval(
   () => out({ type: "ping", ts: Date.now(), events: evCount, connected: connConnected() }),
   15e3

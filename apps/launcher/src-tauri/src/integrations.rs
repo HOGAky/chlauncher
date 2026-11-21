@@ -30,6 +30,7 @@ use tokio::sync::{mpsc, Mutex};
 use tokio::task::JoinHandle;
 
 use crate::types::{now_ms, IntegrationStatus, RawStreamEvent};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Tauri event emitted whenever an integration's status changes.
 pub const STATUS_EVENT: &str = "integration-status";
@@ -50,6 +51,13 @@ pub struct IntegrationManager {
     /// matching `comment` event proves account ownership (the commenter
     /// is logged in as that account) and auto-verifies via the server.
     pub pending_bind: Arc<Mutex<Option<(String, String)>>>,
+    /// Connect/disconnect generation counter — bumps on EVERY
+    /// `tiktok_connect`/`tiktok_disconnect`. The startup supervisor
+    /// compares its captured epoch before each retry and bails when a
+    /// manual action (other room, explicit disconnect, session-capture
+    /// reconnect) superseded it — otherwise the re-check loop would fight
+    /// the user for up to ~3 minutes after boot.
+    tiktok_epoch: Arc<AtomicU64>,
     app: AppHandle,
 }
 
@@ -64,8 +72,15 @@ impl IntegrationManager {
             da_task: Mutex::new(None),
             raw_tx,
             pending_bind: Arc::new(Mutex::new(None)),
+            tiktok_epoch: Arc::new(AtomicU64::new(0)),
             app,
         }
+    }
+
+    /// Current connect epoch — the supervisor snapshots this right after
+    /// its own `tiktok_connect`; any later bump means a manual action won.
+    pub fn tiktok_epoch(&self) -> Arc<AtomicU64> {
+        self.tiktok_epoch.clone()
     }
 
     /// Mirrors the server's pending binding so the sidecar watcher can
@@ -114,6 +129,7 @@ impl IntegrationManager {
             return Err("пустой username".into());
         }
         *self.tiktok_username.lock().await = Some(username.clone());
+        self.tiktok_epoch.fetch_add(1, Ordering::SeqCst);
         self.set_status("tiktok", IntegrationStatus::Connecting)
             .await;
 
@@ -140,6 +156,7 @@ impl IntegrationManager {
 
     /// Disconnects TikTok (kills the sidecar task).
     pub async fn tiktok_disconnect(&self) {
+        self.tiktok_epoch.fetch_add(1, Ordering::SeqCst);
         if let Some(h) = self.tiktok_task.lock().await.take() {
             h.abort();
         }
@@ -160,7 +177,9 @@ impl IntegrationManager {
         let app = self.app.clone();
         let raw_tx = self.raw_tx.clone();
         let handle = tokio::spawn(async move {
-            if let Err(e) = run_da(token, raw_tx, status.clone(), coins_per_rub).await {
+            if let Err(e) =
+                run_da(token, raw_tx, status.clone(), app.clone(), coins_per_rub).await
+            {
                 *status.lock().await = IntegrationStatus::Error(e.clone());
                 let _ = app.emit(
                     STATUS_EVENT,
@@ -197,9 +216,15 @@ async fn run_da(
     token: String,
     raw_tx: mpsc::Sender<RawStreamEvent>,
     status: Arc<Mutex<IntegrationStatus>>,
+    app: AppHandle,
     coins_per_rub: f32,
 ) -> Result<(), String> {
-    let http = reqwest::Client::new();
+    // Bound the HTTP leg — a hung API otherwise leaves the badge on
+    // «Подключение…» until the user gives up.
+    let http = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|e| e.to_string())?;
 
     // 1) Resolve the user id for the token.
     let user: Value = http
@@ -256,9 +281,16 @@ async fn run_da(
     .await
     .map_err(|e| e.to_string())?;
 
-    // 5) Forward alerts into the ingest channel.
+    // 5) Forward alerts into the ingest channel. Watchdog: Centrifugo
+    // pings roughly every 25 s — 150 s of silence means a stale socket,
+    // so we surface an error instead of a zombie «Подключено» badge.
     let mut handshake_checked = false;
-    while let Some(msg) = rx.next().await {
+    loop {
+        let msg = match tokio::time::timeout(Duration::from_secs(150), rx.next()).await {
+            Ok(m) => m,
+            Err(_) => return Err("centrifugo: нет сообщений 150с — сокет завис".into()),
+        };
+        let Some(msg) = msg else { break };
         let Ok(tokio_tungstenite::tungstenite::Message::Text(text)) = msg else {
             continue;
         };
@@ -282,6 +314,13 @@ async fn run_da(
             if id == 1 && !handshake_checked {
                 handshake_checked = true;
                 *status.lock().await = IntegrationStatus::Live;
+                // The mutex alone never reached the UI — emit the same
+                // event tiktok sends, or the badge stays «Подключение…».
+                let _ = app.emit(
+                    STATUS_EVENT,
+                    json!({"integration":"donationalerts",
+                           "status":IntegrationStatus::Live}),
+                );
             }
             continue;
         }
@@ -355,7 +394,6 @@ fn sidecar_dir(app: &AppHandle) -> Option<std::path::PathBuf> {
                 v.push(d.join("tiktok-sidecar"));
             }
         }
-        use tauri::Manager;
         if let Ok(d) = app.path().app_data_dir() {
             v.push(d.join("tiktok-sidecar"));
         }
@@ -594,7 +632,8 @@ async fn run_tiktok(
                 };
                 // Account-binding proof: the pending bind's owner posted the
                 // code in this chat — only possible from their own account.
-                if ev.event_kind == "comment" {
+                let ev_kind = ev.event_kind.clone();
+                if ev_kind == "comment" {
                     let pending = pending_bind.lock().await.clone();
                     if let Some((bind_user, code)) = pending {
                         if (ev.unique_id.eq_ignore_ascii_case(&bind_user)
@@ -618,7 +657,28 @@ async fn run_tiktok(
                         }
                     }
                 }
-                let _ = raw_tx.send(ev).await;
+                // Ingest backpressure: `send().await` inside this read
+                // loop stalls line parsing, which freezes the ping
+                // watchdog and eventually kills a perfectly healthy
+                // sidecar. Noisy kinds (like/join floods can top the
+                // mapper's drain rate) drop on a full queue; important
+                // kinds wait up to 10 s — enough for transient bursts,
+                // not enough to starve the watchdog forever.
+                let noisy = matches!(
+                    ev_kind.as_str(),
+                    "like" | "join" | "share" | "follow" | "gift_tick"
+                );
+                if noisy {
+                    // Full queue or closed channel — the mapper owns the
+                    // deficit; dropping a like/join loses nothing.
+                    let _ = raw_tx.try_send(ev);
+                } else {
+                    let sent =
+                        tokio::time::timeout(Duration::from_secs(10), raw_tx.send(ev)).await;
+                    if sent.is_err() || matches!(sent, Ok(Err(_))) {
+                        tracing::warn!(kind = %ev_kind, "ingest queue congested — event dropped");
+                    }
+                }
             }
             "error" => {
                 let msg = v["message"].as_str().unwrap_or("sidecar error");
@@ -630,8 +690,18 @@ async fn run_tiktok(
         }
     }
 
+    // EOF: the sidecar is designed to run forever, so any exit is
+    // abnormal — distinguish a crash (non-zero exit) from a clean
+    // shutdown instead of always reporting a benign «Disconnected».
+    let status_out = match child.try_wait() {
+        Ok(Some(s)) if !s.success() => IntegrationStatus::Error(format!(
+            "tiktok-sidecar завершился (код {})",
+            s.code().map(|c| c.to_string()).unwrap_or_else(|| "сигнал".into())
+        )),
+        _ => IntegrationStatus::Disconnected,
+    };
     let _ = child.kill().await;
-    finish(IntegrationStatus::Disconnected).await;
+    finish(status_out).await;
 }
 
 /// EulerStream signing key: `EULERSTREAM_API_KEY` env var first, then an
@@ -644,7 +714,6 @@ fn eulerstream_key(app: &AppHandle) -> String {
             return k;
         }
     }
-    use tauri::Manager;
     app.path()
         .app_data_dir()
         .ok()
