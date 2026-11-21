@@ -180,6 +180,16 @@ share|subscribe`, поля `vip|fan_level|is_moderator|is_superfan|gift_id|coins
   `game.json` (default `"patrick"`), флаг `ttsDonorNames` в skin.json.
 - Дебаг в окне игры: `Tab`/`D` — панель, `Space` лайк, `1..6` действия,
   `R` сброс. `gift_tick` пропускается, аватары из `ev.avatar_url`.
+- DEV-панель (та же `Tab`/`D`, справа): установка аватарки персонажа —
+  картинка даунскейлится до ≤512px и пишется в `<data>/games/patrick/
+  sprites/custom.png` через `POST /games/asset` (token-guarded, body
+  `{dir,path,data_b64}`, `null`=удалить, sniff magic-bytes, ≤4MiB,
+  атомарная запись). `SPR.custom` перекрывает позные спрайты и
+  процедурного кролика; «Сбросить» возвращает их.
+- Голосовые слоты донатов (skin.json `sfx`): `patrick` — дешёвый донат
+  (small), `kapustochka` — дорогой (mid/pet). Файлы кладутся в
+  `<app-data>/games/patrick/sfx/` или bundled `sfx/`; отсутствие файла →
+  синтез-фолбэк (как у остальных клипов).
 
 ## Roblox «Steal the Stream»
 

@@ -392,6 +392,7 @@ pub async fn start_overlay_server(
         .route("/games/cfg/{id}", get(serve_game_cfg))
         .route("/games/state.json", get(serve_game_state))
         .route("/games/report", post(serve_game_report))
+        .route("/games/asset", post(save_game_asset))
         .route("/top.json", get(serve_top))
         .route("/goals.json", get(serve_goals))
         .route("/poll.json", get(serve_poll))
@@ -692,6 +693,83 @@ async fn serve_game_asset(
         }
     }
     StatusCode::NOT_FOUND.into_response()
+}
+
+/// `POST /games/asset?t=` — dev-panel asset install: a game page
+/// (Patrick's debug panel) pushes an image into the USER pack dir
+/// (`<data>/games/<dir>/<path>`) so custom content rides the normal
+/// `/games-assets` precedence (user > bundled) without touching the
+/// installed bundle. Body: `{dir, path, data_b64}`; `data_b64:null`
+/// deletes. dir/path/signature are validated — only images, ≤4 MiB.
+async fn save_game_asset(
+    Query(q): Query<HashMap<String, String>>,
+    State(st): State<OverlayState>,
+    Json(body): Json<serde_json::Value>,
+) -> Response {
+    use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
+    if !token_ok(q.get("t").map(String::as_str), &st.token) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let dir = body.get("dir").and_then(|v| v.as_str()).unwrap_or("");
+    let path = body.get("path").and_then(|v| v.as_str()).unwrap_or("");
+    let dir_ok = !dir.is_empty()
+        && dir.len() <= 64
+        && !dir.starts_with('.')
+        && dir
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
+    let ext_ok = path
+        .rsplit_once('.')
+        .map(|(_, e)| matches!(e, "png" | "jpg" | "jpeg" | "webp" | "mp3" | "wav" | "ogg"))
+        .unwrap_or(false);
+    if !dir_ok || !crate::game_packs::safe_relpath(path) || !ext_ok {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+    let dest = st.user_games_dir.join(dir).join(path);
+    match body.get("data_b64") {
+        // Explicit null = dev-panel "reset" → drop the user override.
+        Some(serde_json::Value::Null) => {
+            let _ = std::fs::remove_file(&dest);
+            return axum::Json(serde_json::json!({ "ok": true, "deleted": true }))
+                .into_response();
+        }
+        None => return StatusCode::BAD_REQUEST.into_response(),
+        _ => {}
+    }
+    let b64 = body["data_b64"].as_str().unwrap_or("");
+    if b64.len() > 6_000_000 {
+        return (StatusCode::PAYLOAD_TOO_LARGE, "asset too large").into_response();
+    }
+    let Ok(bytes) = B64.decode(b64.trim()) else {
+        return (StatusCode::BAD_REQUEST, "invalid base64").into_response();
+    };
+    if bytes.len() > 4 * 1024 * 1024 {
+        return (StatusCode::PAYLOAD_TOO_LARGE, "asset >4MiB").into_response();
+    }
+    // Magic-byte sniff — the extension claim isn't proof of content.
+    let sig_ok = bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47])      // PNG
+        || bytes.starts_with(&[0xFF, 0xD8, 0xFF])                // JPEG
+        || (bytes.len() > 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP")
+        || (bytes.len() > 3 && &bytes[..3] == b"ID3")            // MP3 (id3)
+        || (bytes.len() > 2 && bytes[0] == 0xFF && bytes[1] & 0xE0 == 0xE0) // MP3 frame
+        || bytes.starts_with(b"OggS")
+        || (bytes.len() > 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE");
+    if !sig_ok {
+        return (StatusCode::BAD_REQUEST, "unsupported file signature").into_response();
+    }
+    if let Some(parent) = dest.parent() {
+        if std::fs::create_dir_all(parent).is_err() {
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    }
+    // Atomic write: .tmp + rename so a half-written png is never served.
+    let tmp = dest.with_extension("tmp");
+    if std::fs::write(&tmp, &bytes).is_err()
+        || std::fs::rename(&tmp, &dest).is_err()
+    {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+    axum::Json(serde_json::json!({ "ok": true })).into_response()
 }
 
 /// `POST /tts/say?t=` — game pages voice a donor nickname through the

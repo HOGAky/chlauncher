@@ -51,6 +51,18 @@
     border:1px solid #444;border-radius:10px;padding:10px 12px;font:13px/1.55 monospace;color:#9fe;
     pointer-events:auto;white-space:pre}
   #debug.show{display:block}
+  /* dev-панель: аватарка персонажа (Tab/D) */
+  #devpanel{position:absolute;top:10px;right:10px;display:none;background:rgba(0,0,0,.78);
+    border:1px solid #555;border-radius:10px;padding:10px 12px;font:13px/1.5 system-ui;color:#cfd;
+    pointer-events:auto;width:210px}
+  #devpanel.show{display:block}
+  #devpanel .t{font-weight:700;color:#ffcf5a;margin-bottom:6px}
+  #devpanel input[type=file]{width:100%;font-size:11px;color:#9ab;margin:4px 0}
+  #devpanel button{background:#333;border:1px solid #666;border-radius:6px;color:#eee;
+    padding:3px 10px;font:12px system-ui;cursor:pointer}
+  #devpanel button:hover{background:#444}
+  #devpanel .msg{font-size:11px;color:#8f8;min-height:14px;margin-top:4px}
+  #devpanel img{max-width:64px;max-height:64px;border-radius:8px;margin-top:4px;display:none}
   #pause{position:absolute;inset:0;display:none;place-items:center;font:800 80px system-ui;
     background:rgba(0,0,0,.5);text-shadow:0 4px 18px #000}
 </style></head><body>
@@ -60,6 +72,15 @@
   <div id="hints"></div>
   <div id="hero"><div class="t" id="heroT"></div><div class="u" id="heroU"></div><img class="av" id="heroA" alt=""></div>
   <div id="debug"></div>
+  <div id="devpanel">
+    <div class="t">DEV · Аватар Патрика</div>
+    <input type="file" id="devAvatarFile" accept="image/png,image/jpeg,image/webp">
+    <div>
+      <button id="devAvatarReset">Сбросить</button>
+      <img id="devAvatarPrev" alt="">
+    </div>
+    <div class="msg" id="devAvatarMsg">sprites/custom.png заменяет персонажа</div>
+  </div>
   <div id="pause">ПАУЗА</div>
 </div>
 <script>
@@ -103,8 +124,10 @@ const DEF_SKIN = {   // дефолты, если skin.json недоступен
            gaugeCold: '#4da6ff', gaugeWarm: '#ff9f43', gaugeHot: '#ff4d4d' },
   texts: { heroTitle: 'ГЕРОЙ', megaTitle: 'ХОЗЯИН ПАТРИКА', fedCounter: 'Накормлен', topDonor: 'Топ донатер' },
   sprites: { back: 'sprites/back.png', peek: 'sprites/peek.png', almost: 'sprites/almost.png',
-             eat: 'sprites/eat.png', angry: 'sprites/angry.png', hand: 'sprites/hand_cabbage.png' },
+             eat: 'sprites/eat.png', angry: 'sprites/angry.png', hand: 'sprites/hand_cabbage.png',
+             custom: 'sprites/custom.png' },
   sfx: { call: ['sfx/call_1.mp3', 'sfx/call_2.mp3'], cabbage: 'sfx/cabbage.mp3', crunch: 'sfx/crunch.mp3',
+         patrick: 'sfx/patrick.mp3', kapustochka: 'sfx/kapustochka.mp3',
          trollGross: 'sfx/troll_gross.mp3', trollVacuum: 'sfx/troll_vacuum.mp3', mega: 'sfx/mega.mp3' },
   callLoop: { enabled: true, minPauseS: 4.0, maxPauseS: 7.5, hotAngle: 120, hotPauseS: 2.0 },
   decay: [ { below: 90, degPerSec: 2.5 }, { below: 145, degPerSec: 4.5 }, { below: 179, degPerSec: 7.5 } ],
@@ -140,7 +163,7 @@ function giftIcon(name) { return S.giftIcons[String(name || '').toLowerCase()] |
 
 const Audio2 = {
   ac: null, ready: {}, last: {}, voice: null, callList: [],
-  COOLDOWN: { call: 0.4, cabbage: 0.7, crunch: 0.3, trollGross: 0.4, trollVacuum: 1.2, mega: 1.5 },
+  COOLDOWN: { call: 0.4, cabbage: 0.7, crunch: 0.3, patrick: 0.5, kapustochka: 0.8, trollGross: 0.4, trollVacuum: 1.2, mega: 1.5 },
 
   url(name) {
     if (name === 'call' && this.callList.length) {
@@ -151,7 +174,7 @@ const Audio2 = {
     return f ? `${S.skin.assetBase}/${f}?t=${encodeURIComponent(TOKEN)}` : null;
   },
   async probe() {
-    const names = ['cabbage', 'crunch', 'trollGross', 'trollVacuum', 'mega'];
+    const names = ['cabbage', 'crunch', 'patrick', 'kapustochka', 'trollGross', 'trollVacuum', 'mega'];
     const jobs = names.map(async (n) => {
       const u = this.url(n);
       this.ready[n] = u ? await fetch(u, { method: 'HEAD' }).then((r) => r.ok).catch(() => false) : false;
@@ -221,7 +244,9 @@ const Audio2 = {
     };
     switch (kind) {
       case 'call':        tone(660, 440, 0.22, 'sine', 0, 0.7); tone(520, 340, 0.3, 'sine', 0.26, 0.7); break;
+      case 'patrick':     tone(660, 440, 0.22, 'sine', 0, 0.7); tone(520, 340, 0.3, 'sine', 0.26, 0.7); break;
       case 'cabbage':     tone(720, 980, 0.1, 'triangle', 0, 0.8); tone(980, 1240, 0.09, 'triangle', 0.11, 0.7); break;
+      case 'kapustochka': tone(720, 980, 0.1, 'triangle', 0, 0.8); tone(980, 1240, 0.09, 'triangle', 0.11, 0.7); break;
       case 'crunch':      noise(0.28, 2600, 1); noise(0.2, 1400, 0.8); break;
       case 'trollGross':  tone(160, 90, 0.5, 'sawtooth', 0, 0.8); tone(120, 70, 0.4, 'square', 0.1, 0.4); break;
       case 'trollVacuum': tone(90, 700, 0.9, 'sawtooth', 0, 0.9); noise(0.9, 900, 0.7); break;
@@ -290,19 +315,19 @@ function act(a) {
     case 'small':
       addAngle(a.value || 6, u, icon);
       burst(8, 'leaf');
-      Audio2.play('cabbage');
+      Audio2.play('patrick');      // «Патрик!» — голос на дешёвый донат
       break;
     case 'mid':
       addAngle(a.value || 18, u, icon);
       burst(12, 'carrot'); burst(6, 'spark');
-      Audio2.play('cabbage');
+      Audio2.play('kapustochka');  // «капусточка» — дорогой донат
       sayDonor(u);
       break;
     case 'pet':
       addAngle(a.value || 22, u, icon);
       S.shieldUntil = Date.now() + (a.sec || 5) * 1000;
       burst(10, 'heart');
-      Audio2.play('cabbage');
+      Audio2.play('kapustochka');
       break;
     case 'rotten':
       addAngle(-(a.value || 35), u, icon);
@@ -573,7 +598,9 @@ function drawPatrick() {
   ctx.save();
   ctx.translate(540, 1210 - Math.abs(S.bounce) * 46);
   ctx.scale(1 + S.bounce * 0.1, 2 - sq);
-  const spr = SPR[S.state];
+  // Кастомная аватарка (dev-панель → sprites/custom.png) перекрывает
+  // позные спрайты и процедурного кролика для всех состояний.
+  const spr = (SPR.custom && SPR.custom.img) ? SPR.custom : SPR[S.state];
   if (spr && spr.img) {
     const r = 300, img = spr.img;
     const ar = img.width / img.height;
@@ -843,10 +870,75 @@ const DEBUG_ACT = {
   '6': { type: 'mega', _user: 'debug', _ev: 'gift', _gift: 'Galaxy' },
 };
 
+/* dev-панель: установка аватарки персонажа → /games/asset → user-pack */
+const devPanel = document.getElementById('devpanel');
+const devFile = document.getElementById('devAvatarFile');
+const devMsg = document.getElementById('devAvatarMsg');
+const devPrev = document.getElementById('devAvatarPrev');
+const packDir = (DEF_SKIN.assetBase || '/games-assets/patrick').split('/').pop();
+
+function refreshDevAvatar() {
+  if (SPR.custom && SPR.custom.img) {
+    devPrev.src = `${S.skin.assetBase}/sprites/custom.png?t=${encodeURIComponent(TOKEN)}&v=${Date.now()}`;
+    devPrev.style.display = 'block';
+  } else {
+    devPrev.style.display = 'none';
+  }
+}
+
+async function postAsset(path, data_b64) {
+  const r = await fetch(`/games/asset?t=${encodeURIComponent(TOKEN)}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ dir: packDir, path, data_b64 }),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+function reloadCustomSprite() {
+  const img = new Image();
+  img.onload = () => { SPR.custom = { img, failed: false }; refreshDevAvatar(); };
+  img.onerror = () => { SPR.custom = { img: null, failed: true }; refreshDevAvatar(); };
+  img.src = `${S.skin.assetBase}/sprites/custom.png?t=${encodeURIComponent(TOKEN)}&v=${Date.now()}`;
+}
+
+devFile && devFile.addEventListener('change', () => {
+  const f = devFile.files && devFile.files[0];
+  if (!f) return;
+  const img = new Image();
+  img.onload = () => {
+    // Даунскейл до ≤512px по большей стороне — файл маленький, на канвасе всё равно ~600px.
+    const k = Math.min(1, 512 / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(img.width * k));
+    c.height = Math.max(1, Math.round(img.height * k));
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(img.src);
+    const b64 = c.toDataURL('image/png').split(',')[1];
+    postAsset('sprites/custom.png', b64)
+      .then(() => { devMsg.textContent = 'Аватарка сохранена'; reloadCustomSprite(); })
+      .catch((e) => { devMsg.textContent = `Ошибка: ${e.message}`; });
+  };
+  img.onerror = () => { devMsg.textContent = 'Не картинка'; URL.revokeObjectURL(img.src); };
+  img.src = URL.createObjectURL(f);
+  devFile.value = '';
+});
+
+document.getElementById('devAvatarReset').addEventListener('click', () => {
+  postAsset('sprites/custom.png', null)
+    .then(() => { devMsg.textContent = 'Сброшено на спрайты/процедурного'; reloadCustomSprite(); })
+    .catch((e) => { devMsg.textContent = `Ошибка: ${e.message}`; });
+});
+
 addEventListener('keydown', (e) => {
   if (e.key === 'Tab' || e.key === 'd' || e.key === 'D' || e.key === 'в' || e.key === 'В') {
     e.preventDefault();
-    S.debug = !S.debug; dbg.classList.toggle('show', S.debug); drawDebug();
+    S.debug = !S.debug;
+    dbg.classList.toggle('show', S.debug);
+    devPanel.classList.toggle('show', S.debug);
+    drawDebug();
+    if (S.debug) refreshDevAvatar();
     return;
   }
   if (e.key === 'r' || e.key === 'R' || e.key === 'к' || e.key === 'К') {
