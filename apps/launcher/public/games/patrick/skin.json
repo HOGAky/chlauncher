@@ -40,10 +40,10 @@
   },
   "callLoop": {
     "enabled": true,
-    "minPauseS": 4.0,
-    "maxPauseS": 7.5,
+    "minPauseS": 10.0,
+    "maxPauseS": 18.0,
     "hotAngle": 120,
-    "hotPauseS": 2.0
+    "hotPauseS": 5.0
   },
   "decay": [
     {

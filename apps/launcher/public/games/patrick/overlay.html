@@ -132,7 +132,7 @@ const DEF_SKIN = {   // дефолты, если skin.json недоступен
   sfx: { call: ['sfx/ptrick.mp3', 'sfx/paaatrik.mp3'], cabbage: 'sfx/cabbage.mp3', crunch: 'sfx/crunch.mp3',
          patrick: 'sfx/patrick.mp3', kapustochka: 'sfx/kapustochka.mp3',
          trollGross: 'sfx/troll_gross.mp3', trollVacuum: 'sfx/troll_vacuum.mp3', mega: 'sfx/mega.mp3' },
-  callLoop: { enabled: true, minPauseS: 4.0, maxPauseS: 7.5, hotAngle: 120, hotPauseS: 2.0 },
+  callLoop: { enabled: true, minPauseS: 10.0, maxPauseS: 18.0, hotAngle: 120, hotPauseS: 5.0 },
   decay: [ { below: 90, degPerSec: 2.5 }, { below: 145, degPerSec: 4.5 }, { below: 179, degPerSec: 7.5 } ],
   ttsDonorNames: false,
   hints: [],
@@ -323,6 +323,8 @@ function act(a) {
     case 'nudge':
       addAngle(a.value || 0.5, u, icon, false);   // лайк — без карточки
       burst(3, 'spark');
+      // «патрик» в чате — откликается голосом на каждое сообщение
+      if (a._ev === 'comment') Audio2.play('call');
       break;
     case 'small':
       addAngle(a.value || 6, u, icon);
