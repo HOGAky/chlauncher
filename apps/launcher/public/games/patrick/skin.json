@@ -26,8 +26,8 @@
   },
   "sfx": {
     "call": [
-      "sfx/call_1.mp3",
-      "sfx/call_2.mp3"
+      "sfx/ptrick.mp3",
+      "sfx/paaatrik.mp3"
     ],
     "cabbage": "sfx/cabbage.mp3",
     "crunch": "sfx/crunch.mp3",
