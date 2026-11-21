@@ -217,6 +217,11 @@ share|subscribe`, поля `vip|fan_level|is_moderator|is_superfan|gift_id|coins
 - Запуск: «Играть» → `POST /api/stream/ticket` → тикет в `launchData`
   deep-link'а → игра `POST /redeem` → комнатный credential (сессионный,
   не персистится) → claim/poll. Запасной путь — `!key` в чате.
+- Мёртвый клайм больше не вечен: `redeem` и `validate` сбрасывают
+  `claimed_job_id` (новый запуск = мёртвый сервер), а `claim` отдаёт
+  комнату чужому job после 60с без poll-хартбита (`stream_rooms.
+  last_seen_at`, `STALE_CLAIM_MS`). Регрессионный тест в
+  `test/stream.test.js` («crashed server claim…»).
 - Place ID: резолв `custom(settings.forward.roblox_place_id)` →
   `ticket/status.place_id` (env `ROBLOX_PLACE_ID` на бэкенде — источник
   правды после паблиша) → `CHLAUNCHER_ROBLOX_PLACE_ID` (env лаунчера,

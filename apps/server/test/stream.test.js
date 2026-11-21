@@ -288,3 +288,54 @@ test('queue caps at 500 events per key', async () => {
   assert.equal(events[0].n, 6); // the 6 oldest were evicted
   assert.equal(events.at(-1).n, 'newest');
 });
+
+test('crashed server claim: redeem and stale heartbeat let a new job take over', async () => {
+  // Server A redeems + claims, then dies without release — the classic
+  // Roblox-server crash that used to wedge the room on already_claimed.
+  const t1 = (await post('/api/stream/ticket', {}, auth(token))).json().ticket;
+  const rkA = (
+    await post('/api/stream/redeem', { ticket: t1, roblox_user_id: 111 })
+  ).json().stream_key;
+  const claimA = await post('/api/stream/claim', {
+    stream_key: rkA,
+    job_id: 'job-old',
+  });
+  assert.equal(claimA.statusCode, 200);
+
+  // Server B launches (new ticket → redeem): the fresh room key must
+  // arrive with a cleared claim — A's credential died on rotation.
+  const t2 = (await post('/api/stream/ticket', {}, auth(token))).json().ticket;
+  const rkB = (
+    await post('/api/stream/redeem', { ticket: t2, roblox_user_id: 111 })
+  ).json().stream_key;
+  const claimB = await post('/api/stream/claim', {
+    stream_key: rkB,
+    job_id: 'job-new',
+  });
+  assert.equal(claimB.statusCode, 200);
+
+  // Stale takeover: B crashes too (no release, no redeem). Backdating
+  // the room heartbeat beyond the 60 s window lets job C steal.
+  db.prepare(
+    'UPDATE stream_rooms SET last_seen_at = ? WHERE user_id = ?'
+  ).run(new Date(Date.now() - 120_000).toISOString(), userId);
+  const claimC = await post('/api/stream/claim', {
+    stream_key: rkB,
+    job_id: 'job-newer',
+  });
+  assert.equal(claimC.statusCode, 200);
+  assert.equal(
+    db
+      .prepare('SELECT claimed_job_id FROM stream_keys WHERE user_id = ?')
+      .get(userId).claimed_job_id,
+    'job-newer'
+  );
+
+  // While the heartbeat is fresh, a foreign job still gets 409.
+  const conflict = await post('/api/stream/claim', {
+    stream_key: rkB,
+    job_id: 'job-intruder',
+  });
+  assert.equal(conflict.statusCode, 409);
+  assert.equal(conflict.json().error, 'already_claimed');
+});

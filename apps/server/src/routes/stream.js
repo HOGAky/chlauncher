@@ -62,6 +62,10 @@ function sweepEvents(db) {
   );
 }
 
+/** A claimed room that stopped polling for this long is dead — its
+ * claim may be taken over. Polls run every ~2.5 s; 60 s ≈ 24 misses. */
+const STALE_CLAIM_MS = 60_000;
+
 /** Keeps only the newest QUEUE_CAP events for one key. */
 function capQueue(db, keyHash) {
   db.prepare(
@@ -380,10 +384,19 @@ export default async function streamRoutes(app, { db, authenticate }) {
           db.exec('ROLLBACK');
           return reply.code(401).send({ error: 'invalid_ticket' });
         }
+        // A redeem = a fresh launch: any previous claim belongs to a dead
+        // server instance (a live one would lose its credential anyway —
+        // the room key just rotated). Clear it so the new server can
+        // claim instead of hitting already_claimed forever.
         db.prepare(
-          `UPDATE stream_keys SET roblox_user_id = ?, room_key_hash = ?
+          `UPDATE stream_keys SET roblox_user_id = ?, room_key_hash = ?,
+             claimed_job_id = NULL
            WHERE user_id = ?`
         ).run(Number(uid) || 0, sha256(roomKey), keyRow.user_id);
+        db.prepare(
+          `UPDATE stream_rooms SET released_at = ?
+           WHERE user_id = ? AND released_at IS NULL`
+        ).run(nowIso(), keyRow.user_id);
         db.exec('COMMIT');
       } catch (err) {
         db.exec('ROLLBACK');
@@ -419,6 +432,24 @@ export default async function streamRoutes(app, { db, authenticate }) {
           'UPDATE stream_keys SET roblox_user_id = ? WHERE user_id = ?'
         ).run(Number(uid) || 0, a.row.user_id);
       }
+      // Manual key entry from a fresh server = same intent as redeem —
+      // release any claim a dead instance left behind.
+      if (a.row.claimed_job_id) {
+        db.exec('BEGIN');
+        try {
+          db.prepare(
+            'UPDATE stream_keys SET claimed_job_id = NULL WHERE user_id = ?'
+          ).run(a.row.user_id);
+          db.prepare(
+            `UPDATE stream_rooms SET released_at = ?
+             WHERE user_id = ? AND released_at IS NULL`
+          ).run(nowIso(), a.row.user_id);
+          db.exec('COMMIT');
+        } catch (err) {
+          db.exec('ROLLBACK');
+          throw err;
+        }
+      }
       return { ok: true };
     }
   );
@@ -438,7 +469,25 @@ export default async function streamRoutes(app, { db, authenticate }) {
       const a = authKey(db, request);
       if (a.status !== 200) return reply.code(a.status).send({ error: a.error });
       if (a.row.claimed_job_id && a.row.claimed_job_id !== jobId) {
-        return reply.code(409).send({ error: 'already_claimed' });
+        // Takeover path: a crashed server never releases — let a new job
+        // steal the claim once the room stopped polling (stale heartbeat).
+        const room = db
+          .prepare(
+            `SELECT last_seen_at FROM stream_rooms
+              WHERE user_id = ? AND released_at IS NULL`
+          )
+          .get(a.row.user_id);
+        const stale =
+          !room ||
+          !room.last_seen_at ||
+          Date.parse(room.last_seen_at) < Date.now() - STALE_CLAIM_MS;
+        if (!stale) {
+          return reply.code(409).send({ error: 'already_claimed' });
+        }
+        db.prepare(
+          `UPDATE stream_rooms SET released_at = ?
+           WHERE user_id = ? AND released_at IS NULL`
+        ).run(nowIso(), a.row.user_id);
       }
       db.exec('BEGIN');
       try {
