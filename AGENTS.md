@@ -157,6 +157,12 @@ share|subscribe`, поля `vip|fan_level|is_moderator|is_superfan|gift_id|coins
   `tts` (правило `/tts/say`), `launch{}`, `rules` (дефолтная таблица
   `BuiltinGameCfg.rules`), `hidden` (прототип вне каталога),
   `afk` (самоиграющая игра → вкладка «АФК-стримы» в Библиотеке).
+- Пакет `aquarium` — АФК-аквариум: рыба-GIF плавает сама, подарки
+  зрителей → корм/пузыри/разгон/корона/сердца (rules-таблица).
+  Своя гифка: dev-панель (Tab/D) → `POST /games/asset` →
+  `sprites/custom.gif` в user-папке (raw-b64, анимация живая;
+  gif добавлен в whitelist ext+magic `/games/asset` и в mime
+  `/games-assets`).
 - Пайплайн: `game_packs::scan/find` → `builtin_games::registry/exists/
   allowed_games/default_cfg` → `/overlay/game/{id}` (disk-страница;
   remote 404 естественно) → ассеты `/games-assets/<dir>/...` (user →

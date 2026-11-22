@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Аквариум</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: #04121f; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; user-select: none; }
+
+  /* ══ Сцена ══ */
+  #tank { position: absolute; inset: 0; overflow: hidden;
+    background: linear-gradient(180deg, #0e3a5e 0%, #0a2c4a 45%, #071e33 100%); }
+  .ray { position: absolute; top: -20%; width: 90px; height: 130%;
+    background: linear-gradient(180deg, rgba(140,200,255,.14), transparent 75%);
+    transform: skewX(-14deg); animation: ray-sway 9s ease-in-out infinite alternate; }
+  @keyframes ray-sway { to { transform: skewX(-10deg) translateX(30px); opacity: .6; } }
+  #sand { position: absolute; left: 0; right: 0; bottom: 0; height: 11%;
+    background: linear-gradient(180deg, #c9a86b 0%, #a8854e 60%, #7d6138 100%);
+    border-top: 3px solid rgba(255,235,190,.35); }
+  .weed { position: absolute; bottom: 8%; width: 14px; border-radius: 8px 8px 0 0;
+    background: linear-gradient(180deg, #2fae7a, #1c7a52);
+    transform-origin: bottom center; animation: weed-sway 5s ease-in-out infinite alternate; }
+  @keyframes weed-sway { to { transform: rotate(6deg); } }
+  .amb { position: absolute; bottom: -30px; border-radius: 50%;
+    border: 2px solid rgba(140,200,255,.5); background: rgba(160,210,255,.12);
+    animation: amb-rise linear infinite; }
+  @keyframes amb-rise { to { transform: translateY(-115vh); opacity: 0; } }
+
+  /* ══ Рыба: обёртка везёт по аквариуму, img разворачивается ══ */
+  #fishWrap { position: absolute; top: 34%; left: 0; width: 210px; height: 150px;
+    animation: swim 14s ease-in-out infinite; }
+  #fish { width: 100%; pointer-events: none;
+    animation: face 14s steps(1) infinite, bob 2.6s ease-in-out infinite;
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,.35)); }
+  #fishWrap.excited { animation-duration: 4.5s; }
+  #fishWrap.excited #fish { animation-duration: 4.5s, 1.1s; }
+  #fishWrap.royal #fish { filter: drop-shadow(0 0 14px rgba(255,200,60,.9)); }
+  @keyframes swim {
+    0%, 100% { transform: translateX(6vw) translateY(0); }
+    25% { transform: translateX(30vw) translateY(-16px); }
+    50% { transform: translateX(58vw) translateY(0); }
+    75% { transform: translateX(30vw) translateY(16px); }
+  }
+  @keyframes face {
+    0%, 49.9% { transform: scaleX(1); }
+    50%, 100% { transform: scaleX(-1); }
+  }
+  @keyframes bob { 50% { translate: 0 -8px; rotate: -2deg; } }
+
+  /* ══ Эффекты ══ */
+  .fx { position: absolute; inset: 0; pointer-events: none; }
+  .pellet { position: absolute; top: 6%; width: 9px; height: 9px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #ffd27a, #c98a2e);
+    animation: pellet-fall 1.2s ease-in forwards; }
+  @keyframes pellet-fall { to { transform: translateY(34vh); opacity: 0; } }
+  .bub { position: absolute; bottom: 12%; border-radius: 50%;
+    border: 2px solid rgba(150,205,255,.85); background: rgba(160,210,255,.25);
+    animation: bub-rise 1.8s ease-out forwards; }
+  @keyframes bub-rise { to { transform: translateY(-52vh) scale(1.5); opacity: 0; } }
+  .zap { position: absolute; left: 8%; height: 3px; width: 40%;
+    background: linear-gradient(90deg, transparent, #ffe066, transparent);
+    animation: zap-flash .8s ease-out forwards; }
+  @keyframes zap-flash {
+    0% { opacity: 0; transform: translateX(-30px) scaleX(.5); }
+    40% { opacity: 1; } 100% { opacity: 0; transform: translateX(40px); } }
+  .heart { position: absolute; bottom: 25%; font-size: 26px;
+    animation: heart-float 1.7s ease-out forwards; }
+  @keyframes heart-float { to { transform: translateY(-34vh) scale(1.6); opacity: 0; } }
+  .crown { position: absolute; top: 27%; left: 50%; font-size: 42px;
+    transform: translateX(-50%);
+    animation: crown-drop .5s cubic-bezier(.2,1.6,.4,1);
+    filter: drop-shadow(0 0 8px rgba(255,200,60,.9)); }
+  @keyframes crown-drop { from { transform: translateX(-50%) translateY(-60px); opacity: 0; } }
+
+  /* ══ Карточки донатов ══ */
+  #cards { position: absolute; top: 14%; right: 3%; display: flex;
+    flex-direction: column; gap: 8px; align-items: flex-end; }
+  .card { display: flex; gap: 8px; align-items: center; padding: 6px 12px;
+    background: rgba(8,20,35,.85); border: 1px solid rgba(120,190,255,.35);
+    border-radius: 999px; color: #dff1ff; font-size: 15px; font-weight: 600;
+    animation: card-in .35s cubic-bezier(.2,1.4,.4,1), card-out .4s ease-in 3.6s forwards; }
+  .card img { width: 22px; height: 22px; }
+  .card .act { color: #8fd3ff; font-weight: 400; font-size: 13px; }
+  @keyframes card-in { from { transform: translateX(60px); opacity: 0; } }
+  @keyframes card-out { to { transform: translateX(60px); opacity: 0; } }
+
+  /* ══ Статистика (низ) ══ */
+  #stats { position: absolute; left: 3%; bottom: 12%; display: flex; gap: 8px; }
+  .stat { padding: 4px 12px; border-radius: 999px; font-size: 13px; color: #cfe8ff;
+    background: rgba(8,20,35,.7); border: 1px solid rgba(120,190,255,.25); }
+
+  /* ══ Dev-панель (Tab/D) ══ */
+  #devpanel { position: absolute; top: 10px; right: 10px; width: 240px; display: none;
+    background: rgba(10,15,30,.92); border: 1px solid #3a4a6a; border-radius: 10px;
+    padding: 10px; color: #cfe0ff; font-size: 12px; z-index: 10; }
+  #devpanel.show { display: block; }
+  #devpanel .t { font-weight: 700; margin-bottom: 6px; }
+  #devpanel button { background: #22314e; color: #cfe0ff; border: 1px solid #3a4a6a;
+    border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
+  #devpanel button:hover { background: #2c3f63; }
+  #devpanel .msg { margin-top: 6px; color: #8fd3ff; min-height: 14px; }
+  #devPrev { max-width: 120px; max-height: 80px; border-radius: 6px; margin-top: 6px; }
+</style>
+</head>
+<body>
+  <div id="tank">
+    <div class="ray" style="left:18%"></div>
+    <div class="ray" style="left:46%; animation-delay:-4s"></div>
+    <div class="ray" style="left:74%; animation-delay:-7s"></div>
+    <div id="sand"></div>
+    <div id="ambients"></div>
+    <div class="weed" style="left:7%; height:90px"></div>
+    <div class="weed" style="left:12%; height:64px; animation-delay:-2s"></div>
+    <div class="weed" style="right:9%; height:110px; animation-delay:-3.5s"></div>
+    <div class="weed" style="right:15%; height:70px; animation-delay:-1s"></div>
+    <div id="fishWrap"><img id="fish" alt="" draggable="false"></div>
+    <div id="fxLayer" class="fx"></div>
+  </div>
+  <div id="cards"></div>
+  <div id="stats">
+    <span class="stat" id="stFed">🐟 Корм: 0</span>
+    <span class="stat" id="stTop">👑 —</span>
+  </div>
+
+  <div id="devpanel">
+    <div class="t">DEV · Своя рыба</div>
+    <input type="file" id="devFile" accept="image/gif" style="display:none">
+    <button id="devPick">Загрузить GIF</button>
+    <button id="devReset">Стандартная</button>
+    <div class="msg" id="devMsg">sprites/custom.gif заменяет рыбу</div>
+    <img id="devPrev" style="display:none">
+    <div class="t" style="margin-top:10px">keys: Tab/D — панель · 1..6 — эффекты</div>
+  </div>
+
+<script src="/gamekit.js"></script>
+<script>
+'use strict';
+const TOKEN = new URLSearchParams(location.search).get('t') || '';
+const GAME = new URLSearchParams(location.search).get('g') || 'aquarium';
+const packDir = 'aquarium';
+const AB = '/games-assets/aquarium';           // assetBase (user → bundled)
+const FISH_DEF = `${AB}/sprites/fish.gif?t=${encodeURIComponent(TOKEN)}`;
+const FISH_CUST = `${AB}/sprites/custom.gif?t=${encodeURIComponent(TOKEN)}`;
+
+const S = { cfg: null, eng: null, fish: 'def', fed: 0, top: {}, running: true };
+const fishWrap = document.getElementById('fishWrap');
+const fishImg = document.getElementById('fish');
+const fxLayer = document.getElementById('fxLayer');
+const cardsBox = document.getElementById('cards');
+const moodTimers = [];
+
+/* ══ Фоновые пузыри ══ */
+(function ambients() {
+  const box = document.getElementById('ambients');
+  for (let i = 0; i < 10; i++) {
+    const b = document.createElement('span');
+    b.className = 'amb';
+    const s = 5 + Math.random() * 12;
+    b.style.cssText = `left:${5 + Math.random() * 90}%;width:${s}px;height:${s}px;` +
+      `animation-duration:${9 + Math.random() * 8}s;animation-delay:-${Math.random() * 10}s`;
+    box.appendChild(b);
+  }
+})();
+
+/* ══ Своя рыба: custom.gif в user-папке перекрывает bundled ══ */
+function probeCustom() {
+  const im = new Image();
+  im.onload = () => { S.fish = 'custom'; fishImg.src = `${FISH_CUST}&v=${Date.now()}`; };
+  im.onerror = () => { S.fish = 'def'; fishImg.src = FISH_DEF; };
+  im.src = `${FISH_CUST}&v=${Date.now()}`;
+}
+
+/* ══ Эффекты — диспетчер по action.type ══ */
+function spawn(cls, style, inner = '', ttl = 2200) {
+  const el = document.createElement('span');
+  el.className = cls; el.style.cssText = style; el.innerHTML = inner;
+  fxLayer.appendChild(el);
+  setTimeout(() => el.remove(), ttl);
+  return el;
+}
+function mood(cls, ms) {
+  fishWrap.classList.add(cls);
+  moodTimers.push(setTimeout(() => fishWrap.classList.remove(cls), ms));
+}
+const EFFECTS = {
+  nudge() {
+    spawn('bub', `left:${30 + Math.random() * 40}%;width:8px;height:8px`, '', 1600);
+  },
+  feed() {
+    for (let i = 0; i < 4; i++)
+      spawn('pellet', `left:${38 + i * 8}%;animation-delay:${i * 140}ms`, '', 2000);
+  },
+  bubble() {
+    for (let i = 0; i < 6; i++) {
+      const s = 8 + Math.random() * 14;
+      spawn('bub', `left:${18 + i * 12}%;width:${s}px;height:${s}px;animation-delay:${i * 120}ms`);
+    }
+  },
+  zap() {
+    for (let i = 0; i < 4; i++)
+      spawn('zap', `top:${25 + i * 12}%;animation-delay:${i * 90}ms`);
+    mood('excited', 2600);
+  },
+  heart() {
+    for (let i = 0; i < 4; i++)
+      spawn('heart', `left:${28 + i * 14}%;animation-delay:${i * 150}ms`, '❤️');
+    mood('excited', 1200);
+  },
+  crown() {
+    spawn('crown', '', '👑', 6000);
+    mood('royal', 6000);
+  },
+};
+const ACT_LABEL = { nudge: 'подпитал', feed: 'покормил', bubble: 'пузыри',
+  zap: 'разогнал', heart: 'любовь', crown: 'корона!' };
+
+/* ══ Карточки и статистика ══ */
+function card(user, icon, label) {
+  const c = document.createElement('div');
+  c.className = 'card';
+  c.innerHTML = `${icon ? `<img src="${icon}">` : ''}` +
+    `<span>${esc(user || 'зритель')}</span><span class="act">${esc(label)}</span>`;
+  cardsBox.appendChild(c);
+  while (cardsBox.children.length > 5) cardsBox.firstChild.remove();
+  setTimeout(() => c.remove(), 4200);
+}
+function esc(s) { const d = document.createElement('i'); d.textContent = s || ''; return d.innerHTML; }
+function giftIcon(name) { return S.giftIcons ? (S.giftIcons[String(name || '').toLowerCase()] || null) : null; }
+function stat() {
+  document.getElementById('stFed').textContent = `🐟 Корм: ${S.fed}`;
+  const top = Object.entries(S.top).sort((a, b) => b[1] - a[1])[0];
+  document.getElementById('stTop').textContent = `👑 ${top ? top[0] : '—'}`;
+}
+
+/** Единая точка входа действия (событие или дебаг-клавиша). */
+function act(a) {
+  (EFFECTS[a.type] || EFFECTS.nudge)();
+  const u = a._user;
+  if (u) {
+    S.top[u] = (S.top[u] || 0) + 1;
+    card(u, a._ev === 'gift' ? giftIcon(a._gift) : null, ACT_LABEL[a.type] || a.type);
+  }
+  if (a.type === 'feed') S.fed++;
+  stat();
+}
+
+/* ══ Dev-панель: своя гифка через /games/asset (raw b64 — анимация живая) ══ */
+const devPanel = document.getElementById('devpanel');
+const devFile = document.getElementById('devFile');
+const devMsg = document.getElementById('devMsg');
+const devPrev = document.getElementById('devPrev');
+
+document.getElementById('devPick').addEventListener('click', () => devFile.click());
+devFile.addEventListener('change', () => {
+  const f = devFile.files && devFile.files[0];
+  devFile.value = '';
+  if (!f) return;
+  if (f.type !== 'image/gif') { devMsg.textContent = 'Нужен именно .gif'; return; }
+  const rd = new FileReader();
+  rd.onload = () => {
+    const b64 = rd.result.split(',')[1];
+    fetch(`/games/asset?t=${encodeURIComponent(TOKEN)}`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ dir: packDir, path: 'sprites/custom.gif', data_b64: b64 }),
+    }).then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      devMsg.textContent = 'Гифка сохранена';
+      probeCustom();
+    }).catch((e) => { devMsg.textContent = `Ошибка: ${e.message}`; });
+  };
+  rd.readAsDataURL(f);
+});
+document.getElementById('devReset').addEventListener('click', () => {
+  fetch(`/games/asset?t=${encodeURIComponent(TOKEN)}`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ dir: packDir, path: 'sprites/custom.gif', data_b64: null }),
+  }).then(() => { devMsg.textContent = 'Стандартная рыба'; probeCustom(); })
+    .catch((e) => { devMsg.textContent = `Ошибка: ${e.message}`; });
+});
+
+const DEBUG_ACT = { '1': 'nudge', '2': 'feed', '3': 'bubble', '4': 'zap', '5': 'heart', '6': 'crown' };
+addEventListener('keydown', (e) => {
+  if (e.key === 'Tab' || e.key === 'd' || e.key === 'D' || e.key === 'в' || e.key === 'В') {
+    e.preventDefault();
+    devPanel.classList.toggle('show');
+    return;
+  }
+  const t = DEBUG_ACT[e.key];
+  if (t) act({ type: t, _user: 'debug' });
+});
+
+/* ══ Boot ══ */
+async function main() {
+  const HUD = GameKit.hud();
+  const [cfgRes, giftRes] = await Promise.all([
+    GameKit.fetchCfg(GAME),
+    fetch(`/gifts/gifts.json?t=${encodeURIComponent(TOKEN)}`)
+      .then((r) => (r.ok ? r.json() : [])).catch(() => []),
+  ]);
+  S.cfg = cfgRes.cfg;
+  S.giftIcons = {};
+  for (const row of giftRes) {
+    if (row.name && row.image)
+      S.giftIcons[row.name.toLowerCase()] = `/${row.image}?t=${encodeURIComponent(TOKEN)}`;
+  }
+  S.eng = new GameKit.Engine(S.cfg);
+  probeCustom();
+  stat();
+
+  GameKit.connect(['game'], (ev) => {
+    if (ev.event_kind === 'gift_tick') return;
+    S.eng.feed(ev);
+  }, (s) => HUD.setStatus(s));
+
+  setInterval(() => { for (const a of S.eng.pump()) act(a); }, 120);
+}
+main().catch(() => {});
+</script>
+</body>
+</html>

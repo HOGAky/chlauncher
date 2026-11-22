@@ -1,0 +1,68 @@
+{
+  "id": "aquarium",
+  "title": "Аквариум",
+  "desc": "Живая рыбка для эфира: плавает сама, а подарки зрителей кормят её, дарят корону и разгоняют.",
+  "icon": "icon.svg",
+  "window": {
+    "w": 540,
+    "h": 960
+  },
+  "volume": 0.7,
+  "afk": true,
+  "rules": [
+    {
+      "event": "like",
+      "match": {},
+      "action": { "type": "nudge" },
+      "priority": "low"
+    },
+    {
+      "event": "comment",
+      "match": { "contains": ["рыб", "fish", "аква"] },
+      "action": { "type": "bubble" },
+      "cooldownMs": 2000,
+      "priority": "low"
+    },
+    {
+      "event": "gift",
+      "match": { "names": ["Rose", "Ice cream", "Doughnut", "GG"] },
+      "action": { "type": "feed" }
+    },
+    {
+      "event": "gift",
+      "match": { "names": ["Heart Me", "Perfume", "Love You"] },
+      "action": { "type": "heart" }
+    },
+    {
+      "event": "gift",
+      "match": { "names": ["Fan", "Drums", "Money Gun", "Rocket"] },
+      "action": { "type": "zap" },
+      "cooldownMs": 3000
+    },
+    {
+      "event": "gift",
+      "match": { "names": ["Galaxy", "Crown", "Lion", "Whale Diving", "Universe"] },
+      "action": { "type": "crown" },
+      "cooldownMs": 5000
+    },
+    {
+      "event": "subscribe",
+      "match": {},
+      "action": { "type": "crown" }
+    },
+    {
+      "event": "share",
+      "match": {},
+      "action": { "type": "heart" },
+      "cooldownMs": 4000,
+      "priority": "low"
+    },
+    {
+      "event": "follow",
+      "match": {},
+      "action": { "type": "bubble" },
+      "cooldownMs": 3000,
+      "priority": "low"
+    }
+  ]
+}
