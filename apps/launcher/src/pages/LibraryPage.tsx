@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '../compone
 import { Badge } from '../components/ui/badge';
 import { Switch } from '../components/ui/switch';
 import RobloxCard from '../components/RobloxCard';
+import PetWidget from '../features/pet/PetWidget';
 
 import { humanError } from '../errorMessages';
 const RESOLUTIONS: { label: string; w: number; h: number }[] = [
@@ -88,6 +89,10 @@ export default function LibraryPage() {
           {active ? 'Подписка активна' : 'Free · только бесплатные игры'}
         </Badge>
       </div>
+
+      {/* Живой питомец лаунчера — локальный аквариум с виртуальными
+          подарками (features/pet, без бэкенда). */}
+      <PetWidget />
 
       {/* Launch window options for TikTok Live Studio capture */}
       <Card>
