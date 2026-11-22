@@ -7,5 +7,6 @@
   "launch": {
     "kind": "roblox",
     "place_id": null
-  }
+  },
+  "afk": true
 }

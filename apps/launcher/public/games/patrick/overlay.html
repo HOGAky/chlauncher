@@ -137,7 +137,7 @@ const S = {
   shake: 0, bounce: 0, handPulse: 0, flash: 0, beam: 0,
   particles: [], donors: {}, avatars: {}, dropped: 0,
   giftIcons: {},     // giftName(lower) → url
-  callNext: 0, debug: false,
+  callNext: 0, callCount: 0, kapustAt: 0, debug: false,
 };
 
 const DEF_SKIN = {   // дефолты, если skin.json недоступен
@@ -151,7 +151,7 @@ const DEF_SKIN = {   // дефолты, если skin.json недоступен
   sfx: { call: ['sfx/ptrick.mp3', 'sfx/paaatrik.mp3'], cabbage: 'sfx/cabbage.mp3', crunch: 'sfx/crunch.mp3',
          patrick: 'sfx/patrick.mp3', kapustochka: 'sfx/kapustochka.mp3',
          trollGross: 'sfx/troll_gross.mp3', trollVacuum: 'sfx/troll_vacuum.mp3', mega: 'sfx/mega.mp3' },
-  callLoop: { enabled: true, minPauseS: 10.0, maxPauseS: 18.0, hotAngle: 120, hotPauseS: 5.0 },
+  callLoop: { enabled: true, pauseS: 13.0, kapustEveryN: 3, kapustDelayS: 5.0, hotAngle: 120, hotPauseS: 5.0 },
   decay: [ { below: 90, degPerSec: 2.5 }, { below: 145, degPerSec: 4.5 }, { below: 179, degPerSec: 7.5 } ],
   ttsDonorNames: false,
   hints: [],
@@ -240,7 +240,7 @@ const Audio2 = {
       a.volume = this.vol(opts.mult || 1);
       if (kind === 'cabbage') a.playbackRate = 0.96 + Math.random() * 0.16; // комбо-вариация
       a.play().catch(() => {});
-      if (kind === 'call' || kind === 'cabbage') {
+      if (kind === 'call' || kind === 'cabbage' || kind === 'kapustochka') {
         this.voice = a;
         a.onended = () => { if (this.voice === a) this.voice = null; };
       }
@@ -285,15 +285,23 @@ const Audio2 = {
       case 'mega':        [523, 659, 784, 1046].forEach((f, i) => tone(f, f * 1.02, 0.5, 'triangle', i * 0.09, 0.9)); break;
     }
   },
-  /* Фоновый цикл зова «Патрик…» с рандомной паузой (короче на 120°+). */
+  /* Фоновый цикл зова: «Патрик» каждые pauseS секунд (короче на 120°+),
+   * «капусточка» — через kapustDelayS после каждого kapustEveryN-го зова. */
   tick(nowMs) {
     const cl = S.skin.callLoop;
     if (!cl.enabled || !S.running || this.voiceBusy()) return;
+    if (S.kapustAt && nowMs >= S.kapustAt) {
+      S.kapustAt = 0;
+      this.play('kapustochka');
+      return;
+    }
     if (nowMs < S.callNext) return;
     this.play('call');
-    const pause = S.angle > cl.hotAngle
-      ? cl.hotPauseS
-      : cl.minPauseS + Math.random() * Math.max(0.5, cl.maxPauseS - cl.minPauseS);
+    S.callCount++;
+    if (cl.kapustEveryN > 0 && S.callCount % cl.kapustEveryN === 0) {
+      S.kapustAt = nowMs + cl.kapustDelayS * 1000;
+    }
+    const pause = S.angle > cl.hotAngle ? cl.hotPauseS : cl.pauseS;
     S.callNext = nowMs + pause * 1000;
   },
 };

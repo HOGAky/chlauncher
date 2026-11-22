@@ -884,6 +884,8 @@ export interface BuiltinGameMeta {
   cfg: BuiltinGameCfg;
   /** null у remote-записей — страницы захвата у них нет. */
   overlay_path: string | null;
+  /** Манифест `afk: true` — самоиграющий контент для вкладки «АФК-стримы». */
+  afk?: boolean;
 }
 
 export interface GameSessionInfo {

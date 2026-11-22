@@ -155,7 +155,8 @@ share|subscribe`, поля `vip|fan_level|is_moderator|is_superfan|gift_id|coins
 - Поля `game.json` (всё опционально): `id`, `type`, `title`, `desc`,
   `page`, `icon`, `window{w,h}` (default 420×640), `round_sec`, `volume`,
   `tts` (правило `/tts/say`), `launch{}`, `rules` (дефолтная таблица
-  `BuiltinGameCfg.rules`).
+  `BuiltinGameCfg.rules`), `hidden` (прототип вне каталога),
+  `afk` (самоиграющая игра → вкладка «АФК-стримы» в Библиотеке).
 - Пайплайн: `game_packs::scan/find` → `builtin_games::registry/exists/
   allowed_games/default_cfg` → `/overlay/game/{id}` (disk-страница;
   remote 404 естественно) → ассеты `/games-assets/<dir>/...` (user →

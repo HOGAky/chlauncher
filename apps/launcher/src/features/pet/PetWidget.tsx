@@ -5,11 +5,12 @@
  * through EFFECT_COMPONENTS — a new gift with a new effect needs one
  * entry in petGifts.ts + one renderer + keyframes in index.css.
  */
-import React, { useMemo, useState } from 'react';
-import { RotateCcw } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ImagePlus, RotateCcw } from 'lucide-react';
 import type { PetEffect, PetMood } from './types.ts';
 import { FISH_GIF_SRC, PET_TEXTS } from './petGifts.ts';
 import { usePetState } from './usePetState.ts';
+import { clearFish, loadFishBlob, saveFishBlob, MAX_FISH_BYTES } from './petAsset.ts';
 import GiftPanel from './GiftPanel.tsx';
 import { Card, CardContent } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
@@ -83,6 +84,52 @@ export default function PetWidget() {
   const mood = useMemo(() => moodOf(effects), [effects]);
   // Two-step reset: first click arms, second within 2.5s confirms.
   const [armReset, setArmReset] = useState(false);
+  // Custom fish image — user-picked Blob in IndexedDB, shown via
+  // objectURL; null/undefined falls back to the bundled GIF.
+  const [fishSrc, setFishSrc] = useState(FISH_GIF_SRC);
+  const [customFish, setCustomFish] = useState(false);
+  const [assetErr, setAssetErr] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let url: string | null = null;
+    let dead = false;
+    loadFishBlob().then((b) => {
+      if (!b || dead) return;
+      url = URL.createObjectURL(b);
+      setFishSrc(url);
+      setCustomFish(true);
+    });
+    return () => {
+      dead = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, []);
+
+  /** Validates + persists a picked image and swaps the fish. */
+  const onPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    if (!f.type.startsWith('image/')) return setAssetErr(PET_TEXTS.gifNotImage);
+    if (f.size > MAX_FISH_BYTES) return setAssetErr(PET_TEXTS.gifTooBig);
+    setAssetErr(null);
+    const url = URL.createObjectURL(f);
+    saveFishBlob(f)
+      .then(() => {
+        setFishSrc(url);
+        setCustomFish(true);
+      })
+      .catch(() => setAssetErr(PET_TEXTS.gifTooBig));
+  };
+
+  /** Back to the bundled fish GIF. */
+  const revertFish = () => {
+    clearFish().catch(() => {});
+    setCustomFish(false);
+    setFishSrc(FISH_GIF_SRC);
+    setAssetErr(null);
+  };
 
   return (
     <Card className="overflow-hidden">
@@ -93,7 +140,7 @@ export default function PetWidget() {
         >
           <div className="absolute inset-0 rounded-xl bg-gradient-to-b from-sky-500/10 to-blue-500/20 border border-sky-500/20" />
           <img
-            src={FISH_GIF_SRC}
+            src={fishSrc}
             alt="Рыба-питомец"
             draggable={false}
             className={cn(
@@ -118,28 +165,50 @@ export default function PetWidget() {
         <div className="flex-1 min-w-0 flex flex-col gap-2">
           <div className="flex items-center justify-between gap-2">
             <span className="text-sm font-medium">{PET_TEXTS.title}</span>
-            <button
-              onClick={() => {
-                if (armReset) {
-                  reset();
-                  setArmReset(false);
-                } else {
-                  setArmReset(true);
-                  window.setTimeout(() => setArmReset(false), 2500);
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/gif,image/webp,image/apng,image/png"
+                className="hidden"
+                onChange={onPick}
+              />
+              <button
+                onClick={() =>
+                  customFish ? revertFish() : fileRef.current?.click()
                 }
-              }}
-              title={PET_TEXTS.reset}
-              className={cn(
-                'flex items-center gap-1 text-[11px] transition-colors',
-                armReset
-                  ? 'text-red-400'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              <RotateCcw size={11} />
-              {armReset ? PET_TEXTS.resetConfirm : PET_TEXTS.reset}
-            </button>
+                title={customFish ? PET_TEXTS.defaultGif : 'Заменить рыбу своим GIF'}
+                className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ImagePlus size={11} />
+                {customFish ? PET_TEXTS.defaultGif : PET_TEXTS.customGif}
+              </button>
+              <button
+                onClick={() => {
+                  if (armReset) {
+                    reset();
+                    setArmReset(false);
+                  } else {
+                    setArmReset(true);
+                    window.setTimeout(() => setArmReset(false), 2500);
+                  }
+                }}
+                title={PET_TEXTS.reset}
+                className={cn(
+                  'flex items-center gap-1 text-[11px] transition-colors',
+                  armReset
+                    ? 'text-red-400'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <RotateCcw size={11} />
+                {armReset ? PET_TEXTS.resetConfirm : PET_TEXTS.reset}
+              </button>
+            </div>
           </div>
+          {assetErr && (
+            <div className="text-[11px] text-red-400">{assetErr}</div>
+          )}
           <GiftPanel coins={state.coins} onSend={sendGift} />
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Badge variant="outline">

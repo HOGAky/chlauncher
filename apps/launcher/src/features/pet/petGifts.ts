@@ -73,4 +73,8 @@ export const PET_TEXTS = {
   reset: 'Сбросить питомца',
   resetConfirm: 'Точно сбросить?',
   notEnough: 'Не хватает монет',
+  customGif: 'Свой GIF',
+  defaultGif: 'Стандартная',
+  gifTooBig: 'Файл слишком большой (до 8 МБ)',
+  gifNotImage: 'Нужен файл-картинка (GIF)',
 } as const;

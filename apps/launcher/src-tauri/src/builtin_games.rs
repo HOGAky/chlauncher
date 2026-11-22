@@ -45,6 +45,8 @@ pub struct GameEntry {
     pub assets_base: Option<String>,
     /// Manifest icon path relative to `assets_base`.
     pub icon: Option<String>,
+    /// `afk: true` in the manifest — idle/viewer-driven («АФК-стримы»).
+    pub afk: bool,
 }
 
 /// Full game catalogue — folder packs only, sorted by title for a
@@ -55,6 +57,7 @@ pub fn registry(data_dir: &Path) -> Vec<GameEntry> {
         .map(|p| {
             let assets_base = p.assets_base();
             let remote = p.is_remote();
+            let afk = p.is_afk();
             GameEntry {
                 title: p
                     .manifest
@@ -68,6 +71,7 @@ pub fn registry(data_dir: &Path) -> Vec<GameEntry> {
                 user: p.user,
                 assets_base: Some(assets_base),
                 icon: p.manifest.icon.clone(),
+                afk,
             }
         })
         .collect();
@@ -293,6 +297,7 @@ pub fn catalog_view(
                 "launch": g.launch,
                 "assets_base": g.assets_base,
                 "icon": g.icon.as_ref().map(|i| format!("{}/{}", g.assets_base.as_deref().unwrap_or(""), i)),
+                "afk": g.afk,
                 "cfg": cfg_for(settings, &g.id, data_dir),
                 "overlay_path": (!g.remote).then(|| format!("/overlay/game/{}", g.id)),
             })

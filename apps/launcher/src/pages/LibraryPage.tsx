@@ -37,7 +37,7 @@ export default function LibraryPage() {
   );
   const [error, setError] = useState<string | null>(null);
   // Вкладка каталога: «все» | только доступные бесплатно | только по тарифу.
-  const [tab, setTab] = useState<'all' | 'free' | 'paid'>('all');
+  const [tab, setTab] = useState<'all' | 'free' | 'paid' | 'afk'>('all');
 
   /** Card icon URL — pack icon file via /games-assets on the local overlay server. */
   const iconUrl = (p: BuiltinGameMeta) => {
@@ -153,6 +153,7 @@ export default function LibraryPage() {
             ['all', 'Все'],
             ['free', 'Бесплатные'],
             ['paid', 'По тарифу'],
+            ['afk', 'АФК-стримы'],
           ] as const
         ).map(([k, label]) => (
           <button
@@ -225,7 +226,10 @@ export default function LibraryPage() {
             open a capture window, «remote» link-packs dispatch on
             launch.kind — «roblox» renders the full Roblox card. */}
         {packs
-          .filter((p) => tab === 'all' || (tab === 'free' ? p.allowed : !p.allowed))
+          .filter((p) =>
+            tab === 'all' ||
+            (tab === 'free' ? p.allowed : tab === 'afk' ? p.afk : !p.allowed)
+          )
           .map((p) =>
           p.remote ? (
             p.launch?.kind === 'roblox' ? (
@@ -315,7 +319,11 @@ export default function LibraryPage() {
           )
         )}
         {games
-          .filter((g) => tab === 'all' || (tab === 'free' ? g.is_free : !g.is_free))
+          .filter(
+            (g) =>
+              tab !== 'afk' &&
+              (tab === 'all' || (tab === 'free' ? g.is_free : !g.is_free))
+          )
           .map((g) => {
           const isBusy = !!busy[g.slug];
           // §8.3: Free accounts play is_free titles; paid titles need an
@@ -410,6 +418,11 @@ export default function LibraryPage() {
               Бесплатных игр нет — все записи требуют тариф.
             </p>
           )}
+        {tab === 'afk' && packs.every((p) => !p.afk) && (
+          <p className="text-sm text-muted-foreground col-span-full">
+            Самоиграющих игр нет — пометь папку флагом «afk»: true в game.json.
+          </p>
+        )}
       </div>
     </div>
   );

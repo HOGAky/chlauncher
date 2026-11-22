@@ -85,6 +85,9 @@ pub struct PackManifest {
     /// catalogue, not launchable, `/overlay/game/<id>` → 404. For
     /// unfinished/prototype games shipped in the repo.
     pub hidden: Option<bool>,
+    /// `true` = game runs itself (idle loops, viewer-driven) — shows
+    /// up under the «АФК-стримы» library tab.
+    pub afk: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -103,6 +106,7 @@ struct RawManifest {
     launch: Option<serde_json::Value>,
     rules: Option<serde_json::Value>,
     hidden: Option<bool>,
+    afk: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -173,6 +177,11 @@ impl GamePack {
     /// `hidden: true` — on disk but out of the runtime entirely.
     pub fn is_hidden(&self) -> bool {
         self.manifest.hidden == Some(true)
+    }
+
+    /// `afk: true` — idle/viewer-driven game for the «АФК-стримы» tab.
+    pub fn is_afk(&self) -> bool {
+        self.manifest.afk == Some(true)
     }
 }
 
@@ -249,6 +258,7 @@ fn parse_manifest(text: &str) -> PackManifest {
                 launch: raw.launch,
                 rules: raw.rules,
                 hidden: raw.hidden,
+                afk: raw.afk,
             }
         }
         Err(e) => {

@@ -9,6 +9,7 @@
 | Путь | Назначение |
 |---|---|
 | `apps/launcher/public/pets/fish.gif` | Зацикленная анимация рыбы (локальный ассет, без внешних URL в рантайме) |
+| `apps/launcher/src/features/pet/petAsset.ts` | Своя гифка: blob в IndexedDB (`chlauncher-pet`/`assets`), objectURL в рантайме |
 | `apps/launcher/src/features/pet/types.ts` | Типы: `PetGift`, `PetState`, `PetEffect`, `ActiveEffect` |
 | `apps/launcher/src/features/pet/petGifts.ts` | Каталог подарков `PET_GIFTS` + константы (ключ хранилища, стартовый баланс, лимит эффектов, тексты) |
 | `apps/launcher/src/features/pet/usePetState.ts` | Хук: баланс, счётчики, очередь эффектов, localStorage, reset |
@@ -25,6 +26,15 @@
 Активные эффекты не сохраняются (это рантайм, максимум 3 слоя одновременно —
 новый вытесняет самый старый). Кнопка «Сбросить питомца» — двухшаговая
 (первый клик «вооружает» на 2.5с).
+
+## Своя гифка
+
+Кнопка «Свой GIF» в шапке виджета открывает выбор файла
+(GIF/WebP/APNG/PNG, ≤8 МБ). Файл хранится как blob в IndexedDB —
+не в localStorage (квота ~5МБ) и не на диске в явном виде; показывается
+через `URL.createObjectURL`. «Стандартная» возвращает встроенную рыбу.
+Картинка сохраняется между запусками и не трогается кнопкой «Сбросить
+питомца» (сбрасывает только прогресс).
 
 ## Подарки
 
