@@ -58,3 +58,8 @@ tools/rvc-server/*-test*.wav
 !tools/tiktok-sidecar/dist/
 !tools/tiktok-sidecar/dist/**
 *.whl
+
+# stray sqlite databases (real db lives in ignored data/)
+*.db
+*.db-shm
+*.db-wal
