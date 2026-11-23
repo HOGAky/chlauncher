@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>Аквариум</title>
+<title>Конструктор GIF-игры</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; overflow: hidden; background: #04121f; }
@@ -27,7 +27,7 @@
     animation: amb-rise linear infinite; }
   @keyframes amb-rise { to { transform: translateY(-115vh); opacity: 0; } }
 
-  /* ══ Рыба: обёртка везёт по аквариуму, img разворачивается ══ */
+  /* ══ Питомец: обёртка везёт по аквариуму, img разворачивается ══ */
   #fishWrap { position: absolute; top: 34%; left: 0; width: 210px; height: 150px;
     animation: swim 14s ease-in-out infinite; }
   #fish { width: 100%; pointer-events: none;
@@ -90,17 +90,28 @@
   .stat { padding: 4px 12px; border-radius: 999px; font-size: 13px; color: #cfe8ff;
     background: rgba(8,20,35,.7); border: 1px solid rgba(120,190,255,.25); }
 
-  /* ══ Dev-панель (Tab/D) ══ */
-  #devpanel { position: absolute; top: 10px; right: 10px; width: 240px; display: none;
-    background: rgba(10,15,30,.92); border: 1px solid #3a4a6a; border-radius: 10px;
-    padding: 10px; color: #cfe0ff; font-size: 12px; z-index: 10; }
-  #devpanel.show { display: block; }
-  #devpanel .t { font-weight: 700; margin-bottom: 6px; }
-  #devpanel button { background: #22314e; color: #cfe0ff; border: 1px solid #3a4a6a;
+  /* ══ Конструктор (Tab/D) ══ */
+  #panel { position: absolute; top: 8px; right: 8px; width: 330px; max-height: 94%;
+    overflow-y: auto; display: none; background: rgba(10,15,30,.94);
+    border: 1px solid #3a4a6a; border-radius: 10px; padding: 10px;
+    color: #cfe0ff; font-size: 12px; z-index: 10; }
+  #panel.show { display: block; }
+  #panel .t { font-weight: 700; margin-bottom: 6px; }
+  #panel button { background: #22314e; color: #cfe0ff; border: 1px solid #3a4a6a;
     border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
-  #devpanel button:hover { background: #2c3f63; }
-  #devpanel .msg { margin-top: 6px; color: #8fd3ff; min-height: 14px; }
+  #panel button:hover { background: #2c3f63; }
+  #panel .msg { margin-top: 6px; color: #8fd3ff; min-height: 14px; }
   #devPrev { max-width: 120px; max-height: 80px; border-radius: 6px; margin-top: 6px; }
+
+  .rule { display: grid; grid-template-columns: 1fr; gap: 3px; padding: 6px;
+    background: rgba(255,255,255,.04); border: 1px solid #2c3a58; border-radius: 8px;
+    margin-bottom: 6px; }
+  .rule .row { display: flex; gap: 4px; align-items: center; }
+  .rule select, .rule input { background: #16223c; color: #cfe0ff;
+    border: 1px solid #3a4a6a; border-radius: 5px; padding: 3px 6px; font-size: 12px; }
+  .rule input { flex: 1; min-width: 0; }
+  .rule .del { margin-left: auto; padding: 2px 8px; }
+  #rulesBox .hint { color: #7f95bd; font-size: 11px; margin-bottom: 6px; }
 </style>
 </head>
 <body>
@@ -121,15 +132,28 @@
   <div id="stats">
     <span class="stat" id="stFed">🐟 Корм: 0</span>
     <span class="stat" id="stTop">👑 —</span>
+    <span class="stat" id="stRules"></span>
   </div>
 
-  <div id="devpanel">
-    <div class="t">DEV · Своя рыба</div>
+  <div id="panel">
+    <div class="t">🐟 Своя картинка</div>
     <input type="file" id="devFile" accept="image/gif" style="display:none">
     <button id="devPick">Загрузить GIF</button>
     <button id="devReset">Стандартная</button>
-    <div class="msg" id="devMsg">sprites/custom.gif заменяет рыбу</div>
+    <div class="msg" id="devMsg">sprites/custom.gif заменяет питомца</div>
     <img id="devPrev" style="display:none">
+
+    <div class="t" style="margin-top:10px">⚙️ Конструктор действий</div>
+    <div id="rulesBox">
+      <div class="hint">Событие → условие → реакция питомца. Для подарка —
+        имена через запятую (Rose, Galaxy), для комментария — слово из текста.</div>
+      <div id="ruleRows"></div>
+      <button id="ruleAdd">+ Правило</button>
+      <button id="ruleSave">Сохранить</button>
+      <button id="ruleReset">Стандарт</button>
+      <div class="msg" id="ruleMsg"></div>
+    </div>
+
     <div class="t" style="margin-top:10px">keys: Tab/D — панель · 1..6 — эффекты</div>
   </div>
 
@@ -139,16 +163,29 @@
 const TOKEN = new URLSearchParams(location.search).get('t') || '';
 const GAME = new URLSearchParams(location.search).get('g') || 'aquarium';
 const packDir = 'aquarium';
-const AB = '/games-assets/aquarium';           // assetBase (user → bundled)
+const AB = '/games-assets/aquarium';
 const FISH_DEF = `${AB}/sprites/fish.gif?t=${encodeURIComponent(TOKEN)}`;
 const FISH_CUST = `${AB}/sprites/custom.gif?t=${encodeURIComponent(TOKEN)}`;
+const RULES_CUST = `${AB}/custom_rules.json?t=${encodeURIComponent(TOKEN)}`;
 
-const S = { cfg: null, eng: null, fish: 'def', fed: 0, top: {}, running: true };
+const S = { cfg: null, eng: null, customRules: false, fed: 0, top: {}, giftIcons: {} };
 const fishWrap = document.getElementById('fishWrap');
 const fishImg = document.getElementById('fish');
 const fxLayer = document.getElementById('fxLayer');
 const cardsBox = document.getElementById('cards');
 const moodTimers = [];
+
+/* ══ Конструктор: словари событий и действий (всё по-русски) ══ */
+const EVENTS = [
+  ['gift', 'Подарок'], ['like', 'Лайк'], ['comment', 'Комментарий'],
+  ['subscribe', 'Подписка'], ['share', 'Репост'], ['follow', 'Подписка на канал'],
+];
+const ACTIONS = [
+  ['nudge', 'Покачивание'], ['feed', 'Корм'], ['bubble', 'Пузыри'],
+  ['zap', 'Молния (разгон)'], ['heart', 'Сердца'], ['crown', 'Корона'],
+];
+const ACT_LABEL = { nudge: 'подпитал', feed: 'покормил', bubble: 'пузыри',
+  zap: 'разогнал', heart: 'любовь', crown: 'корона!' };
 
 /* ══ Фоновые пузыри ══ */
 (function ambients() {
@@ -163,11 +200,17 @@ const moodTimers = [];
   }
 })();
 
-/* ══ Своя рыба: custom.gif в user-папке перекрывает bundled ══ */
+/* ══ Своя гифка: custom.gif в user-папке перекрывает bundled ══ */
+const devMsg = document.getElementById('devMsg');
+const devPrev = document.getElementById('devPrev');
 function probeCustom() {
   const im = new Image();
-  im.onload = () => { S.fish = 'custom'; fishImg.src = `${FISH_CUST}&v=${Date.now()}`; };
-  im.onerror = () => { S.fish = 'def'; fishImg.src = FISH_DEF; };
+  im.onload = () => {
+    fishImg.src = `${FISH_CUST}&v=${Date.now()}`;
+    devPrev.src = `${FISH_CUST}&v=${Date.now()}`;
+    devPrev.style.display = 'block';
+  };
+  im.onerror = () => { fishImg.src = FISH_DEF; devPrev.style.display = 'none'; };
   im.src = `${FISH_CUST}&v=${Date.now()}`;
 }
 
@@ -212,10 +255,9 @@ const EFFECTS = {
     mood('royal', 6000);
   },
 };
-const ACT_LABEL = { nudge: 'подпитал', feed: 'покормил', bubble: 'пузыри',
-  zap: 'разогнал', heart: 'любовь', crown: 'корона!' };
 
 /* ══ Карточки и статистика ══ */
+function esc(s) { const d = document.createElement('i'); d.textContent = s || ''; return d.innerHTML; }
 function card(user, icon, label) {
   const c = document.createElement('div');
   c.className = 'card';
@@ -225,12 +267,12 @@ function card(user, icon, label) {
   while (cardsBox.children.length > 5) cardsBox.firstChild.remove();
   setTimeout(() => c.remove(), 4200);
 }
-function esc(s) { const d = document.createElement('i'); d.textContent = s || ''; return d.innerHTML; }
-function giftIcon(name) { return S.giftIcons ? (S.giftIcons[String(name || '').toLowerCase()] || null) : null; }
+function giftIcon(name) { return S.giftIcons[String(name || '').toLowerCase()] || null; }
 function stat() {
   document.getElementById('stFed').textContent = `🐟 Корм: ${S.fed}`;
   const top = Object.entries(S.top).sort((a, b) => b[1] - a[1])[0];
   document.getElementById('stTop').textContent = `👑 ${top ? top[0] : '—'}`;
+  document.getElementById('stRules').textContent = S.customRules ? '⚙️ свои правила' : '';
 }
 
 /** Единая точка входа действия (событие или дебаг-клавиша). */
@@ -245,12 +287,103 @@ function act(a) {
   stat();
 }
 
-/* ══ Dev-панель: своя гифка через /games/asset (raw b64 — анимация живая) ══ */
-const devPanel = document.getElementById('devpanel');
-const devFile = document.getElementById('devFile');
-const devMsg = document.getElementById('devMsg');
-const devPrev = document.getElementById('devPrev');
+/* ══ Конструктор: rules ⇄ UI ══ */
+const ruleRows = document.getElementById('ruleRows');
+const ruleMsg = document.getElementById('ruleMsg');
+const hasCond = (ev) => ev === 'gift' || ev === 'comment';
+const condPlaceholder = (ev) => ev === 'gift'
+  ? 'Подарки через запятую (Rose, Galaxy)'
+  : ev === 'comment' ? 'Слово из текста (напр. рыба)' : '—';
 
+function addRow(r = {}) {
+  const ev = r.event || 'gift';
+  const cond = r.match ? (r.match.names ? r.match.names.join(', ') : (r.match.contains || '')) : '';
+  const coins = r.match && r.match.min_coins ? String(r.match.min_coins) : '';
+  const type = (r.action && r.action.type) || 'feed';
+  const row = document.createElement('div');
+  row.className = 'rule';
+  row.innerHTML =
+    `<div class="row"><select class="ev">${EVENTS.map(([v, l]) =>
+      `<option value="${v}"${v === ev ? ' selected' : ''}>${l}</option>`).join('')}</select>` +
+    `<select class="act">${ACTIONS.map(([v, l]) =>
+      `<option value="${v}"${v === type ? ' selected' : ''}>${l}</option>`).join('')}</select>` +
+    `<button class="del" title="Удалить правило">✕</button></div>` +
+    `<div class="row"><input class="cond" placeholder="${condPlaceholder(ev)}">` +
+    `<input class="coins" type="number" min="0" style="width:64px" ` +
+    `placeholder="монеты от" title="Мин. цена подарка в монетах"></div>`;
+  row.querySelector('.cond').value = cond;
+  row.querySelector('.coins').value = coins;
+  row.querySelector('.ev').addEventListener('change', (e) => {
+    row.querySelector('.cond').placeholder = condPlaceholder(e.target.value);
+    row.querySelector('.cond').disabled = !hasCond(e.target.value);
+    row.querySelector('.coins').disabled = e.target.value !== 'gift';
+  });
+  row.querySelector('.cond').disabled = !hasCond(ev);
+  row.querySelector('.coins').disabled = ev !== 'gift';
+  row.querySelector('.del').addEventListener('click', () => row.remove());
+  ruleRows.appendChild(row);
+}
+
+function rowsToRules() {
+  const out = [];
+  for (const row of ruleRows.querySelectorAll('.rule')) {
+    const ev = row.querySelector('.ev').value;
+    const type = row.querySelector('.act').value;
+    const cond = row.querySelector('.cond').value.trim();
+    const coins = parseInt(row.querySelector('.coins').value, 10) || 0;
+    const match = {};
+    if (ev === 'gift') {
+      if (cond) match.names = cond.split(',').map((s) => s.trim()).filter(Boolean);
+      if (coins > 0) match.min_coins = coins;
+    } else if (ev === 'comment' && cond) {
+      match.contains = cond;
+    }
+    out.push({ event: ev, match, action: { type } });
+  }
+  return out;
+}
+
+function rulesToRows(rules) {
+  ruleRows.innerHTML = '';
+  (Array.isArray(rules) ? rules : []).forEach((r) => addRow(r));
+  if (!ruleRows.children.length) addRow();
+}
+
+document.getElementById('ruleAdd').addEventListener('click', () => addRow());
+document.getElementById('ruleSave').addEventListener('click', () => {
+  const rules = rowsToRules();
+  const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(rules))));
+  postAsset('custom_rules.json', b64)
+    .then(() => { ruleMsg.textContent = 'Правила сохранены'; applyRules(rules, true); })
+    .catch((e) => { ruleMsg.textContent = `Ошибка: ${e.message}`; });
+});
+document.getElementById('ruleReset').addEventListener('click', () => {
+  postAsset('custom_rules.json', null)
+    .then(() => {
+      ruleMsg.textContent = 'Стандартные правила';
+      applyRules(S.cfg.rules, false);
+      rulesToRows(S.cfg.rules);
+    })
+    .catch((e) => { ruleMsg.textContent = `Ошибка: ${e.message}`; });
+});
+
+function applyRules(rules, custom) {
+  if (S.eng) S.eng.rules = Array.isArray(rules) ? rules : [];
+  S.customRules = !!custom;
+  stat();
+}
+
+async function postAsset(path, data_b64) {
+  const r = await fetch(`/games/asset?t=${encodeURIComponent(TOKEN)}`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ dir: packDir, path, data_b64 }),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+/* ══ Гифка: загрузка / сброс ══ */
+const devFile = document.getElementById('devFile');
 document.getElementById('devPick').addEventListener('click', () => devFile.click());
 devFile.addEventListener('change', () => {
   const f = devFile.files && devFile.files[0];
@@ -259,23 +392,15 @@ devFile.addEventListener('change', () => {
   if (f.type !== 'image/gif') { devMsg.textContent = 'Нужен именно .gif'; return; }
   const rd = new FileReader();
   rd.onload = () => {
-    const b64 = rd.result.split(',')[1];
-    fetch(`/games/asset?t=${encodeURIComponent(TOKEN)}`, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ dir: packDir, path: 'sprites/custom.gif', data_b64: b64 }),
-    }).then((r) => {
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      devMsg.textContent = 'Гифка сохранена';
-      probeCustom();
-    }).catch((e) => { devMsg.textContent = `Ошибка: ${e.message}`; });
+    postAsset('sprites/custom.gif', rd.result.split(',')[1])
+      .then(() => { devMsg.textContent = 'Гифка сохранена'; probeCustom(); })
+      .catch((e) => { devMsg.textContent = `Ошибка: ${e.message}`; });
   };
   rd.readAsDataURL(f);
 });
 document.getElementById('devReset').addEventListener('click', () => {
-  fetch(`/games/asset?t=${encodeURIComponent(TOKEN)}`, {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ dir: packDir, path: 'sprites/custom.gif', data_b64: null }),
-  }).then(() => { devMsg.textContent = 'Стандартная рыба'; probeCustom(); })
+  postAsset('sprites/custom.gif', null)
+    .then(() => { devMsg.textContent = 'Стандартная рыба'; probeCustom(); })
     .catch((e) => { devMsg.textContent = `Ошибка: ${e.message}`; });
 });
 
@@ -283,7 +408,7 @@ const DEBUG_ACT = { '1': 'nudge', '2': 'feed', '3': 'bubble', '4': 'zap', '5': '
 addEventListener('keydown', (e) => {
   if (e.key === 'Tab' || e.key === 'd' || e.key === 'D' || e.key === 'в' || e.key === 'В') {
     e.preventDefault();
-    devPanel.classList.toggle('show');
+    document.getElementById('panel').classList.toggle('show');
     return;
   }
   const t = DEBUG_ACT[e.key];
@@ -293,18 +418,21 @@ addEventListener('keydown', (e) => {
 /* ══ Boot ══ */
 async function main() {
   const HUD = GameKit.hud();
-  const [cfgRes, giftRes] = await Promise.all([
+  const [cfgRes, giftRes, rulesRes] = await Promise.all([
     GameKit.fetchCfg(GAME),
     fetch(`/gifts/gifts.json?t=${encodeURIComponent(TOKEN)}`)
       .then((r) => (r.ok ? r.json() : [])).catch(() => []),
+    fetch(RULES_CUST).then((r) => (r.ok ? r.json() : null)).catch(() => null),
   ]);
   S.cfg = cfgRes.cfg;
-  S.giftIcons = {};
   for (const row of giftRes) {
     if (row.name && row.image)
       S.giftIcons[row.name.toLowerCase()] = `/${row.image}?t=${encodeURIComponent(TOKEN)}`;
   }
   S.eng = new GameKit.Engine(S.cfg);
+  // Конструкторские правила перекрывают дефолтные из game.json.
+  applyRules(rulesRes || S.cfg.rules, !!rulesRes);
+  rulesToRows(rulesRes || S.cfg.rules);
   probeCustom();
   stat();
 

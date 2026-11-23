@@ -262,7 +262,7 @@ const MIGRATIONS = [
       earn_limit_coins_month: 5000,
       paid_games: false,
       mc_premium_plugins: false,
-      interactive_games: ['gift_tower'],
+      interactive_games: ['gift_tower', 'patrick_cabbage', 'aquarium'],
     }), 0);
     seed.run('pro', 'Pro', 29900, JSON.stringify({
       max_presets: 25,
@@ -275,7 +275,7 @@ const MIGRATIONS = [
       earn_limit_coins_month: null,
       paid_games: true,
       mc_premium_plugins: false,
-      interactive_games: ['gift_tower', 'boy_vs_girl', 'survive_horde'],
+      interactive_games: ['gift_tower', 'boy_vs_girl', 'survive_horde', 'patrick_cabbage', 'aquarium'],
     }), 1);
     seed.run('expert', 'Expert', 59900, JSON.stringify({
       max_presets: 100,
@@ -288,7 +288,7 @@ const MIGRATIONS = [
       earn_limit_coins_month: null,
       paid_games: true,
       mc_premium_plugins: true,
-      interactive_games: ['gift_tower', 'boy_vs_girl', 'survive_horde'],
+      interactive_games: ['gift_tower', 'boy_vs_girl', 'survive_horde', 'patrick_cabbage', 'aquarium'],
     }), 2);
   },
   // v6 → v7: Minecraft plugin catalog (parity spec §9.4). Rows are
@@ -593,6 +593,20 @@ const MIGRATIONS = [
       try { ent = JSON.parse(r.entitlements || '{}'); } catch { continue; }
       const list = Array.isArray(ent.interactive_games) ? ent.interactive_games : [];
       if (!list.includes('patrick_cabbage')) list.push('patrick_cabbage');
+      ent.interactive_games = list;
+      upd.run(JSON.stringify(ent), r.code);
+    }
+  },
+  // Migration 16: the aquarium/constructor pack joined the bundled
+  // catalogue — same union fix as migration 15 so every plan unlocks it.
+  (db) => {
+    const rows = db.prepare('SELECT code, entitlements FROM plans').all();
+    const upd = db.prepare('UPDATE plans SET entitlements = ? WHERE code = ?');
+    for (const r of rows) {
+      let ent;
+      try { ent = JSON.parse(r.entitlements || '{}'); } catch { continue; }
+      const list = Array.isArray(ent.interactive_games) ? ent.interactive_games : [];
+      if (!list.includes('aquarium')) list.push('aquarium');
       ent.interactive_games = list;
       upd.run(JSON.stringify(ent), r.code);
     }

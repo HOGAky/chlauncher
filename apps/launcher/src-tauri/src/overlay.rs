@@ -723,7 +723,7 @@ async fn save_game_asset(
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
     let ext_ok = path
         .rsplit_once('.')
-        .map(|(_, e)| matches!(e, "png" | "jpg" | "jpeg" | "webp" | "gif" | "mp3" | "wav" | "ogg"))
+        .map(|(_, e)| matches!(e, "png" | "jpg" | "jpeg" | "webp" | "gif" | "json" | "mp3" | "wav" | "ogg"))
         .unwrap_or(false);
     if !dir_ok || !crate::game_packs::safe_relpath(path) || !ext_ok {
         return StatusCode::BAD_REQUEST.into_response();
@@ -757,7 +757,10 @@ async fn save_game_asset(
         || (bytes.len() > 2 && bytes[0] == 0xFF && bytes[1] & 0xE0 == 0xE0) // MP3 frame
         || bytes.starts_with(b"OggS")
         || (bytes.len() > 6 && (&bytes[..6] == b"GIF87a" || &bytes[..6] == b"GIF89a"))
-        || (bytes.len() > 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE");
+        || (bytes.len() > 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WAVE")
+        // JSON (конструкторские конфиги типа custom_rules.json) — без
+        // magic-сигнатуры, поэтому проверяем первый не-пробельный байт.
+        || bytes.iter().find(|b| !b.is_ascii_whitespace()).is_some_and(|b| matches!(b, b'{' | b'['));
     if !sig_ok {
         return (StatusCode::BAD_REQUEST, "unsupported file signature").into_response();
     }
