@@ -47,6 +47,10 @@ pub struct GameEntry {
     pub icon: Option<String>,
     /// `afk: true` in the manifest — idle/viewer-driven («АФК-стримы»).
     pub afk: bool,
+    /// `section` in the manifest — custom library tab name.
+    pub section: Option<String>,
+    /// `true` — user `game.json` patches a bundled pack (editable entry).
+    pub overridden: bool,
 }
 
 /// Full game catalogue — folder packs only, sorted by title for a
@@ -59,6 +63,8 @@ pub fn registry(data_dir: &Path) -> Vec<GameEntry> {
             let remote = p.is_remote();
             let afk = p.is_afk();
             GameEntry {
+                section: p.manifest.section.clone(),
+                overridden: p.overridden,
                 title: p
                     .manifest
                     .title
@@ -298,6 +304,8 @@ pub fn catalog_view(
                 "assets_base": g.assets_base,
                 "icon": g.icon.as_ref().map(|i| format!("{}/{}", g.assets_base.as_deref().unwrap_or(""), i)),
                 "afk": g.afk,
+                "section": g.section,
+                "overridden": g.overridden,
                 "cfg": cfg_for(settings, &g.id, data_dir),
                 "overlay_path": (!g.remote).then(|| format!("/overlay/game/{}", g.id)),
             })

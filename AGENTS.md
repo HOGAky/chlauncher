@@ -141,7 +141,10 @@ share|subscribe`, поля `vip|fan_level|is_moderator|is_superfan|gift_id|coins
 - Игра = папка `games/<slug>/`, лаунчер сканирует её сам (без правок
   кода): `public/games/` (встроенные, бандлятся в `resources/games`) +
   `<app-data>/games/` (drop-in пользователя, создаётся в `lib.rs::setup`).
-  User-пакеты переопределяют bundled по id. СТАТИЧЕСКОГО реестра больше
+  User-пакеты на bundled-id — это ПАТЧ (`merged_over`): поля, которых
+  нет в user `game.json`, наследуют bundled-значения, а bundled-папка
+  остаётся fallback для страницы (`GamePack.base_dir`) и ассетов.
+  `overridden` — флаг «манифест пропатчен». СТАТИЧЕСКОГО реестра больше
   нет — `builtin_games::registry` = только папки (сортировка по title).
 - ДВА типа пакетов (`game.json.type`):
   - `"pack"` (default) — полная локальная игра: `overlay.html` +
@@ -156,13 +159,24 @@ share|subscribe`, поля `vip|fan_level|is_moderator|is_superfan|gift_id|coins
   `page`, `icon`, `window{w,h}` (default 420×640), `round_sec`, `volume`,
   `tts` (правило `/tts/say`), `launch{}`, `rules` (дефолтная таблица
   `BuiltinGameCfg.rules`), `hidden` (прототип вне каталога),
-  `afk` (самоиграющая игра → вкладка «АФК-стримы» в Библиотеке).
-- Пакет `aquarium` — АФК-аквариум: рыба-GIF плавает сама, подарки
+  `afk` (самоиграющая игра → вкладка «АФК-стримы» в Библиотеке),
+  `section` (имя своей вкладки-раздела в Библиотеке — каждое уникальное
+  значение = новая вкладка после «АФК-стримы»).
+- Пакет `aquarium` — «GIF-конструктор»: своя гифка плавает по сцене,
+  подарки/события зрителей → реакции по rules-таблице.
+  Своя гифка: dev-панель (Tab/D) → `POST /games/asset` →
   зрителей → корм/пузыри/разгон/корона/сердца (rules-таблица).
   Своя гифка: dev-панель (Tab/D) → `POST /games/asset` →
   `sprites/custom.gif` в user-папке (raw-b64, анимация живая;
   gif добавлен в whitelist ext+magic `/games/asset` и в mime
-  `/games-assets`).
+  `/games-assets`). Той же панелью правятся правила (`custom_rules.json`,
+  `.json` тоже принимает `/games/asset`).
+- Редактор манифеста (админ-роль, карандаш на карточке в Библиотеке):
+  `pack_manifest` (effective-манифест с merge) → `save_pack_manifest`
+  (пишет патч в `<data>/games/<dir>/game.json`, `id` форсится,
+  эмит `catalog-changed`) → `reset_pack_manifest` (удаляет патч;
+  hidden-патчи находит сканом user-корня). Валидация —
+  `validate_pack_manifest` в commands.rs.
 - Пайплайн: `game_packs::scan/find` → `builtin_games::registry/exists/
   allowed_games/default_cfg` → `/overlay/game/{id}` (disk-страница;
   remote 404 естественно) → ассеты `/games-assets/<dir>/...` (user →

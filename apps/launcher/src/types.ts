@@ -886,6 +886,10 @@ export interface BuiltinGameMeta {
   overlay_path: string | null;
   /** Манифест `afk: true` — самоиграющий контент для вкладки «АФК-стримы». */
   afk?: boolean;
+  /** Манифест `section` — имя пользовательской вкладки-раздела в библиотеке. */
+  section?: string | null;
+  /** true — манифест уже пропатчен user-оверрайдом (можно сбросить). */
+  overridden?: boolean;
 }
 
 export interface GameSessionInfo {

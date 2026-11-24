@@ -5,7 +5,7 @@
  * always-on-top, chroma key).
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { Download, Play, RefreshCw, Square, Lock, Timer, MonitorPlay, Globe } from 'lucide-react';
+import { Download, Play, RefreshCw, Square, Lock, Timer, MonitorPlay, Globe, Pencil } from 'lucide-react';
 import * as api from '../api';
 import { useApp } from '../App';
 import type { BuiltinGameMeta, LibraryEntry, WindowOptions } from '../types';
@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '../compone
 import { Badge } from '../components/ui/badge';
 import { Switch } from '../components/ui/switch';
 import RobloxCard from '../components/RobloxCard';
+import GameEditDialog from '../components/GameEditDialog';
 
 import { humanError } from '../errorMessages';
 const RESOLUTIONS: { label: string; w: number; h: number }[] = [
@@ -26,6 +27,8 @@ const RESOLUTIONS: { label: string; w: number; h: number }[] = [
 export default function LibraryPage() {
   const { subscription, boot, overlayUrl } = useApp();
   const active = subscription?.status === 'active';
+  // Admin account (TG-owner/admin role) — unlocks the manifest editor.
+  const isAdmin = boot?.role === 'admin';
   const [games, setGames] = useState<LibraryEntry[]>([]);
   // Folder-pack catalogue (bundled public/games + <app-data>/games):
   // local overlay pages AND remote link-packs (e.g. the Roblox place).
@@ -35,8 +38,10 @@ export default function LibraryPage() {
     boot?.window_options ?? { width: 540, height: 960, borderless: true, always_on_top: true, chroma_key: false }
   );
   const [error, setError] = useState<string | null>(null);
-  // Вкладка каталога: «все» | только доступные бесплатно | только по тарифу.
-  const [tab, setTab] = useState<'all' | 'free' | 'paid' | 'afk'>('all');
+  // Вкладка каталога: «все» | бесплатные | по тарифу | АФК-стримы |
+  // имя пользовательского раздела из манифестов (`section` в game.json).
+  const [tab, setTab] = useState<string>('all');
+  const [editing, setEditing] = useState<string | null>(null);
 
   /** Card icon URL — pack icon file via /games-assets on the local overlay server. */
   const iconUrl = (p: BuiltinGameMeta) => {
@@ -62,6 +67,22 @@ export default function LibraryPage() {
       un2?.();
     };
   }, [refresh]);
+
+  /** Уникальные разделы из манифестов пакетов → свои вкладки. */
+  const sections = [
+    ...new Set(packs.map((p) => p.section).filter((s): s is string => !!s)),
+  ].sort((a, b) => a.localeCompare(b));
+
+  /** Фильтр пакета под активную вкладку. */
+  const packVisible = (p: BuiltinGameMeta) =>
+    tab === 'all' ||
+    (tab === 'free'
+      ? p.allowed
+      : tab === 'paid'
+        ? !p.allowed
+        : tab === 'afk'
+          ? p.afk
+          : p.section === tab);
 
   /** Wraps an action with per-game busy state + error surfacing. */
   const act = (slug: string, label: string, fn: () => Promise<unknown>) => async () => {
@@ -141,15 +162,17 @@ export default function LibraryPage() {
       )}
 
       {/* Вкладки: вместо бейджей «тариф» на каждой карточке — фильтр
-          сверху по доступности. */}
-      <div className="flex gap-1 border-b border-border">
+          сверху по доступности + свои разделы из манифестов. */}
+      <div className="flex gap-1 border-b border-border flex-wrap">
         {(
           [
             ['all', 'Все'],
             ['free', 'Бесплатные'],
             ['paid', 'По тарифу'],
             ['afk', 'АФК-стримы'],
-          ] as const
+            // Пользовательские разделы — уникальные `section` из манифестов.
+            ...sections.map((s): [string, string] => [s, s]),
+          ] as [string, string][]
         ).map(([k, label]) => (
           <button
             key={k}
@@ -169,7 +192,7 @@ export default function LibraryPage() {
         {/* Built-in app — the stream timer; viewers extend the countdown
             via gifts/likes/subs. Rendered by /overlay/timer in a capture
             window, configured on the «Таймер» page. */}
-        {tab !== 'paid' && (
+        {['all', 'free', 'afk'].includes(tab) && (
         <Card className="overflow-hidden border-primary/40">
           <div className="h-24 bg-gradient-to-br from-pink-500/30 to-violet-500/30 flex items-end p-3">
             <span className="text-2xl font-black opacity-70 flex items-center gap-2">
@@ -221,10 +244,7 @@ export default function LibraryPage() {
             open a capture window, «remote» link-packs dispatch on
             launch.kind — «roblox» renders the full Roblox card. */}
         {packs
-          .filter((p) =>
-            tab === 'all' ||
-            (tab === 'free' ? p.allowed : tab === 'afk' ? p.afk : !p.allowed)
-          )
+          .filter(packVisible)
           .map((p) =>
           p.remote ? (
             p.launch?.kind === 'roblox' ? (
@@ -241,9 +261,22 @@ export default function LibraryPage() {
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <CardTitle>{p.title}</CardTitle>
-                    <Badge variant="outline">
-                      <Globe size={11} className="mr-1" /> Серверная
-                    </Badge>
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="outline">
+                        <Globe size={11} className="mr-1" /> Серверная
+                      </Badge>
+                      {isAdmin && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0"
+                          title="Редактировать манифест (game.json)"
+                          onClick={() => setEditing(p.id)}
+                        >
+                          <Pencil size={12} />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <p className="text-xs text-muted-foreground">удалённый сервер · {p.launch?.kind}</p>
                 </CardHeader>
@@ -264,11 +297,26 @@ export default function LibraryPage() {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <CardTitle>{p.title}</CardTitle>
-                  {p.user_pack && (
-                    <Badge variant="outline" title={p.assets_base ?? 'папка-пакет'}>
-                      Своя папка
-                    </Badge>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    {p.overridden ? (
+                      <Badge variant="warning">Изменено</Badge>
+                    ) : p.user_pack ? (
+                      <Badge variant="outline" title={p.assets_base ?? 'папка-пакет'}>
+                        Своя папка
+                      </Badge>
+                    ) : null}
+                    {isAdmin && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 w-6 p-0"
+                        title="Редактировать манифест (game.json)"
+                        onClick={() => setEditing(p.id)}
+                      >
+                        <Pencil size={12} />
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 <p className="text-xs text-muted-foreground">окно захвата · LIVE</p>
               </CardHeader>
@@ -316,7 +364,7 @@ export default function LibraryPage() {
         {games
           .filter(
             (g) =>
-              tab !== 'afk' &&
+              ['all', 'free', 'paid'].includes(tab) &&
               (tab === 'all' || (tab === 'free' ? g.is_free : !g.is_free))
           )
           .map((g) => {
@@ -418,7 +466,23 @@ export default function LibraryPage() {
             Самоиграющих игр нет — пометь папку флагом «afk»: true в game.json.
           </p>
         )}
+        {sections.includes(tab) && packs.every((p) => p.section !== tab) && (
+          <p className="text-sm text-muted-foreground col-span-full">
+            В разделе «{tab}» пусто — привяжи игру полем «section» в game.json
+            или через редактор (карандаш на карточке).
+          </p>
+        )}
       </div>
+      {editing && (
+        <GameEditDialog
+          gameId={editing}
+          sections={sections}
+          onClose={(changed) => {
+            setEditing(null);
+            if (changed) refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

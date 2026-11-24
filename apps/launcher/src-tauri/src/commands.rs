@@ -752,6 +752,117 @@ pub async fn game_results(state: State<'_, AppState>) -> Result<Value, String> {
     Ok(crate::builtin_games::results_view(&state.games))
 }
 
+/// Effective manifest of a pack for the library's manifest editor —
+/// `{id, dir_name, user_pack, overridden, manifest}` where `manifest` is
+/// the merged view (user patch over bundled defaults).
+#[tauri::command]
+pub async fn pack_manifest(game_id: String, state: State<'_, AppState>) -> Result<Value, String> {
+    let pack = crate::game_packs::find(&game_id, &state.data_dir).ok_or("UNKNOWN_GAME")?;
+    Ok(json!({
+        "id": pack.id,
+        "dir_name": pack.dir_name,
+        "user_pack": pack.user,
+        "overridden": pack.overridden,
+        "manifest": crate::game_packs::manifest_json(&pack),
+    }))
+}
+
+/// Type/shape checks for an editor-supplied manifest before it is
+/// persisted. `id` is excluded — it is force-bound to the pack on save.
+fn validate_pack_manifest(v: &Value) -> Result<(), String> {
+    let o = v.as_object().ok_or("manifest must be a JSON object")?;
+    let str_cap = |k: &str, max: usize| -> Result<(), String> {
+        match o.get(k) {
+            None | Some(Value::Null) => Ok(()),
+            Some(s) if s.is_string() && s.as_str().unwrap().chars().count() <= max => Ok(()),
+            _ => Err(format!("{k}: string ≤ {max} chars")),
+        }
+    };
+    str_cap("title", 120)?;
+    str_cap("desc", 500)?;
+    str_cap("page", 128)?;
+    str_cap("icon", 128)?;
+    str_cap("tts", 64)?;
+    str_cap("section", 64)?;
+    match o.get("type") {
+        None | Some(Value::Null) => {}
+        Some(s) if s.as_str() == Some("pack") || s.as_str() == Some("remote") => {}
+        _ => return Err("type: \"pack\" | \"remote\"".into()),
+    }
+    for k in ["hidden", "afk"] {
+        if let Some(b) = o.get(k) {
+            if !b.is_boolean() && !b.is_null() {
+                return Err(format!("{k}: boolean"));
+            }
+        }
+    }
+    if let Some(w) = o.get("window") {
+        let w = w.as_object().ok_or("window: object {w,h}")?;
+        for k in ["w", "h"] {
+            if let Some(n) = w.get(k) {
+                if !n.is_number() {
+                    return Err(format!("window.{k}: number"));
+                }
+            }
+        }
+    }
+    if let Some(n) = o.get("round_sec") {
+        if !n.is_u64() {
+            return Err("round_sec: non-negative integer".into());
+        }
+    }
+    if let Some(n) = o.get("volume") {
+        if !n.is_number() {
+            return Err("volume: number".into());
+        }
+    }
+    if let Some(l) = o.get("launch") {
+        if !l.is_object() {
+            return Err("launch: object".into());
+        }
+    }
+    if let Some(r) = o.get("rules") {
+        crate::builtin_games::validate_cfg(&json!({ "rules": r }))?;
+    }
+    Ok(())
+}
+
+/// Saves an edited manifest as a user-side patch: `game.json` lands in
+/// `<data>/games/<dir_name>` — fields left out inherit bundled values
+/// (see `game_packs::merged_over`). Emits `catalog-changed`.
+#[tauri::command]
+pub async fn save_pack_manifest(
+    game_id: String,
+    manifest: Value,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let pack = crate::game_packs::find(&game_id, &state.data_dir).ok_or("UNKNOWN_GAME")?;
+    validate_pack_manifest(&manifest)?;
+    let mut m = manifest;
+    // The id binds the patch to this pack — it is not user-editable.
+    m["id"] = json!(pack.id);
+    let path = crate::game_packs::write_user_manifest(&state.data_dir, &pack.dir_name, &m)
+        .map_err(|e| e.to_string())?;
+    let _ = app.emit("catalog-changed", ());
+    Ok(json!({ "ok": true, "path": path.to_string_lossy() }))
+}
+
+/// Deletes the user manifest patching `game_id` — the bundled defaults
+/// are restored. `NO_OVERRIDE` when nothing user-side exists.
+#[tauri::command]
+pub async fn reset_pack_manifest(
+    game_id: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    if !crate::game_packs::reset_user_manifest(&state.data_dir, &game_id) {
+        return Err("NO_OVERRIDE".into());
+    }
+    let _ = app.emit("catalog-changed", ());
+    Ok(json!({ "ok": true }))
+}
+
 /// TEST billing: grants/extends one billing period of `plan_code`.
 #[tauri::command]
 pub async fn mock_pay(

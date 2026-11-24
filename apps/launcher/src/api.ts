@@ -815,6 +815,22 @@ export const gameSetCfg = (gameId: string, cfg: BuiltinGameCfg) =>
   cmd<{ cfg: BuiltinGameCfg }>('game_set_cfg', { gameId, cfg });
 export const gameResults = () => cmd<{ results: GameResult[] }>('game_results');
 
+/** Effective manifest of a pack — the manifest editor's starting point. */
+export const packManifest = (gameId: string) =>
+  cmd<{
+    id: string;
+    dir_name: string;
+    user_pack: boolean;
+    overridden: boolean;
+    manifest: Record<string, unknown>;
+  }>('pack_manifest', { gameId });
+/** Saves an edited manifest as a user-side patch over the pack. */
+export const savePackManifest = (gameId: string, manifest: Record<string, unknown>) =>
+  cmd<{ ok: boolean; path: string }>('save_pack_manifest', { gameId, manifest });
+/** Removes the user manifest patch — bundled defaults are restored. */
+export const resetPackManifest = (gameId: string) =>
+  cmd<{ ok: boolean }>('reset_pack_manifest', { gameId });
+
 // --- EFIR stream timer (efirtimer.rs) -----------------------------------------
 export const efirtimerStatus = () =>
   cmd<import('./types').EfirTimerStatus>('efirtimer_status');
