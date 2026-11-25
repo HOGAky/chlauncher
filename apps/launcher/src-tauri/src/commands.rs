@@ -2511,6 +2511,40 @@ pub async fn open_overlay_window(
     Ok(())
 }
 
+/// Native file picker for pack constructor pages. The overlay windows
+/// are always-on-top and borderless, which makes WebView2's own
+/// `<input type=file>` dialog unreliable (it can open behind the
+/// window) — the gamekit dev panel calls this via `__TAURI__` instead.
+/// Returns `{name, data_b64}` or `null` on cancel; the caller uploads
+/// through the existing write-token `/games/asset` route.
+#[tauri::command]
+pub async fn pick_file_base64(
+    filter_name: String,
+    filter_exts: Vec<String>,
+    app: AppHandle,
+) -> Result<Option<serde_json::Value>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let exts: Vec<&str> = filter_exts.iter().map(|s| s.as_str()).collect();
+    let Some(picked) = app
+        .dialog()
+        .file()
+        .add_filter(&filter_name, &exts)
+        .blocking_pick_file()
+    else {
+        return Ok(None);
+    };
+    let path = picked.as_path().ok_or("picked file is not a local path")?;
+    let data = std::fs::read(path).map_err(|e| e.to_string())?;
+    if data.len() > 64 * 1024 * 1024 {
+        return Err("FILE_TOO_LARGE".into());
+    }
+    use base64::Engine;
+    Ok(Some(serde_json::json!({
+        "name": path.file_name().and_then(|n| n.to_str()).unwrap_or("file"),
+        "data_b64": base64::engine::general_purpose::STANDARD.encode(&data),
+    })))
+}
+
 /// Closes a capture window previously opened by `open_overlay_window`.
 #[tauri::command]
 pub async fn close_overlay_window(page: String, app: AppHandle) -> Result<(), String> {

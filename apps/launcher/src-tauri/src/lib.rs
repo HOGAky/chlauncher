@@ -809,6 +809,7 @@ pub fn run() {
             commands::regenerate_adapter_key,
             commands::open_overlay_window,
             commands::close_overlay_window,
+            commands::pick_file_base64,
             commands::get_goals,
             commands::save_goals,
             commands::reset_goals,
