@@ -174,6 +174,7 @@
 
   const $ = id => document.getElementById(id);
   const _q = new URLSearchParams(location.search);
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const socket = io();
 
   socket.on('state', s => {
@@ -182,7 +183,7 @@
     $('total').textContent = m.total.toLocaleString('ru-RU');
 
     if (m.image) { $('giftImg').src = m.image; $('giftImg').style.display='block'; $('giftPh').style.display='none'; }
-    else { $('giftImg').style.display='none'; $('giftPh').style.display='flex'; $('giftPh').innerHTML = 'ждём<br>'+m.gift+'…'; }
+    else { $('giftImg').style.display='none'; $('giftPh').style.display='flex'; $('giftPh').innerHTML = 'ждём<br>'+esc(m.gift)+'…'; }
 
     if (m.king) {
       $('kingAva').src = m.king.avatar || 'https://api.dicebear.com/9.x/thumbs/png?seed='+encodeURIComponent(m.king.nickname);

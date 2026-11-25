@@ -140,11 +140,24 @@ const BASIC =
   'Basic ' + Buffer.from('testshop:testsecret').toString('base64');
 
 /** Inserts a pending yookassa payment row (what /checkout creates). */
-function pendingPayment(userId, externalId, days = 30) {
+function pendingPayment(userId, externalId, days = 30, amountMinor = null) {
   db.prepare(
-    `INSERT INTO payments (user_id, provider, external_id, days, status, created_at)
-     VALUES (?, 'yookassa', ?, ?, 'pending', ?)`
-  ).run(userId, externalId, days, new Date().toISOString());
+    `INSERT INTO payments
+       (user_id, provider, external_id, days, status, amount_minor, currency, created_at)
+     VALUES (?, 'yookassa', ?, ?, 'pending', ?, 'RUB', ?)`
+  ).run(userId, externalId, days, amountMinor, new Date().toISOString());
+}
+
+/** A realistic YooKassa `payment.succeeded` notification object. */
+function ykObject(id, { amountMinor = 29900, currency = 'RUB' } = {}) {
+  return {
+    id,
+    status: 'succeeded',
+    paid: true,
+    amount: { value: (amountMinor / 100).toFixed(2), currency },
+    created_at: new Date().toISOString(),
+    captured_at: new Date().toISOString(),
+  };
 }
 
 function webhook(body, headers = {}) {
@@ -161,7 +174,7 @@ test('webhook: valid signature -> succeeded -> +30 days', async () => {
   pendingPayment(user.id, 'yk-ok-1');
 
   const res = await webhook(
-    { event: 'payment.succeeded', object: { id: 'yk-ok-1' } },
+    { event: 'payment.succeeded', object: ykObject('yk-ok-1') },
     { authorization: BASIC }
   );
   assert.equal(res.statusCode, 200);
@@ -176,10 +189,54 @@ test('webhook: valid signature -> succeeded -> +30 days', async () => {
   assert.equal(pay.status, 'succeeded');
 });
 
+test('webhook: object missing paid/status is not granted', async () => {
+  const { user } = await register('wh-unpaid@example.com');
+  pendingPayment(user.id, 'yk-unpaid-1');
+  const res = await webhook(
+    { event: 'payment.succeeded', object: { id: 'yk-unpaid-1' } },
+    { authorization: BASIC }
+  );
+  assert.equal(res.statusCode, 200); // acked, but no grant
+  assert.equal(
+    db.prepare('SELECT status FROM payments WHERE external_id = ?').get('yk-unpaid-1').status,
+    'pending'
+  );
+  assert.equal(
+    db.prepare('SELECT status FROM subscriptions WHERE user_id = ?').get(user.id).status,
+    'expired'
+  );
+});
+
+test('webhook: amount mismatch is rejected (integer minor units)', async () => {
+  const { user } = await register('wh-amt@example.com');
+  pendingPayment(user.id, 'yk-amt-1', 30, 29900);
+  await webhook(
+    { event: 'payment.succeeded', object: ykObject('yk-amt-1', { amountMinor: 100 }) },
+    { authorization: BASIC }
+  );
+  assert.equal(
+    db.prepare('SELECT status FROM payments WHERE external_id = ?').get('yk-amt-1').status,
+    'pending'
+  );
+  assert.equal(
+    db.prepare('SELECT status FROM subscriptions WHERE user_id = ?').get(user.id).status,
+    'expired'
+  );
+  // …and a correct retry still applies.
+  await webhook(
+    { event: 'payment.succeeded', object: ykObject('yk-amt-1', { amountMinor: 29900 }) },
+    { authorization: BASIC }
+  );
+  assert.equal(
+    db.prepare('SELECT status FROM payments WHERE external_id = ?').get('yk-amt-1').status,
+    'succeeded'
+  );
+});
+
 test('webhook: duplicate succeeded does not double-grant days', async () => {
   const { user } = await register('wh2@example.com');
   pendingPayment(user.id, 'yk-dup-1');
-  const evt = { event: 'payment.succeeded', object: { id: 'yk-dup-1' } };
+  const evt = { event: 'payment.succeeded', object: ykObject('yk-dup-1') };
   await webhook(evt, { authorization: BASIC });
   const end1 = db
     .prepare('SELECT current_period_end FROM subscriptions WHERE user_id = ?')
@@ -191,11 +248,58 @@ test('webhook: duplicate succeeded does not double-grant days', async () => {
   assert.equal(end1, end2);
 });
 
+test('webhook: refund revokes the granted period', async () => {
+  const { user } = await register('wh-refund@example.com');
+  pendingPayment(user.id, 'yk-refund-1', 30, 29900);
+  await webhook(
+    { event: 'payment.succeeded', object: ykObject('yk-refund-1') },
+    { authorization: BASIC }
+  );
+  assert.equal(
+    db.prepare('SELECT status FROM subscriptions WHERE user_id = ?').get(user.id).status,
+    'active'
+  );
+  const res = await webhook(
+    {
+      event: 'refund.succeeded',
+      object: {
+        id: 'rf-1',
+        payment_id: 'yk-refund-1',
+        status: 'succeeded',
+        amount: { value: '299.00', currency: 'RUB' },
+      },
+    },
+    { authorization: BASIC }
+  );
+  assert.equal(res.statusCode, 200);
+  assert.equal(
+    db.prepare('SELECT status FROM payments WHERE external_id = ?').get('yk-refund-1').status,
+    'refunded'
+  );
+  // The 30 granted days are clawed back → the subscription expires now.
+  const sub = db
+    .prepare('SELECT status FROM subscriptions WHERE user_id = ?')
+    .get(user.id);
+  assert.equal(sub.status, 'expired');
+  // A second refund notification is a no-op.
+  await webhook(
+    {
+      event: 'refund.succeeded',
+      object: { id: 'rf-2', payment_id: 'yk-refund-1', status: 'succeeded', amount: { value: '299.00', currency: 'RUB' } },
+    },
+    { authorization: BASIC }
+  );
+  assert.equal(
+    db.prepare('SELECT status FROM subscriptions WHERE user_id = ?').get(user.id).status,
+    'expired'
+  );
+});
+
 test('webhook: invalid signature -> 401, subscription untouched', async () => {
   const { user } = await register('wh3@example.com');
   pendingPayment(user.id, 'yk-bad-1');
   const res = await webhook(
-    { event: 'payment.succeeded', object: { id: 'yk-bad-1' } },
+    { event: 'payment.succeeded', object: ykObject('yk-bad-1') },
     { authorization: 'Basic ' + Buffer.from('testshop:wrong').toString('base64') }
   );
   assert.equal(res.statusCode, 401);
@@ -216,6 +320,29 @@ test('webhook: canceled marks the payment failed, no grant', async () => {
   assert.equal(
     db.prepare('SELECT status FROM payments WHERE external_id = ?').get('yk-cancel-1').status,
     'failed'
+  );
+});
+
+test('webhook: unknown payment is journaled, then applied on order arrival', async () => {
+  const { user } = await register('wh-race@example.com');
+  // Webhook beats the checkout response — the provider id isn't stored
+  // yet, so the event is journaled unmatched…
+  await webhook(
+    { event: 'payment.succeeded', object: ykObject('yk-race-1') },
+    { authorization: BASIC }
+  );
+  const journaled = db
+    .prepare("SELECT * FROM billing_events WHERE provider = 'yookassa' AND external_id = 'yk-race-1'")
+    .get();
+  assert.ok(journaled);
+  assert.equal(journaled.applied, 0);
+  // …and replayed once the pending row carries the provider id.
+  pendingPayment(user.id, 'yk-race-1');
+  const { replayUnmatchedYookassa } = await import('../src/routes/billing.js');
+  replayUnmatchedYookassa(db);
+  assert.equal(
+    db.prepare('SELECT status FROM subscriptions WHERE user_id = ?').get(user.id).status,
+    'active'
   );
 });
 

@@ -56,7 +56,7 @@ async fn java_major(exe: &Path) -> Option<u32> {
     let major = if v.starts_with("1.") {
         v.split('.').nth(1)?.parse().ok()?
     } else {
-        v.split(|c: char| c == '.' || c == '+' || c == '-')
+        v.split(['.', '+', '-'])
             .next()?
             .parse()
             .ok()?
@@ -282,28 +282,12 @@ fn hex_sha256(bytes: &[u8]) -> String {
         .collect()
 }
 
-/// Extracts a zip archive (used for the JRE bundle — STORE/DEFLATE).
+/// Extracts a zip archive (used for the JRE bundle — STORE/DEFLATE)
+/// through the shared bounded extractor (§P0.7: traversal, bomb and
+/// entry-count limits; the archive is third-party bytes).
 fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
     let file = std::fs::File::open(zip_path).map_err(|e| e.to_string())?;
-    let mut zip = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
-    for i in 0..zip.len() {
-        let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
-        // Path-traversal guard — zips are third-party bytes.
-        let Some(name) = entry.enclosed_name().map(|p| p.to_owned()) else {
-            continue;
-        };
-        let out = dest.join(&name);
-        if entry.is_dir() {
-            std::fs::create_dir_all(&out).map_err(|e| e.to_string())?;
-        } else {
-            if let Some(p) = out.parent() {
-                std::fs::create_dir_all(p).map_err(|e| e.to_string())?;
-            }
-            let mut f = std::fs::File::create(&out).map_err(|e| e.to_string())?;
-            std::io::copy(&mut entry, &mut f).map_err(|e| e.to_string())?;
-        }
-    }
-    Ok(())
+    crate::downloads::extract_zip_reader(file, dest).map_err(|e| e.to_string())
 }
 
 /// Depth-first search for `name` inside `dir` (the JRE zip nests under

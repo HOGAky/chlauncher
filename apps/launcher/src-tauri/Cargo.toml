@@ -40,6 +40,9 @@ tauri-plugin-dialog = "2"
 # Downloads game zips and talks to the licensing REST API.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
+# OS credential store for secrets (§P0.5) — Windows Credential Manager
+# (DPAPI-backed) here, Keychain/Secret Service elsewhere.
+keyring = { version = "3", default-features = false, features = ["windows-native"] }
 # OS-level machine GUID → the HWID bound to the subscription.
 machine-uid = "0.5"
 uuid = { version = "1", features = ["v4"] }

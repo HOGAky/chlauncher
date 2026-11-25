@@ -148,7 +148,8 @@
   }
   addEventListener('resize', fit); fit();
 
-  const fmt = n => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : String(n);
+  const fmt = n => { n = Math.floor(Number(n)) || 0; return n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : String(n); };
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const socket = io();
   const medals = ['r1','r2','r3'];
 
@@ -161,8 +162,8 @@
     document.getElementById('rows').innerHTML = s.likes.top.map((u,i)=>`
       <div class="lb-row ${medals[i]}">
         <div class="rank">0${i+1}</div>
-        <img class="ava" src="${u.avatar||''}" onerror="this.src='https://api.dicebear.com/9.x/thumbs/png?seed=${encodeURIComponent(u.nickname)}'">
-        <div class="nick">${u.nickname}</div>
+        <img class="ava" src="${esc(u.avatar||'')}" onerror="this.src='https://api.dicebear.com/9.x/thumbs/png?seed=x'">
+        <div class="nick">${esc(u.nickname)}</div>
         <div class="cnt">${fmt(u.count)} <small>LIKES</small></div>
       </div>`).join('');
   });

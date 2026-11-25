@@ -1,0 +1,13 @@
+{
+  "name": "@chlauncher/tg-admin-bot",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Owner-only Telegram admin panel bot for chlauncher",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=22.5"
+  }
+}

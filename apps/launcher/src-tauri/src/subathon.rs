@@ -335,6 +335,7 @@ mod tests {
             is_moderator: false,
             is_superfan: false,
             ts_ms: 0,
+            event_id: String::new(),
         }
     }
 

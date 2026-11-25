@@ -117,10 +117,13 @@
 (function(){
   const Q = new URLSearchParams(location.search);
   const token = Q.get('t') || '';
+  const wtoken = Q.get('w') || '';
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   // Управление — POST /timer/cmd на оверлей-сервере (внешняя страница,
   // __TAURI__ тут недоступен; в Tauri-окне и в OBS работает одинаково).
+  // Пульт — write-scope: URL пульта несёт `w`, read-only виджеты — нет.
   const cmd = (action, extra) =>
-    fetch('/timer/cmd?t=' + encodeURIComponent(token), {
+    fetch('/timer/cmd?w=' + encodeURIComponent(wtoken), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(Object.assign({ action }, extra || {})),
     }).catch(() => {});
@@ -128,7 +131,7 @@
   const fmtT = s => { s=Math.max(0,Math.floor(s));
     return String(Math.floor(s/3600)).padStart(2,'0')+':'+
            String(Math.floor(s/60)%60).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); };
-  const fmtK = n => n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1)+'K':String(n);
+  const fmtK = n => { n=Math.floor(Number(n))||0; return n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(1)+'K':String(n); };
 
   let state=null, cfg=null;
   const manual = (action,secs,rouletteId)=>cmd(action,{secs,rouletteId});
@@ -188,7 +191,7 @@
     // кошельки
     const w = s.wallets||[];
     el('topWallets').innerHTML = w.length
-      ? w.slice(0,6).map(x=>`<div><span>${x.user}</span><b>${fmtK(x.balance)}</b></div>`).join('')
+      ? w.slice(0,6).map(x=>`<div><span>${esc(x.user)}</span><b>${fmtK(x.balance)}</b></div>`).join('')
       : '<div><span>—</span><b>0</b></div>';
     // карты
     const card = s.__card;

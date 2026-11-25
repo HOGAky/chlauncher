@@ -84,7 +84,7 @@
     const el = document.createElement('div');
     el.className = 'msg';
     el.innerHTML = `
-      <img class="m-ava" src="${d.avatar || 'https://api.dicebear.com/9.x/thumbs/png?seed='+encodeURIComponent(d.nickname||'x')}">
+      <img class="m-ava" src="${esc(d.avatar || 'https://api.dicebear.com/9.x/thumbs/png?seed='+encodeURIComponent(d.nickname||'x'))}">
       <div class="m-body">
         <div class="m-nick">${esc(d.nickname||'???')}</div>
         <div class="m-text">${esc(d.comment||'')}</div>

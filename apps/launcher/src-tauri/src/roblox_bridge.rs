@@ -174,7 +174,8 @@ impl RobloxBridge {
         let v4 = match TcpListener::bind(("127.0.0.1", port)).await {
             Ok(l) => l,
             Err(e) => {
-                let msg = format!("порт {port} занят ({e}) — закройте старый relay или смените порт");
+                let msg =
+                    format!("порт {port} занят ({e}) — закройте старый relay или смените порт");
                 *self.error.lock().unwrap_or_else(|p| p.into_inner()) = Some(msg.clone());
                 return Err(msg);
             }
@@ -236,6 +237,48 @@ impl RobloxBridge {
     }
 }
 
+/// DNS-rebinding / CSRF guard (§P0.6): browsers can reach loopback
+/// listeners under an attacker-controlled hostname — require a loopback
+/// `Host` and, when present, a loopback/`tauri.localhost` `Origin`.
+/// Roblox HttpService sends neither custom Host names nor Origin, so
+/// this changes nothing for the real client.
+async fn guard_loopback(req: axum::extract::Request, next: axum::middleware::Next) -> Response {
+    fn host_is_loopback(host_header: &str) -> bool {
+        let host = host_header
+            .trim_start_matches('[')
+            .split([':', ']'])
+            .next()
+            .unwrap_or("");
+        matches!(host, "127.0.0.1" | "localhost" | "::1")
+    }
+    let host_ok = req
+        .headers()
+        .get(axum::http::header::HOST)
+        .and_then(|v| v.to_str().ok())
+        .map(host_is_loopback)
+        .unwrap_or(false);
+    if !host_ok {
+        return fail(StatusCode::FORBIDDEN, "loopback_host_required");
+    }
+    if let Some(origin) = req
+        .headers()
+        .get(axum::http::header::ORIGIN)
+        .and_then(|v| v.to_str().ok())
+    {
+        let oh = origin
+            .split("://")
+            .nth(1)
+            .unwrap_or("")
+            .split('/')
+            .next()
+            .unwrap_or("");
+        if !(host_is_loopback(oh) || oh == "tauri.localhost") {
+            return fail(StatusCode::FORBIDDEN, "foreign_origin");
+        }
+    }
+    next.run(req).await
+}
+
 fn router(sh: Arc<Shared>) -> Router {
     Router::new()
         .route(
@@ -248,6 +291,7 @@ fn router(sh: Arc<Shared>) -> Router {
         .route("/api/stream/release", post(release))
         .route("/api/stream/validate", post(validate))
         .route("/api/stream/redeem", post(redeem))
+        .layer(axum::middleware::from_fn(guard_loopback))
         .with_state(sh)
 }
 
@@ -262,11 +306,18 @@ fn ok() -> Response {
 
 /// Constant-time compare — the key doubles as the room pass.
 fn key_eq(a: &str, b: &str) -> bool {
-    a.len() == b.len() && a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+    a.len() == b.len()
+        && a.bytes()
+            .zip(b.bytes())
+            .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+            == 0
 }
 
 /// Key from `X-Stream-Key`, `?key=` or `body.stream_key` (relay order)
 /// against the launcher's own `forward.stream_key`.
+// Err is an early axum response — idiomatic for middleware-style
+// guards; boxing it would only add an indirection per rejection.
+#[allow(clippy::result_large_err)]
 async fn authorize(
     sh: &Shared,
     headers: &HeaderMap,
@@ -307,7 +358,10 @@ async fn events(
     if let Err(r) = authorize(&sh, &headers, &q, &Value::Null).await {
         return r;
     }
-    let since = q.get("since").and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
+    let since = q
+        .get("since")
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(0);
     let mut room = sh.room();
     room.last_poll_ms = Some(crate::types::now_ms());
     let events = room.since(since);
@@ -404,10 +458,7 @@ async fn validate(
 /// key and binds the uid, letting Studio exercise the same
 /// launchData→redeem code path the production game uses. Dev-mode only —
 /// the bridge itself never runs for regular users.
-async fn redeem(
-    State(sh): State<Arc<Shared>>,
-    body: Bytes,
-) -> Response {
+async fn redeem(State(sh): State<Arc<Shared>>, body: Bytes) -> Response {
     let body = parse(&body);
     let ticket = body.get("ticket").and_then(Value::as_str).unwrap_or("");
     if ticket.is_empty() {
@@ -431,9 +482,7 @@ async fn redeem(
     {
         let mut room = sh.room();
         match &room.bound_user_id {
-            Some(cur) if cur != &uid => {
-                return fail(StatusCode::CONFLICT, "bound_to_other_user")
-            }
+            Some(cur) if cur != &uid => return fail(StatusCode::CONFLICT, "bound_to_other_user"),
             _ => room.bound_user_id = Some(uid.clone()),
         }
     }
@@ -499,17 +548,26 @@ mod tests {
                 .send()
         };
 
-        let r = post("/api/stream/validate", json!({"stream_key": "nope", "roblox_user_id": 1}))
-            .await
-            .unwrap();
+        let r = post(
+            "/api/stream/validate",
+            json!({"stream_key": "nope", "roblox_user_id": 1}),
+        )
+        .await
+        .unwrap();
         assert_eq!(r.status(), 401);
-        let r = post("/api/stream/validate", json!({"stream_key": "sk_test", "roblox_user_id": 111}))
-            .await
-            .unwrap();
+        let r = post(
+            "/api/stream/validate",
+            json!({"stream_key": "sk_test", "roblox_user_id": 111}),
+        )
+        .await
+        .unwrap();
         assert_eq!(r.status(), 200);
-        let r = post("/api/stream/validate", json!({"stream_key": "sk_test", "roblox_user_id": 222}))
-            .await
-            .unwrap();
+        let r = post(
+            "/api/stream/validate",
+            json!({"stream_key": "sk_test", "roblox_user_id": 222}),
+        )
+        .await
+        .unwrap();
         assert_eq!(r.status(), 409);
 
         // The ticket-redeem path hands back the same dev key the server
@@ -523,7 +581,12 @@ mod tests {
         assert_eq!(r.status(), 200);
         assert_eq!(r.json::<Value>().await.unwrap()["stream_key"], "sk_test");
 
-        let claim = |job: &str| post("/api/stream/claim", json!({"stream_key": "sk_test", "job_id": job}));
+        let claim = |job: &str| {
+            post(
+                "/api/stream/claim",
+                json!({"stream_key": "sk_test", "job_id": job}),
+            )
+        };
         assert_eq!(claim("studio-1").await.unwrap().status(), 200);
         assert_eq!(claim("other").await.unwrap().status(), 409);
 
@@ -553,7 +616,9 @@ mod tests {
         assert_eq!(body["events"][0]["type"], "event");
         let cursor = body["cursor"].as_u64().unwrap();
         let again: Value = http
-            .get(format!("{base}/api/stream/events?key=sk_test&since={cursor}"))
+            .get(format!(
+                "{base}/api/stream/events?key=sk_test&since={cursor}"
+            ))
             .send()
             .await
             .unwrap()
@@ -562,9 +627,12 @@ mod tests {
             .unwrap();
         assert_eq!(again["events"].as_array().unwrap().len(), 0);
 
-        let r = post("/api/stream/release", json!({"stream_key": "sk_test", "job_id": "studio-1"}))
-            .await
-            .unwrap();
+        let r = post(
+            "/api/stream/release",
+            json!({"stream_key": "sk_test", "job_id": "studio-1"}),
+        )
+        .await
+        .unwrap();
         assert_eq!(r.status(), 200);
         assert_eq!(claim("other").await.unwrap().status(), 200);
 

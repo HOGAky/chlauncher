@@ -163,6 +163,7 @@ impl ViewerQueue {
             is_moderator: false,
             is_superfan: false,
             ts_ms: crate::types::now_ms(),
+            event_id: String::new(),
         };
         // Full ingest channel: the caller still gets the viewer — the
         // trigger rule just won't fire this round.
@@ -199,6 +200,7 @@ mod tests {
             is_moderator: false,
             is_superfan: false,
             ts_ms: 0,
+            event_id: String::new(),
         }
     }
 

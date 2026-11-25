@@ -213,6 +213,12 @@ pub struct SapiEngine {
     voice_cache: Mutex<Option<Vec<TtsVoice>>>,
 }
 
+impl Default for SapiEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SapiEngine {
     pub fn new() -> Self {
         Self {
@@ -315,17 +321,14 @@ impl TtsEngine for SapiEngine {
                 if let Ok(mut f) = std::fs::File::create(&text_path) {
                     let _ = f.write_all(strip_laugh_markers(&spec.text).as_bytes());
                 }
-                let script = format!(
-                    "{}{}",
-                    SapiEngine::prelude(&spec.voice, rate, volume),
-                    format!(
-                        "$t = [IO.File]::ReadAllText('{}', [Text.Encoding]::UTF8)\n\
-                         $s.SetOutputToWaveFile('{}')\n\
-                         $s.Speak($t)\n$s.Dispose()\n",
-                        ps_quote(&text_path.to_string_lossy()),
-                        ps_quote(&wp2.to_string_lossy()),
-                    )
+                let speak = format!(
+                    "$t = [IO.File]::ReadAllText('{}', [Text.Encoding]::UTF8)\n\
+                     $s.SetOutputToWaveFile('{}')\n\
+                     $s.Speak($t)\n$s.Dispose()\n",
+                    ps_quote(&text_path.to_string_lossy()),
+                    ps_quote(&wp2.to_string_lossy()),
                 );
+                let script = SapiEngine::prelude(&spec.voice, rate, volume) + &speak;
                 let r = run_ps(&script, Some(&slot));
                 let _ = std::fs::remove_file(&text_path);
                 r.and_then(|_| std::fs::read(&wp2).map_err(|e| e.to_string()))
@@ -749,6 +752,12 @@ async fn edge_synth(spec: &SpeechSpec) -> Result<Vec<u8>, String> {
         .map_err(|_| "edge synth: таймаут 30с".to_string())?
 }
 
+impl Default for EdgeEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EdgeEngine {
     pub fn new() -> Self {
         Self {
@@ -1140,9 +1149,10 @@ impl PiperEngine {
             .await
             .map_err(|e| format!("piper download: {e}"))?;
         tokio::task::spawn_blocking(move || {
-            let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes))
-                .map_err(|e| format!("piper zip: {e}"))?;
-            zip.extract(&dir).map_err(|e| format!("piper unzip: {e}"))
+            // §P0.7: shared bounded extractor — the release zip is
+            // third-party bytes; traversal/bomb limits apply to it too.
+            crate::downloads::extract_zip_reader(std::io::Cursor::new(bytes), &dir)
+                .map_err(|e| format!("piper unzip: {e}"))
         })
         .await
         .map_err(|e| e.to_string())??;
@@ -1201,10 +1211,10 @@ fn wav_scale_volume(data: &mut [u8], volume: f32) {
             as usize;
         if tag == b"data" {
             let end = (pos + 8 + size).min(data.len());
-            for chunk in data[pos + 8..end].chunks_exact_mut(2) {
-                let s = i16::from_le_bytes([chunk[0], chunk[1]]);
+            for chunk in data[pos + 8..end].as_chunks_mut::<2>().0 {
+                let s = i16::from_le_bytes(*chunk);
                 let v = (s as f32 * volume).round().clamp(-32768.0, 32767.0) as i16;
-                chunk.copy_from_slice(&v.to_le_bytes());
+                *chunk = v.to_le_bytes();
             }
             return;
         }
@@ -1549,6 +1559,7 @@ fn silero_gender(s: &str) -> &'static str {
 
 /// Silero TTS — локальные нейроголоса через Python-сервер
 /// (tools/rvc-server, эндпоинт /tts). spec.voice = имя спикера.
+#[derive(Default)]
 pub struct SileroEngine;
 
 impl SileroEngine {
@@ -1700,6 +1711,12 @@ pub struct GeminiEngine {
     /// переполняет его и ловит бесконечные 429. Ограничитель держит
     /// ≥4.2 с между запросами и снимает проблему структурно.
     last_req: Mutex<Option<Instant>>,
+}
+
+impl Default for GeminiEngine {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl GeminiEngine {
@@ -1936,7 +1953,7 @@ impl Player {
         self.tx
             .send(PlayerMsg::Play(bytes, volume, tx))
             .map_err(|_| "player dead".to_string())?;
-        rx.await.unwrap_or_else(|_| Ok(()))
+        rx.await.unwrap_or(Ok(()))
     }
 
     fn stop(&self) {
@@ -2126,7 +2143,7 @@ fn grandpa_text(text: &str, _laugh: &str) -> String {
     out.push_str(text);
     if qchance(&mut r, 30) {
         out = out.trim_end().trim_end_matches('.').to_string();
-        out.push_str("…");
+        out.push('…');
     }
     out
 }
@@ -2203,11 +2220,14 @@ fn is_ru_voice(voice: &str) -> bool {
 // Shared service
 // ---------------------------------------------------------------------------
 
+/// Stored clip: (file extension, bytes).
+type WavEntry = (&'static str, Vec<u8>);
+
 /// Synthesized clips for `output = "overlay"`, served at
 /// `/tts/<id>.<ext>` (bounded — oldest evicted).
 #[derive(Clone, Default)]
 pub struct WavStore {
-    map: Arc<Mutex<HashMap<String, (&'static str, Vec<u8>)>>>,
+    map: Arc<Mutex<HashMap<String, WavEntry>>>,
     order: Arc<Mutex<VecDeque<String>>>,
 }
 
@@ -2409,9 +2429,7 @@ impl Tts {
         }
         // §6.5 — blacklist vetoes everything from this viewer; матч
         // идёт и по nickname, и по стабильному uniqueId (@username).
-        if user_in_list(&cfg.blacklist, &raw.user)
-            || user_in_list(&cfg.blacklist, &raw.unique_id)
-        {
+        if user_in_list(&cfg.blacklist, &raw.user) || user_in_list(&cfg.blacklist, &raw.unique_id) {
             return;
         }
         match raw.event_kind.as_str() {
@@ -2633,6 +2651,7 @@ impl Tts {
             is_moderator: false,
             is_superfan: false,
             ts_ms: crate::types::now_ms(),
+            event_id: String::new(),
         };
         self.fire_gift_rule(&rule, &raw).await;
     }
@@ -2735,7 +2754,7 @@ impl Tts {
                 .chars()
                 .filter(|c| {
                     let u = *c as u32;
-                    !(u >= 0x1F000 && u <= 0x1FAFF
+                    !((0x1F000..=0x1FAFF).contains(&u)
                         || (0x2600..=0x27BF).contains(&u)
                         || u == 0xFE0F
                         || (0x2190..=0x21FF).contains(&u))
@@ -2855,7 +2874,13 @@ impl Tts {
             let (voice, engine_id, cust_rate, cust_pitch, cust_style) = match cv {
                 Some(c) if c.engine == "rvc" => {
                     rvc_model = Some(c.base.to_string());
-                    (rvc_profile(c.base).base.to_string(), "silero", c.rate, c.pitch, c.style)
+                    (
+                        rvc_profile(c.base).base.to_string(),
+                        "silero",
+                        c.rate,
+                        c.pitch,
+                        c.style,
+                    )
                 }
                 Some(c) => (c.base.to_string(), c.engine, c.rate, c.pitch, c.style),
                 None => (voice.clone(), cfg.engine.as_str(), 1.0, 1.0, None),
@@ -3172,6 +3197,7 @@ mod tests {
             is_moderator: false,
             is_superfan: false,
             ts_ms: 0,
+            event_id: String::new(),
         }
     }
 
@@ -3259,7 +3285,9 @@ mod tests {
         // `VOICES=a,b,c` или дефолтный DmitryNeural).
         let mut voices: Vec<String> = std::env::var("VOICES")
             .map(|v| v.split(',').map(|s| s.trim().to_string()).collect())
-            .unwrap_or_else(|_| vec![std::env::var("VOICE").unwrap_or_else(|_| "ru-RU-DmitryNeural".into())]);
+            .unwrap_or_else(|_| {
+                vec![std::env::var("VOICE").unwrap_or_else(|_| "ru-RU-DmitryNeural".into())]
+            });
         for voice in voices.drain(..) {
             let spec = SpeechSpec {
                 text: "Привет, стрим!".into(),

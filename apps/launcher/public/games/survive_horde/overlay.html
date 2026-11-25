@@ -294,9 +294,9 @@ function draw() {
   document.getElementById('score').textContent = `${S.score} очков · волна ${S.wave}`;
   document.getElementById('timer').textContent = GameKit.fmtTime(S.roundLeft);
   document.getElementById('mods').innerHTML =
-    S.mods.map((m) => `${m.label} (${Math.ceil((m.until - Date.now()) / 1000)}с)`).join('<br>');
+    S.mods.map((m) => `${GameKit.esc(m.label)} (${Math.ceil((m.until - Date.now()) / 1000)}с)`).join('<br>');
   document.getElementById('board').innerHTML =
-    GameKit.leaderboard(S.supporters, 5).map((r, i) => `${i + 1}. ${r.user} — ${GameKit.fmtNum(r.score)}`).join('<br>');
+    GameKit.leaderboard(S.supporters, 5).map((r, i) => `${i + 1}. ${GameKit.esc(r.user)} — ${GameKit.fmtNum(r.score)}`).join('<br>');
 }
 
 async function main() {
@@ -330,7 +330,8 @@ async function main() {
   const s = document.createElement('script');
   s.src = '/gamekit.js?t=' + encodeURIComponent(new URLSearchParams(location.search).get('t') || '');
   s.onload = () => main().catch((e) => {
-    document.body.innerHTML = `<pre style="color:#f66;padding:20px">${e}</pre>`;
+    document.body.innerHTML = '<pre id="err" style="color:#f66;padding:20px"></pre>';
+    document.getElementById('err').textContent = String(e);
   });
   s.onerror = () => { document.body.innerHTML = '<pre style="color:#f66;padding:20px">gamekit: 403 — проверьте токен</pre>'; };
   document.head.appendChild(s);

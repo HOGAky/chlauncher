@@ -56,6 +56,35 @@ test('same payload re-fed inside the window does not duplicate (§15.2)', () => 
   assert.equal(e.pump().length, 1);
 });
 
+test('a stable upstream event_id dedupes regardless of timestamp (§15.2)', () => {
+  const e = new Engine(cfg([{ event: 'gift', match: {}, action: { type: 'add_block', value: 1 } }]));
+  const gift = ev({ coins: 5, count: 3, event_id: 'tt-12345' });
+  e.feed(gift);
+  // Re-delivery can arrive seconds later with a re-stamped ts — the
+  // provider id is authoritative, the ts window does not apply.
+  e.feed({ ...gift, ts_ms: gift.ts_ms + 60000 });
+  e.feed({ ...gift, ts_ms: gift.ts_ms - 60000 });
+  assert.equal(e.pump().length, 1);
+});
+
+test('a legit repeat beyond the replay window still fires (§15.2)', () => {
+  const e = new Engine(cfg([{ event: 'gift', match: {}, action: { type: 'add_block', value: 1 } }]));
+  const gift = ev({ coins: 1, count: 1 }); // two identical Roses…
+  e.feed(gift);
+  // …sent seconds apart are distinct events, not reconnect replays.
+  e.feed({ ...gift, ts_ms: gift.ts_ms + Engine.REPLAY_MS + 1 });
+  assert.equal(e.pump().length, 2);
+});
+
+test('different upstream ids with the same fingerprint are distinct', () => {
+  const e = new Engine(cfg([{ event: 'gift', match: {}, action: { type: 'add_block', value: 1 } }]));
+  const gift = ev({ coins: 5, count: 3, event_id: 'a1' });
+  e.feed(gift);
+  e.feed({ ...gift, event_id: 'a2' }); // second identical gift, new id
+  e.feed({ ...gift, event_id: 'a2' }); // …and its replay
+  assert.equal(e.pump().length, 2);
+});
+
 test('distinct gifts in the window all fire', () => {
   const e = new Engine(cfg([{ event: 'gift', match: {}, action: { type: 'add_block', value: 1 } }]));
   e.feed(ev({ user: 'a', coins: 1 }));

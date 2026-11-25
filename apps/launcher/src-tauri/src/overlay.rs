@@ -77,11 +77,16 @@ struct OverlayState {
     hub: Arc<EventHub>,
     /// Broadcast of scheduler overlay frames (alerts/spinner/progress…).
     frames: broadcast::Sender<OverlayFrame>,
-    /// Access token — every route requires `?t=` matching this. Shared
-    /// with `AppState` so `rotate_overlay_token` takes effect instantly
-    /// (a static copy would keep accepting the old token while the UI
-    /// already shows the new one — the rotation would be inverted).
+    /// Access token — read-scope routes require `?t=` matching this.
+    /// Shared with `AppState` so `rotate_overlay_token` takes effect
+    /// instantly (a static copy would keep accepting the old token while
+    /// the UI already shows the new one — the rotation would be inverted).
     token: Arc<std::sync::RwLock<String>>,
+    /// Write-scope token — mutating routes (`/games/report`, `/games/asset`,
+    /// `/tts/say`, `/timer/cmd`, `/overlay-close`) require `?w=` or
+    /// `X-Overlay-Token` matching this. A leaked OBS widget URL (read
+    /// scope only) then can't touch game sessions, TTS or windows (§P0.6).
+    write_token: Arc<std::sync::RwLock<String>>,
     /// Directory with bundled gift icons (`*.webp` + `gifts.json`).
     gifts_dir: Option<PathBuf>,
     /// `<app-data>/media` — files behind `/media/:id` (§4.1).
@@ -152,6 +157,24 @@ fn token_ok(given: Option<&str>, token: &std::sync::RwLock<String>) -> bool {
         (Some(g), Ok(exp)) => g == exp.as_str(),
         _ => false,
     }
+}
+
+/// `X-Overlay-Token` header — callers that can set headers (API clients,
+/// in-app fetches) keep the secret out of the URL: query strings leak
+/// into OBS scene configs, referrers and proxy logs (§P0.6).
+fn hdr_token(headers: &axum::http::HeaderMap) -> Option<&str> {
+    headers.get("x-overlay-token").and_then(|v| v.to_str().ok())
+}
+
+/// Write scope: `?w=` (pages opened by the launcher itself) or the
+/// `X-Overlay-Token` header must equal the write token.
+fn write_ok(
+    headers: &axum::http::HeaderMap,
+    q: &HashMap<String, String>,
+    st: &OverlayState,
+) -> bool {
+    token_ok(q.get("w").map(String::as_str), &st.write_token)
+        || token_ok(hdr_token(headers), &st.write_token)
 }
 
 /// URL the Browser Source should consume, given the bound port + token.
@@ -295,10 +318,87 @@ pub fn preset_frame(profile: &TriggerProfile) -> OverlayFrame {
 /// a stable Browser Source URL); on a bind failure the server falls back
 /// to an OS-assigned port and reports the fallback so the UI can warn.
 /// Returns (actual port, fell_back).
+/// DNS-rebinding / CSWSH guard applied to every overlay route (§P0.6).
+/// The listener is loopback-only, but a browser will still connect to it
+/// under an attacker-controlled hostname that resolves to 127.0.0.1 —
+/// the request then arrives "same-origin" to the malicious page.
+/// - `Host` must be a loopback name (else 403 — kills rebinding).
+/// - A present `Origin` must be loopback or the Tauri scheme (else 403 —
+///   kills CSWSH/cross-site fetches; non-browser clients send none).
+///
+/// Responses are marked `no-store` + `no-referrer` so token-bearing
+/// URLs never persist in caches or leak via the Referer header.
+async fn guard_loopback(req: axum::extract::Request, next: axum::middleware::Next) -> Response {
+    fn host_is_loopback(host_header: &str) -> bool {
+        // "127.0.0.1:8787" → "127.0.0.1"; "[::1]:8787" → "::1".
+        let host = host_header
+            .trim_start_matches('[')
+            .split([':', ']'])
+            .next()
+            .unwrap_or("");
+        matches!(host, "127.0.0.1" | "localhost" | "::1")
+    }
+    let host_ok = req
+        .headers()
+        .get(axum::http::header::HOST)
+        .and_then(|v| v.to_str().ok())
+        .map(host_is_loopback)
+        .unwrap_or(false);
+    if !host_ok {
+        return (StatusCode::FORBIDDEN, "loopback Host required").into_response();
+    }
+    if let Some(origin) = req
+        .headers()
+        .get(axum::http::header::ORIGIN)
+        .and_then(|v| v.to_str().ok())
+    {
+        let oh = origin
+            .split("://")
+            .nth(1)
+            .unwrap_or("")
+            .split('/')
+            .next()
+            .unwrap_or("");
+        let origin_ok = host_is_loopback(oh) || oh == "tauri.localhost";
+        if !origin_ok {
+            return (StatusCode::FORBIDDEN, "foreign Origin rejected").into_response();
+        }
+    }
+    let mut res = next.run(req).await;
+    let h = res.headers_mut();
+    h.insert(
+        axum::http::header::CACHE_CONTROL,
+        "no-store".parse().unwrap(),
+    );
+    h.insert(
+        axum::http::header::REFERRER_POLICY,
+        "no-referrer".parse().unwrap(),
+    );
+    // Overlay/widget pages are OBS-hosted inline-script documents —
+    // script/style must stay inline, but every other class is locked
+    // down (§P0.1): no objects, no base-tag hijack, no cross-site
+    // connections, framing only by the launcher window itself.
+    h.insert(
+        axum::http::header::CONTENT_SECURITY_POLICY,
+        "default-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; \
+         media-src 'self' blob:; font-src 'self' data:; \
+         connect-src 'self' ws://127.0.0.1:* ws://localhost:*; \
+         object-src 'none'; base-uri 'none'; \
+         frame-ancestors 'self' http://tauri.localhost https://tauri.localhost"
+            .parse()
+            .unwrap(),
+    );
+    res
+}
+
+// The server wires ~20 subsystems (hubs, stores, engine handles) —
+// bundling them into a ctx struct would just re-wrap the same list.
+#[allow(clippy::too_many_arguments)]
 pub async fn start_overlay_server(
     hub: Arc<EventHub>,
     frames: broadcast::Sender<OverlayFrame>,
     token: Arc<std::sync::RwLock<String>>,
+    write_token: Arc<std::sync::RwLock<String>>,
     port_cfg: u16,
     media_dir: PathBuf,
     settings: Arc<tokio::sync::Mutex<SettingsStore>>,
@@ -325,6 +425,7 @@ pub async fn start_overlay_server(
         hub,
         frames,
         token,
+        write_token,
         gifts_dir: gifts_dir(),
         media_dir,
         settings,
@@ -408,6 +509,7 @@ pub async fn start_overlay_server(
         .route("/anim/cfg", get(serve_anim_cfg))
         .route("/health", get(|| async { "ok" }))
         .route("/ws", get(ws_upgrade))
+        .layer(axum::middleware::from_fn(guard_loopback))
         .with_state(state);
 
     // Fixed port first (§5.4) — fall back to OS-assigned on conflict.
@@ -430,23 +532,27 @@ pub async fn start_overlay_server(
     Ok((port, fell_back))
 }
 
-/// `POST /timer/cmd?t=` — управление EFIR-таймером из виджета-пульта.
+/// `POST /timer/cmd?w=` — управление EFIR-таймером из виджета-пульта.
 /// Тело: `{action, secs?, rouletteId?, index?, durS?}` — те же действия,
 /// что и Tauri-команды `efirtimer_*` (пульт — внешняя страница, invoke там
 /// недоступен, поэтому управление идёт по HTTP на тот же движок).
 async fn timer_cmd(
+    headers: axum::http::HeaderMap,
     Query(q): Query<HashMap<String, String>>,
     State(st): State<OverlayState>,
     Json(body): Json<serde_json::Value>,
 ) -> Response {
-    if !token_ok(q.get("t").map(String::as_str), &st.token) {
-        return (StatusCode::FORBIDDEN, "overlay token required (?t=…)").into_response();
+    if !write_ok(&headers, &q, &st) {
+        return (StatusCode::FORBIDDEN, "overlay write token required (?w=…)").into_response();
     }
     let t = &st.efirtimer;
     let action = body.get("action").and_then(|x| x.as_str()).unwrap_or("");
     let secs = body.get("secs").and_then(|x| x.as_i64()).unwrap_or(60);
     match action {
-        "start" => t.start(body.get("durS").and_then(|x| x.as_i64()).unwrap_or(300)).await,
+        "start" => {
+            t.start(body.get("durS").and_then(|x| x.as_i64()).unwrap_or(300))
+                .await
+        }
         "stop" => t.stop().await,
         "pause" => {
             t.pause().await;
@@ -463,14 +569,20 @@ async fn timer_cmd(
         "ruiner" => t.manual_ruiner().await,
         "save" => t.manual_save().await,
         "spin" => {
-            t.manual_spin(body.get("rouletteId").and_then(|x| x.as_str()).unwrap_or(""))
-                .await;
+            t.manual_spin(
+                body.get("rouletteId")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or(""),
+            )
+            .await;
         }
         "card" => {
             let idx = body.get("index").and_then(|x| x.as_u64()).unwrap_or(0) as usize;
             t.manual_card_pick(idx).await;
         }
-        other => return (StatusCode::BAD_REQUEST, format!("unknown action: {other}")).into_response(),
+        other => {
+            return (StatusCode::BAD_REQUEST, format!("unknown action: {other}")).into_response()
+        }
     }
     Json(serde_json::json!({"ok": true})).into_response()
 }
@@ -487,10 +599,8 @@ async fn serve_anim_cfg(
     }
     let s = st.settings.lock().await;
     let rules = s.data.anims.clone();
-    let ids: std::collections::HashSet<&str> = rules
-        .iter()
-        .filter_map(|r| r.media_id.as_deref())
-        .collect();
+    let ids: std::collections::HashSet<&str> =
+        rules.iter().filter_map(|r| r.media_id.as_deref()).collect();
     let media: Vec<serde_json::Value> = s
         .data
         .media
@@ -663,10 +773,7 @@ async fn serve_pack_game(
 /// Served from disk like `/widgets/` so a new skin drops in without a
 /// rebuild. Assets carry no secrets → no token gate (same as widget
 /// sub-resources); `..` and exotic chars are rejected char-wise.
-async fn serve_game_asset(
-    Path(path): Path<String>,
-    State(st): State<OverlayState>,
-) -> Response {
+async fn serve_game_asset(Path(path): Path<String>, State(st): State<OverlayState>) -> Response {
     if !crate::game_packs::safe_relpath(&path) {
         return StatusCode::NOT_FOUND.into_response();
     }
@@ -698,19 +805,20 @@ async fn serve_game_asset(
     StatusCode::NOT_FOUND.into_response()
 }
 
-/// `POST /games/asset?t=` — dev-panel asset install: a game page
+/// `POST /games/asset?w=` — dev-panel asset install: a game page
 /// (Patrick's debug panel) pushes an image into the USER pack dir
 /// (`<data>/games/<dir>/<path>`) so custom content rides the normal
 /// `/games-assets` precedence (user > bundled) without touching the
 /// installed bundle. Body: `{dir, path, data_b64}`; `data_b64:null`
 /// deletes. dir/path/signature are validated — only images, ≤4 MiB.
 async fn save_game_asset(
+    headers: axum::http::HeaderMap,
     Query(q): Query<HashMap<String, String>>,
     State(st): State<OverlayState>,
     Json(body): Json<serde_json::Value>,
 ) -> Response {
     use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
-    if !token_ok(q.get("t").map(String::as_str), &st.token) {
+    if !write_ok(&headers, &q, &st) {
         return StatusCode::FORBIDDEN.into_response();
     }
     let dir = body.get("dir").and_then(|v| v.as_str()).unwrap_or("");
@@ -723,7 +831,12 @@ async fn save_game_asset(
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
     let ext_ok = path
         .rsplit_once('.')
-        .map(|(_, e)| matches!(e, "png" | "jpg" | "jpeg" | "webp" | "gif" | "json" | "mp3" | "wav" | "ogg"))
+        .map(|(_, e)| {
+            matches!(
+                e,
+                "png" | "jpg" | "jpeg" | "webp" | "gif" | "json" | "mp3" | "wav" | "ogg"
+            )
+        })
         .unwrap_or(false);
     if !dir_ok || !crate::game_packs::safe_relpath(path) || !ext_ok {
         return StatusCode::BAD_REQUEST.into_response();
@@ -733,8 +846,7 @@ async fn save_game_asset(
         // Explicit null = dev-panel "reset" → drop the user override.
         Some(serde_json::Value::Null) => {
             let _ = std::fs::remove_file(&dest);
-            return axum::Json(serde_json::json!({ "ok": true, "deleted": true }))
-                .into_response();
+            return axum::Json(serde_json::json!({ "ok": true, "deleted": true })).into_response();
         }
         None => return StatusCode::BAD_REQUEST.into_response(),
         _ => {}
@@ -771,23 +883,22 @@ async fn save_game_asset(
     }
     // Atomic write: .tmp + rename so a half-written png is never served.
     let tmp = dest.with_extension("tmp");
-    if std::fs::write(&tmp, &bytes).is_err()
-        || std::fs::rename(&tmp, &dest).is_err()
-    {
+    if std::fs::write(&tmp, &bytes).is_err() || std::fs::rename(&tmp, &dest).is_err() {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
     axum::Json(serde_json::json!({ "ok": true })).into_response()
 }
 
-/// `POST /tts/say?t=` — game pages voice a donor nickname through the
+/// `POST /tts/say?w=` — game pages voice a donor nickname through the
 /// streamer's configured TTS pipeline (`speak_rule` — obeys mute,
 /// filters and the device/overlay output). Body: `{text, voice?, style?}`.
 async fn tts_say(
+    headers: axum::http::HeaderMap,
     Query(q): Query<HashMap<String, String>>,
     State(st): State<OverlayState>,
     Json(body): Json<serde_json::Value>,
 ) -> Response {
-    if !token_ok(q.get("t").map(String::as_str), &st.token) {
+    if !write_ok(&headers, &q, &st) {
         return StatusCode::FORBIDDEN.into_response();
     }
     let text = body.get("text").and_then(|v| v.as_str()).unwrap_or("");
@@ -934,13 +1045,15 @@ async fn serve_game_cfg(
 }
 
 /// POST `/games/report` — the page reports a finished round; appended
-/// to the bounded results ledger (token via `?t=`).
+/// to the bounded results ledger (write-scope token via `?w=` or the
+/// `X-Overlay-Token` header).
 async fn serve_game_report(
+    headers: axum::http::HeaderMap,
     Query(q): Query<HashMap<String, String>>,
     State(st): State<OverlayState>,
     Json(body): Json<serde_json::Value>,
 ) -> Response {
-    if !token_ok(q.get("t").map(String::as_str), &st.token) {
+    if !write_ok(&headers, &q, &st) {
         return StatusCode::FORBIDDEN.into_response();
     }
     let game_id = body["game_id"].as_str().unwrap_or("");
@@ -955,12 +1068,14 @@ async fn serve_game_report(
 
 /// Closes the `overlay-<page>` capture window. Frameless windows have no
 /// chrome to click, so the Escape handler injected into each capture
-/// page pings this endpoint — token-guarded like the pages themselves.
+/// page pings this endpoint — write-scope token (`?w=` / header): a
+/// read-only OBS widget URL must not be able to close app windows.
 async fn overlay_close(
+    headers: axum::http::HeaderMap,
     Query(q): Query<HashMap<String, String>>,
     State(st): State<OverlayState>,
 ) -> Response {
-    if !token_ok(q.get("t").map(String::as_str), &st.token) {
+    if !write_ok(&headers, &q, &st) {
         return StatusCode::FORBIDDEN.into_response();
     }
     let Some(page) = q.get("page") else {
@@ -1089,9 +1204,9 @@ async fn send(
 }
 
 /// One overlay socket. Legacy clients (no `subscribe`) get the snapshot
-/// + event stream exactly as before. After `{type:"subscribe",
-/// channels:[…]}` the client gets only its channels' frames plus the
-/// last frame replayed per channel (§5.3).
+/// plus the event stream exactly as before. After
+/// `{type:"subscribe", channels:[…]}` the client gets only its channels'
+/// frames plus the last frame replayed per channel (§5.3).
 async fn overlay_ws(socket: WebSocket, st: OverlayState) {
     let (mut tx, mut rx) = socket.split();
     let mut events = st.hub.tx.subscribe();

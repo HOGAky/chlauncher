@@ -121,6 +121,7 @@
 const BG = new URLSearchParams(location.search).get('bg');
 if (BG) document.body.style.background = '#' + BG;
 const TOKEN = new URLSearchParams(location.search).get('t') || '';
+const WTOKEN = new URLSearchParams(location.search).get('w') || '';
 const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
 const stage = document.getElementById('stage');
 const GAME = 'patrick_cabbage';
@@ -402,7 +403,7 @@ function sayDonor(u) {
   if (!u || !S.skin.ttsDonorNames) return;
   if (Date.now() - ttsLast < 4000) return;          // не дублировать озвучку на комбо
   ttsLast = Date.now();
-  fetch(`/tts/say?t=${encodeURIComponent(TOKEN)}`, {
+  fetch(`/tts/say?w=${encodeURIComponent(WTOKEN)}`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ text: u.slice(0, 40) }),
   }).catch(() => {});
@@ -963,7 +964,7 @@ function refreshDevAvatar() {
 }
 
 async function postAsset(path, data_b64) {
-  const r = await fetch(`/games/asset?t=${encodeURIComponent(TOKEN)}`, {
+  const r = await fetch(`/games/asset?w=${encodeURIComponent(WTOKEN)}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ dir: packDir, path, data_b64 }),
@@ -1070,7 +1071,8 @@ async function main() {
   const s = document.createElement('script');
   s.src = '/gamekit.js?t=' + encodeURIComponent(TOKEN);
   s.onload = () => main().catch((e) => {
-    document.body.innerHTML = `<pre style="color:#f66;padding:20px">${e}</pre>`;
+    document.body.innerHTML = '<pre id="err" style="color:#f66;padding:20px"></pre>';
+    document.getElementById('err').textContent = String(e);
   });
   s.onerror = () => { document.body.innerHTML = '<pre style="color:#f66;padding:20px">gamekit: 403 — проверьте токен</pre>'; };
   document.head.appendChild(s);

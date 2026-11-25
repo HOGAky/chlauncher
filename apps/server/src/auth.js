@@ -161,11 +161,18 @@ export function isOwner(db, userId) {
 /**
  * Route preHandler for owner-only admin actions (grants, plans, roles,
  * promo codes). Must run after `requireAdmin`. Without OWNER_TG_IDS the
- * legacy rule applies (any admin) — see the startup warning in config.
+ * legacy rule applies (any admin) in dev/test ONLY — production startup
+ * refuses to boot with an empty owner list, and this guard fails closed
+ * as a second line of defense.
  */
 export function makeRequireOwner(db) {
   return async function requireOwner(request, reply) {
-    if (config.ownerTgIds.size === 0) return;
+    if (config.ownerTgIds.size === 0) {
+      if (config.isProduction) {
+        return reply.code(403).send({ error: 'OWNER_NOT_CONFIGURED' });
+      }
+      return;
+    }
     if (!isOwner(db, request.auth.userId)) {
       return reply.code(403).send({ error: 'OWNER_ONLY' });
     }

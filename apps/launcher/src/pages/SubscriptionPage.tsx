@@ -200,15 +200,6 @@ export default function SubscriptionPage() {
                   variant="outline"
                   size="sm"
                   disabled={busy}
-                  title="Тест: mock-pay expert (только dev)"
-                  onClick={act(() => api.mockPay('expert'))}
-                >
-                  <FlaskConical size={14} /> Тест: expert
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={busy}
                   title="Тест: принудительно завершает подписку"
                   onClick={act(() => api.mockExpire())}
                 >

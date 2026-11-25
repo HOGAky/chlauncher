@@ -253,6 +253,7 @@ impl PollTracker {
                 is_moderator: false,
                 is_superfan: false,
                 ts_ms: crate::types::now_ms(),
+                event_id: String::new(),
             };
             let _ = self.raw_tx.try_send(ev);
         }
@@ -299,6 +300,7 @@ mod tests {
             is_moderator: false,
             is_superfan: false,
             ts_ms: 0,
+            event_id: String::new(),
         }
     }
 

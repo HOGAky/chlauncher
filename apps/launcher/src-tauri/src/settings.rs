@@ -65,6 +65,12 @@ pub struct Settings {
     /// Token guarding overlay pages (`?t=…`) — generated on first launch.
     #[serde(default)]
     pub overlay_token: String,
+    /// Write-scope token (`?w=` / `X-Overlay-Token`) for mutating overlay
+    /// routes (`/games/report`, `/games/asset`, `/tts/say`, `/timer/cmd`,
+    /// `/overlay-close`) — §P0.6 capability split: a leaked OBS browser-
+    /// source URL grants read-only access. Generated on first launch.
+    #[serde(default)]
+    pub overlay_write_token: String,
     /// DA→coin exchange rate: coins credited per 1 RUB of donation.
     /// 0 (default) = donations don't count toward the earn limit (§8.4).
     #[serde(default)]
@@ -509,13 +515,29 @@ impl SettingsStore {
             .ok()
             .and_then(|s| serde_json::from_str(s.trim_start_matches('\u{feff}')).ok())
             .unwrap_or_default();
-        if data.overlay_token.is_empty() {
-            // 64 hex chars = 32 random bytes — used as the `?t=` overlay key.
-            data.overlay_token = format!(
+        // §P0.5: resolve key-store markers and migrate legacy plaintext
+        // secrets into the OS credential store (in-memory keeps values).
+        let migrated = Self::resolve_secrets(&mut data);
+        // 64 hex chars = 32 random bytes — used as the `?t=`/`?w=` keys.
+        let gen = || {
+            format!(
                 "{}{}",
                 uuid::Uuid::new_v4().simple(),
                 uuid::Uuid::new_v4().simple()
-            );
+            )
+        };
+        let mut dirty = false;
+        if data.overlay_token.is_empty() {
+            data.overlay_token = gen();
+            dirty = true;
+        }
+        if data.overlay_write_token.is_empty() {
+            data.overlay_write_token = gen();
+            dirty = true;
+        }
+        if dirty || migrated {
+            // Migrated plaintext gets scrubbed to disk right away — the
+            // file must not keep credentials longer than needed.
             let store = Self::new(path, data);
             let _ = store.save();
             return store;
@@ -529,10 +551,7 @@ impl SettingsStore {
         if !path.exists() {
             return;
         }
-        let bak = path.with_file_name(format!(
-            "settings.json.bak-{}",
-            env!("CARGO_PKG_VERSION")
-        ));
+        let bak = path.with_file_name(format!("settings.json.bak-{}", env!("CARGO_PKG_VERSION")));
         if !bak.exists() {
             let _ = fs::copy(path, &bak);
         }
@@ -561,6 +580,61 @@ impl SettingsStore {
         }
     }
 
+    /// §P0.5 secret fields: JSON stores `kr:v1` markers; the real values
+    /// live in the OS credential store (Windows Credential Manager).
+    /// Plaintext values found on load are migrated. In-memory settings
+    /// keep the real value so consumers need no changes.
+    /// Returns `true` when any plaintext was migrated — the file then
+    /// needs an immediate scrub-save.
+    fn resolve_secrets(data: &mut Settings) -> bool {
+        let mut migrated = false;
+        migrated |= crate::secrets::resolve("auth_token", &mut data.auth_token);
+        migrated |= crate::secrets::resolve("tiktok_session", &mut data.tiktok_session);
+        migrated |= crate::secrets::resolve("da_token", &mut data.donationalerts_token);
+        migrated |= crate::secrets::resolve("forward.stream_key", &mut data.forward.stream_key);
+        migrated |= crate::secrets::resolve(
+            "forward.relay_admin_secret",
+            &mut data.forward.relay_admin_secret,
+        );
+        // `String` (not Option) fields ride the same path via a shim.
+        for (name, field) in [
+            ("adapter_key", &mut data.adapter_key),
+            ("mc.rcon_password", &mut data.mc.rcon_password),
+            ("tts.gemini_key", &mut data.tts.gemini_key),
+        ] {
+            let mut opt = (!field.is_empty()).then(|| std::mem::take(field));
+            migrated |= crate::secrets::resolve(name, &mut opt);
+            if let Some(v) = opt {
+                *field = v;
+            }
+        }
+        migrated
+    }
+
+    /// Serialization twin of `resolve_secrets`: real secrets never reach
+    /// the disk document — only the key-store marker (§P0.5).
+    fn scrub_secrets(data: &mut Settings) {
+        crate::secrets::scrub("auth_token", &mut data.auth_token);
+        crate::secrets::scrub("tiktok_session", &mut data.tiktok_session);
+        crate::secrets::scrub("da_token", &mut data.donationalerts_token);
+        crate::secrets::scrub("forward.stream_key", &mut data.forward.stream_key);
+        crate::secrets::scrub(
+            "forward.relay_admin_secret",
+            &mut data.forward.relay_admin_secret,
+        );
+        for (name, field) in [
+            ("adapter_key", &mut data.adapter_key),
+            ("mc.rcon_password", &mut data.mc.rcon_password),
+            ("tts.gemini_key", &mut data.tts.gemini_key),
+        ] {
+            let mut opt = (!field.is_empty()).then(|| std::mem::take(field));
+            crate::secrets::scrub(name, &mut opt);
+            if let Some(v) = opt {
+                *field = v;
+            }
+        }
+    }
+
     fn new(path: PathBuf, data: Settings) -> Self {
         Self {
             path,
@@ -585,7 +659,10 @@ impl SettingsStore {
             let _ = fs::copy(&self.path, self.path.with_extension("json.bak"));
         }
         let tmp = self.path.with_extension("json.tmp");
-        fs::write(&tmp, serde_json::to_string_pretty(&self.data)?)?;
+        // §P0.5: secrets serialize as key-store markers, never plaintext.
+        let mut out = self.data.clone();
+        Self::scrub_secrets(&mut out);
+        fs::write(&tmp, serde_json::to_string_pretty(&out)?)?;
         fs::rename(&tmp, &self.path)?;
         self.rev.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Ok(())
@@ -657,78 +734,81 @@ mod tests {
     }
 }
 
-    /// Десериализация реального settings.json целиком — если efirtimer
-    /// ломает парс, падает ВСЁ в дефолт. `SETTINGS_PATH=<file>`.
-    #[test]
-    fn settings_file_parses() {
-        let Ok(path) = std::env::var("SETTINGS_PATH") else { return };
-        let raw = std::fs::read_to_string(path).expect("read settings");
-        match serde_json::from_str::<crate::settings::Settings>(&raw) {
-            Ok(s) => println!("OK efirtimer.rlts={}", s.efirtimer.roulettes.len()),
-            Err(e) => println!("PARSE_ERR: {e}"),
-        }
+/// Десериализация реального settings.json целиком — если efirtimer
+/// ломает парс, падает ВСЁ в дефолт. `SETTINGS_PATH=<file>`.
+#[test]
+fn settings_file_parses() {
+    let Ok(path) = std::env::var("SETTINGS_PATH") else {
+        return;
+    };
+    let raw = std::fs::read_to_string(path).expect("read settings");
+    match serde_json::from_str::<crate::settings::Settings>(&raw) {
+        Ok(s) => println!("OK efirtimer.rlts={}", s.efirtimer.roulettes.len()),
+        Err(e) => println!("PARSE_ERR: {e}"),
     }
+}
 
-    /// Починка кракозябр в settings.json: строки, в которых UTF-8 был
-    /// ошибочно прочитан как CP1251 (признак — буквы ЈџњЉљ±№, которых
-    /// нет в русском тексте), ре-энкодируются CP1251→bytes→UTF-8.
-    /// Запуск: `MOJIBAKE_FIX=<settings.json> cargo test mojibake_fix`
-    #[cfg(test)]
-    #[test]
-    fn mojibake_fix_file() {
-        let Ok(path) = std::env::var("MOJIBAKE_FIX") else { return };
-        let raw = std::fs::read_to_string(&path).expect("read settings");
-        let mut v: serde_json::Value = serde_json::from_str(&raw).expect("parse");
-        let n = mojibake_fix_value(&mut v);
-        // UTF-8 без BOM — BOM ломает serde_json и роняет всё в дефолт.
-        std::fs::write(&path, serde_json::to_string_pretty(&v).unwrap()).unwrap();
-        println!("MOJIBAKE_FIXED:{n}");
-    }
+/// Починка кракозябр в settings.json: строки, в которых UTF-8 был
+/// ошибочно прочитан как CP1251 (признак — буквы ЈџњЉљ±№, которых
+/// нет в русском тексте), ре-энкодируются CP1251→bytes→UTF-8.
+/// Запуск: `MOJIBAKE_FIX=<settings.json> cargo test mojibake_fix`
+#[cfg(test)]
+#[test]
+fn mojibake_fix_file() {
+    let Ok(path) = std::env::var("MOJIBAKE_FIX") else {
+        return;
+    };
+    let raw = std::fs::read_to_string(&path).expect("read settings");
+    let mut v: serde_json::Value = serde_json::from_str(&raw).expect("parse");
+    let n = mojibake_fix_value(&mut v);
+    // UTF-8 без BOM — BOM ломает serde_json и роняет всё в дефолт.
+    std::fs::write(&path, serde_json::to_string_pretty(&v).unwrap()).unwrap();
+    println!("MOJIBAKE_FIXED:{n}");
+}
 
-    #[cfg(test)]
-    fn mojibake_fix_value(v: &mut serde_json::Value) -> usize {
-        match v {
-            serde_json::Value::String(s) => usize::from(mojibake_fix_str(s)),
-            serde_json::Value::Array(a) => a.iter_mut().map(mojibake_fix_value).sum(),
-            serde_json::Value::Object(o) => {
-                let mut n: usize = o.values_mut().map(mojibake_fix_value).sum();
-                // ключи тоже могут быть битыми (walletCommands: "!руина")
-                let keys: Vec<String> = o.keys().cloned().collect();
-                for k in keys {
-                    let mut nk = k.clone();
-                    if mojibake_fix_str(&mut nk) {
-                        if let Some(val) = o.remove(&k) {
-                            o.insert(nk, val);
-                            n += 1;
-                        }
+#[cfg(test)]
+fn mojibake_fix_value(v: &mut serde_json::Value) -> usize {
+    match v {
+        serde_json::Value::String(s) => usize::from(mojibake_fix_str(s)),
+        serde_json::Value::Array(a) => a.iter_mut().map(mojibake_fix_value).sum(),
+        serde_json::Value::Object(o) => {
+            let mut n: usize = o.values_mut().map(mojibake_fix_value).sum();
+            // ключи тоже могут быть битыми (walletCommands: "!руина")
+            let keys: Vec<String> = o.keys().cloned().collect();
+            for k in keys {
+                let mut nk = k.clone();
+                if mojibake_fix_str(&mut nk) {
+                    if let Some(val) = o.remove(&k) {
+                        o.insert(nk, val);
+                        n += 1;
                     }
                 }
-                n
             }
-            _ => 0,
+            n
         }
+        _ => 0,
     }
+}
 
-    /// true, если строка была кракозябрами и восстановлена.
-    #[cfg(test)]
-    fn mojibake_fix_str(s: &mut String) -> bool {
-        const MARKERS: &[char] = &[
-            'Ј', 'ј', 'Љ', 'љ', 'Њ', 'њ', 'Џ', 'џ', 'Ђ', 'ђ', 'Ѓ', 'ѓ',
-            'Ѕ', 'ѕ', 'Є', 'є', 'І', 'і', 'Ї', 'ї', 'Ґ', 'ґ', '±', '№',
-            'Ў', 'ў', '‰', '‚', 'ƒ', '„', 'ˆ', '‹', '›', '˜', '™', '†',
-            '‡', 'Š', 'Œ', 'Ž', 'š', 'œ', 'ž', 'Ÿ',
-        ];
-        if !s.chars().any(|c| MARKERS.contains(&c)) {
-            return false;
-        }
-        let (bytes, _, had_errors) = encoding_rs::WINDOWS_1251.encode(s);
-        if had_errors {
-            return false;
-        }
-        if let Ok(fixed) = String::from_utf8(bytes.into_owned()) {
-            *s = fixed;
-            true
-        } else {
-            false
-        }
+/// true, если строка была кракозябрами и восстановлена.
+#[cfg(test)]
+fn mojibake_fix_str(s: &mut String) -> bool {
+    const MARKERS: &[char] = &[
+        'Ј', 'ј', 'Љ', 'љ', 'Њ', 'њ', 'Џ', 'џ', 'Ђ', 'ђ', 'Ѓ', 'ѓ', 'Ѕ', 'ѕ', 'Є', 'є', 'І', 'і',
+        'Ї', 'ї', 'Ґ', 'ґ', '±', '№', 'Ў', 'ў', '‰', '‚', 'ƒ', '„', 'ˆ', '‹', '›', '˜', '™', '†',
+        '‡', 'Š', 'Œ', 'Ž', 'š', 'œ', 'ž', 'Ÿ',
+    ];
+    if !s.chars().any(|c| MARKERS.contains(&c)) {
+        return false;
     }
+    let (bytes, _, had_errors) = encoding_rs::WINDOWS_1251.encode(s);
+    if had_errors {
+        return false;
+    }
+    if let Ok(fixed) = String::from_utf8(bytes.into_owned()) {
+        *s = fixed;
+        true
+    } else {
+        false
+    }
+}

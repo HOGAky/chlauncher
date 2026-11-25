@@ -1,4 +1,4 @@
-﻿//! EFIR-style stream timer («таймер эфира») — countdown viewers extend
+//! EFIR-style stream timer («таймер эфира») — countdown viewers extend
 //! and mess with: gifts/likes/follows add or steal seconds, trigger
 //! rules fire effects (shield, reverse, multipliers, ruiner, saves,
 //! set/reset), roulettes spin weighted slots, and the overlay widgets
@@ -96,7 +96,7 @@ struct RuinerReq {
     avatar: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 struct TimerState {
     #[serde(rename = "timeLeft")]
     time_left: i64,
@@ -126,25 +126,7 @@ struct TimerState {
     ruiner_pending: i64,
 }
 
-impl Default for TimerState {
-    fn default() -> Self {
-        Self {
-            time_left: 0,
-            running: false,
-            victory: false,
-            bonus_phase: false,
-            rolling_bonus: false,
-            frozen: false,
-            freeze_left: 0,
-            reversed: false,
-            multiplier: MultState::default(),
-            ruiner: RuinerState::default(),
-            total_likes: 0,
-            started_at: 0,
-            ruiner_pending: 0,
-        }
-    }
-}
+
 
 struct Inner {
     st: TimerState,
@@ -239,7 +221,9 @@ impl EfirTimer {
         let store = self.settings.lock().await;
         let mut w: Vec<(&String, &i64)> = store.data.efir_wallets.iter().collect();
         w.sort_by(|a, b| b.1.cmp(a.1));
-        json!(w.into_iter().take(n)
+        json!(w
+            .into_iter()
+            .take(n)
             .map(|(u, b)| json!({"user": u, "balance": b}))
             .collect::<Vec<_>>())
     }
@@ -282,6 +266,9 @@ impl EfirTimer {
     }
 
     /// Float-up «+2 ч 15 мин» / «ЩИТ!» banner on the timer widget.
+    // Frame fields mirror the widget contract — packing them into a
+    // struct would only re-wrap the same ten values.
+    #[allow(clippy::too_many_arguments)]
     fn alert(
         &self,
         username: &str,
@@ -828,7 +815,11 @@ impl EfirTimer {
             gift_id: "wallet-command",
             count,
             coins: 0,
-            nickname: if raw.user.is_empty() { "Зритель" } else { &raw.user },
+            nickname: if raw.user.is_empty() {
+                "Зритель"
+            } else {
+                &raw.user
+            },
             avatar: &raw.avatar_url,
             gift_name: &cmd.command,
         };
@@ -897,7 +888,12 @@ impl EfirTimer {
     /// Возвращает false, если колода невалидна — очередь идёт дальше.
     async fn start_card_session(self: &Arc<Self>, req: SpinReq) -> bool {
         let cfg = self.cfg().await;
-        let Some(r) = cfg.roulettes.iter().find(|r| r.id == req.roulette_id).cloned() else {
+        let Some(r) = cfg
+            .roulettes
+            .iter()
+            .find(|r| r.id == req.roulette_id)
+            .cloned()
+        else {
             return false;
         };
         let Some(cards) = cards_for(&r) else {
@@ -976,7 +972,9 @@ impl EfirTimer {
         };
         let (sid, gen) = {
             let i = self.inner.lock().await;
-            let Some(c) = i.card.as_ref() else { return false };
+            let Some(c) = i.card.as_ref() else {
+                return false;
+            };
             if c.phase != "waiting" {
                 return false;
             }
@@ -1001,7 +999,9 @@ impl EfirTimer {
     pub async fn card_select(self: &Arc<Self>, index: usize, sid: &str, gen: u64) -> bool {
         let selected = {
             let mut i = self.inner.lock().await;
-            let Some(c) = i.card.as_mut() else { return false };
+            let Some(c) = i.card.as_mut() else {
+                return false;
+            };
             if c.id != sid || c.gen != gen || c.phase != "waiting" || index >= c.cards.len() {
                 return false;
             }
@@ -1584,54 +1584,48 @@ impl EfirTimer {
     /// `poke_queues`.
     async fn drain_queues(self: &Arc<Self>) {
         // Ruiner first — EFIR blocks ruiners while a spin is busy.
-        loop {
-            let req = {
-                let mut i = self.inner.lock().await;
-                let paused = i
-                    .ruiner_paused_until
-                    .map(|t| t > tokio::time::Instant::now())
-                    .unwrap_or(false);
-                if i.st.ruiner.active
-                    || i.ruiner_q.is_empty()
-                    || i.st.victory
-                    || i.roulette_busy
-                    || paused
-                {
-                    None
-                } else {
-                    i.ruiner_q.pop_front()
-                }
-            };
-            match req {
-                None => break,
-                Some(r) => {
-                    let cfg = self.cfg().await;
-                    let (dur, t) = {
-                        let mut i = self.inner.lock().await;
-                        i.st.ruiner = RuinerState {
-                            active: true,
-                            time_left: cfg.ruiner_duration.max(1),
-                            username: r.username.clone(),
-                            avatar: r.avatar.clone(),
-                        };
-                        (cfg.ruiner_duration.max(1), i.st.time_left)
-                    };
-                    let _ = dur;
-                    self.alert(
-                        &r.username,
-                        &r.avatar,
-                        "РУИНЕР ЗАПУЩЕН!",
-                        "",
-                        0,
-                        "ruiner",
-                        1,
-                        true,
-                        t,
-                    );
-                    self.send_state().await;
-                }
+        // One active ruiner at a time, so a single pop is enough.
+        let req = {
+            let mut i = self.inner.lock().await;
+            let paused = i
+                .ruiner_paused_until
+                .map(|t| t > tokio::time::Instant::now())
+                .unwrap_or(false);
+            if i.st.ruiner.active
+                || i.ruiner_q.is_empty()
+                || i.st.victory
+                || i.roulette_busy
+                || paused
+            {
+                None
+            } else {
+                i.ruiner_q.pop_front()
             }
-            break; // one active ruiner at a time
+        };
+        if let Some(r) = req {
+            let cfg = self.cfg().await;
+            let t = {
+                let mut i = self.inner.lock().await;
+                i.st.ruiner = RuinerState {
+                    active: true,
+                    time_left: cfg.ruiner_duration.max(1),
+                    username: r.username.clone(),
+                    avatar: r.avatar.clone(),
+                };
+                i.st.time_left
+            };
+            self.alert(
+                &r.username,
+                &r.avatar,
+                "РУИНЕР ЗАПУЩЕН!",
+                "",
+                0,
+                "ruiner",
+                1,
+                true,
+                t,
+            );
+            self.send_state().await;
         }
 
         loop {
@@ -1813,7 +1807,7 @@ impl EfirTimer {
                     .roulettes
                     .iter()
                     .find(|r| r.id == w.extra_roulette_id)
-                    .or_else(|| cfg.roulettes.iter().find(|r| r.id != "" && r.enabled));
+                    .or_else(|| cfg.roulettes.iter().find(|r| !r.id.is_empty() && r.enabled));
                 let mut i = self.inner.lock().await;
                 if let Some(r) = target {
                     for _ in 0..spins {
@@ -2223,10 +2217,16 @@ fn wallet_resolve(cfg: &EfirTimerCfg, text: &str) -> Option<(String, i64)> {
         rows.push((id.to_string(), en));
     }
     for r in &cfg.roulettes {
-        rows.push((format!("roulette:{}", r.id), r.enabled && r.trigger_type != "like"));
+        rows.push((
+            format!("roulette:{}", r.id),
+            r.enabled && r.trigger_type != "like",
+        ));
     }
     for p in &cfg.penalties {
-        rows.push((format!("penalty:{}", p.id), cfg.penalty_enabled && p.enabled));
+        rows.push((
+            format!("penalty:{}", p.id),
+            cfg.penalty_enabled && p.enabled,
+        ));
     }
     for t in &cfg.custom_triggers {
         rows.push((format!("custom:{}", t.id), t.enabled));
@@ -2320,27 +2320,21 @@ fn wallet_isolate(cfg: &EfirTimerCfg, row_id: &str) -> EfirTimerCfg {
             let (kind, id) = row_id.split_once(':').unwrap_or(("", row_id));
             match kind {
                 "roulette" => {
-                    if let Some(mut r) =
-                        cfg.roulettes.iter().find(|r| r.id == id).cloned()
-                    {
+                    if let Some(mut r) = cfg.roulettes.iter().find(|r| r.id == id).cloned() {
                         r.trigger_type = "gift".into();
                         r.trigger_gift_ids = marker();
                         c.roulettes.push(r);
                     }
                 }
                 "penalty" => {
-                    if let Some(mut p) =
-                        cfg.penalties.iter().find(|p| p.id == id).cloned()
-                    {
+                    if let Some(mut p) = cfg.penalties.iter().find(|p| p.id == id).cloned() {
                         p.gift_ids = marker();
                         c.penalty_enabled = true;
                         c.penalties.push(p);
                     }
                 }
                 "custom" => {
-                    if let Some(mut t) =
-                        cfg.custom_triggers.iter().find(|t| t.id == id).cloned()
-                    {
+                    if let Some(mut t) = cfg.custom_triggers.iter().find(|t| t.id == id).cloned() {
                         t.gift_ids = marker();
                         c.custom_triggers.push(t);
                     }
@@ -2515,6 +2509,9 @@ fn import_sound(v: Option<&Value>) -> Option<crate::types::EfirSoundSpec> {
 }
 
 /// Строит `EfirTimerCfg` из экспортированного EFIR-JSON.
+// ~40 полей собираются из JSON-маппера — плоские присваивания читаются
+// лучше гигантского struct-литерала.
+#[allow(clippy::field_reassign_with_default)]
 pub fn import_efir_export(json_str: &str) -> Result<EfirTimerCfg, String> {
     let root: Value = serde_json::from_str(json_str).map_err(|e| e.to_string())?;
     let s = root.get("settings").cloned().unwrap_or(Value::Null);
@@ -2608,7 +2605,11 @@ pub fn import_efir_export(json_str: &str) -> Result<EfirTimerCfg, String> {
                 gift_ids: t.get("gift").map(gift_keys).unwrap_or_default(),
                 action: {
                     let a = es(t, "type");
-                    if a.is_empty() { "add".into() } else { a }
+                    if a.is_empty() {
+                        "add".into()
+                    } else {
+                        a
+                    }
                 },
                 value: ei(t, "value", 60),
                 enabled: t.get("isEnabled").and_then(|x| x.as_bool()).unwrap_or(true),
@@ -2636,7 +2637,11 @@ pub fn import_efir_export(json_str: &str) -> Result<EfirTimerCfg, String> {
                     name: es(r, "name"),
                     trigger_type: {
                         let t = es(r, "triggerType");
-                        if t.is_empty() { "gift".into() } else { t }
+                        if t.is_empty() {
+                            "gift".into()
+                        } else {
+                            t
+                        }
                     },
                     trigger_gift_ids: ids,
                     likes_threshold: ei(r, "likesThreshold", 100_000),
@@ -2645,7 +2650,11 @@ pub fn import_efir_export(json_str: &str) -> Result<EfirTimerCfg, String> {
                     works_when_shielded: eb(r, "worksWhenShielded"),
                     mode: {
                         let m = es(r, "mode");
-                        if m.is_empty() { "wheel".into() } else { m }
+                        if m.is_empty() {
+                            "wheel".into()
+                        } else {
+                            m
+                        }
                     },
                     choice_timeout_seconds: ei(r, "choiceTimeoutSeconds", 120),
                     remote_button_color: es(r, "remoteButtonColor"),
@@ -2665,7 +2674,11 @@ pub fn import_efir_export(json_str: &str) -> Result<EfirTimerCfg, String> {
                                     label: es(sl, "label"),
                                     kind: {
                                         let k = es(sl, "type");
-                                        if k.is_empty() { "add_time".into() } else { k }
+                                        if k.is_empty() {
+                                            "add_time".into()
+                                        } else {
+                                            k
+                                        }
                                     },
                                     value: ei(sl, "value", 60),
                                     mult_value: ef(sl, "multiplierValue", 2.0),
@@ -2673,7 +2686,11 @@ pub fn import_efir_export(json_str: &str) -> Result<EfirTimerCfg, String> {
                                     chance: ef(sl, "chance", 10.0),
                                     color: {
                                         let c = es(sl, "color");
-                                        if c.is_empty() { "#6366f1".into() } else { c }
+                                        if c.is_empty() {
+                                            "#6366f1".into()
+                                        } else {
+                                            c
+                                        }
                                     },
                                     enabled: sl
                                         .get("isEnabled")
@@ -2683,7 +2700,11 @@ pub fn import_efir_export(json_str: &str) -> Result<EfirTimerCfg, String> {
                                     extra_roulette_id: es(sl, "extraSpinRouletteId"),
                                     target: {
                                         let t = es(sl, "target");
-                                        if t.is_empty() { "self".into() } else { t }
+                                        if t.is_empty() {
+                                            "self".into()
+                                        } else {
+                                            t
+                                        }
                                     },
                                     original: false,
                                 })
@@ -2812,7 +2833,9 @@ mod tests {
     /// пишет итоговый cfg в stdout (префикс `IMPORTED_CFG:`).
     #[test]
     fn import_real_export() {
-        let Ok(path) = std::env::var("EFIR_IMPORT") else { return };
+        let Ok(path) = std::env::var("EFIR_IMPORT") else {
+            return;
+        };
         let json = std::fs::read_to_string(path).expect("read export");
         let cfg = import_efir_export(&json).expect("parse export");
         println!("IMPORTED_CFG:{}", serde_json::to_string(&cfg).unwrap());

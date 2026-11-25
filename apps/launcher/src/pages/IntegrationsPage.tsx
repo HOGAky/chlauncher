@@ -488,6 +488,11 @@ export default function IntegrationsPage() {
                 без анонимных лимитов. Хранится только локально. После входа ник подставится и
                 связь перезапустится автоматически.
               </p>
+              <p className="text-amber-600 dark:text-amber-400">
+                sessionid — это ключ от вашего аккаунта TikTok: любой, у кого она есть, может
+                действовать от вашего имени. Импортируйте только свою сессию и никому её
+                не передавайте.
+              </p>
               <Button size="sm" variant="secondary" onClick={sessionLoginAndConnect}>
                 <LogIn size={14} className="mr-1" /> Войти в TikTok — сессия и связь настроятся сами
               </Button>
@@ -515,12 +520,22 @@ export default function IntegrationsPage() {
                 <Button
                   size="sm"
                   disabled={!ttSession.trim()}
-                  onClick={() =>
+                  onClick={() => {
+                    // §P0.5: the cookie is account credentials — import
+                    // only after an explicit acknowledgement.
+                    if (
+                      !window.confirm(
+                        'sessionid даёт полный доступ к вашему аккаунту TikTok. ' +
+                          'Импортируйте её только со своего устройства. Продолжить?',
+                      )
+                    ) {
+                      return;
+                    }
                     api.setTiktokSession(ttSession.trim()).then(() => {
                       setTtSessionSaved(true);
                       setTtSession('');
-                    })
-                  }
+                    });
+                  }}
                 >
                   Сохранить
                 </Button>

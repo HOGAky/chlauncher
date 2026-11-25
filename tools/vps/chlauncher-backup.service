@@ -1,0 +1,10 @@
+[Unit]
+Description=chlauncher SQLite backup
+After=network.target
+
+[Service]
+Type=oneshot
+User=chlauncher
+ExecStart=/opt/chlauncher/tools/backup-db.sh
+Nice=19
+IOSchedulingClass=idle

@@ -15,11 +15,15 @@
  * Commands:
  *   /start <code> — bind the account that generated <code>
  *   /status       — show bound account + subscription state
+ *   /pay          — payment link for the subscription
+ *   /whoami       — your Telegram user id (for OWNER_TG_IDS)
  *   /channel      — invite link to the chlauncher Telegram channel
+ *   /grant <tg_id> <days> — owner-only: credit subscription days by TG id
  *   /start        — usage hint
  *
  * Env: TG_BOT_TOKEN, TG_BIND_SECRET, SERVER_URL (default 127.0.0.1:8787),
- *      TG_CHANNEL_INVITE_URL
+ *      TG_CHANNEL_INVITE_URL, OWNER_TG_IDS (comma list — /grant allowed
+ *      only for these ids)
  */
 
 import path from 'node:path';
@@ -38,6 +42,14 @@ const SECRET = process.env.TG_BIND_SECRET;
 const SERVER = (process.env.SERVER_URL || 'http://127.0.0.1:8787').replace(/\/+$/, '');
 const CHANNEL_URL =
   process.env.TG_CHANNEL_INVITE_URL || 'https://t.me/+nXUpPl7nOeQ1OWYy';
+// Owner Telegram ids — the only senders allowed to run /grant. Same env
+// name the server uses for its own owner checks.
+const OWNER_IDS = new Set(
+  String(process.env.OWNER_TG_IDS || '')
+    .split(',')
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isInteger(n) && n > 0)
+);
 
 if (!TOKEN || !SECRET) {
   console.error('[tg-bot] TG_BOT_TOKEN and TG_BIND_SECRET are required');
@@ -128,6 +140,8 @@ async function loginClaim(chatId, from, code) {
     chatId,
     `📢 Присоединяйтесь к каналу chlauncher — бета-новости, промокоды и giveaways:\n${CHANNEL_URL}`
   );
+  // Проверяем подписку по TG id, как только биндинг появится.
+  await notifySubStatus(chatId, from.id);
 }
 
 async function pairClaim(chatId, from, code) {
@@ -156,28 +170,123 @@ async function pairClaim(chatId, from, code) {
     chatId,
     `📢 Заходите в наш Telegram-канал за свежими апдейтами и промо:\n${CHANNEL_URL}`
   );
+  await notifySubStatus(chatId, from.id);
 }
 
-async function status(chatId, from) {
+/** Server-side bind+subscription lookup for a Telegram user id. */
+async function bindStatus(tgId) {
   const res = await fetch(
-    `${SERVER}/api/tg/bind-status?telegram_user_id=${from.id}`,
+    `${SERVER}/api/tg/bind-status?telegram_user_id=${tgId}`,
     { headers: { 'x-bot-secret': SECRET } }
   );
   const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data.bound) {
+  return res.ok ? data : null;
+}
+
+/** Human-readable subscription line (+ pay link when inactive). */
+function subStatusText(data) {
+  const sub = data?.subscription;
+  if (sub?.status === 'active' && sub.current_period_end) {
+    return (
+      `Подписка <b>${sub.plan_code}</b> активна до ` +
+      `${new Date(sub.current_period_end).toLocaleDateString('ru-RU')} ` +
+      `(${sub.days_left} дн).`
+    );
+  }
+  const pay = data?.payment_url
+    ? `Оплатить: <a href="${data.payment_url}">2400 ₽/мес</a>`
+    : 'Оплатить можно из лаунчера: Подписка → Telegram.';
+  return `Подписка не активна — ${pay}`;
+}
+
+async function status(chatId, from) {
+  const data = await bindStatus(from.id);
+  if (!data || !data.bound) {
     return send(
       chatId,
       `Telegram не привязан к аккаунту chlauncher.\nСгенерируйте ссылку в лаунчере: Подписка → «Привязать Telegram».\n\n📢 Наш канал: ${CHANNEL_URL}`
     );
   }
-  const sub = data.subscription;
-  const tail =
-    sub?.status === 'active' && sub.current_period_end
-      ? `Подписка ${sub.plan_code} активна до ${new Date(sub.current_period_end).toLocaleDateString('ru-RU')} (${sub.days_left} дн).`
-      : 'Подписка не активна — оплатите тариф, чтобы снять ограничения.';
   await send(
     chatId,
-    `Привязан аккаунт ${data.email_masked}.\n${tail}\n\n📢 Канал: ${CHANNEL_URL}`
+    `Привязан аккаунт ${data.email_masked}.\n${subStatusText(data)}\n\n📢 Канал: ${CHANNEL_URL}`
+  );
+}
+
+/**
+ * После подтверждения входа (login_/pair_ коды) проверяем подписку по
+ * TG id: биндинг появляется, когда лаунчер дочитает статус-код, поэтому
+ * опрашиваем несколько секунд, затем сообщаем итог.
+ */
+async function notifySubStatus(chatId, tgId) {
+  for (let i = 0; i < 4; i += 1) {
+    await new Promise((r) => setTimeout(r, 2500));
+    const data = await bindStatus(tgId).catch(() => null);
+    if (data?.bound) {
+      return send(chatId, subStatusText(data));
+    }
+  }
+  // Лаунчер не дочитал код (закрыт/офлайн) — подписка всё равно
+  // подтянется автоматически при следующем входе.
+  return send(
+    chatId,
+    'Подписка привязана к вашему Telegram и подтянется автоматически при входе. Проверить: /status'
+  );
+}
+
+/** /pay — прямая ссылка на оплату (или статус, если уже оплачено). */
+async function pay(chatId, from) {
+  const data = await bindStatus(from.id);
+  if (!data?.bound) {
+    return send(
+      chatId,
+      `Сначала привяжите аккаунт — сгенерируйте ссылку в лаунчере: Подписка → «Привязать Telegram».`
+    );
+  }
+  const sub = data.subscription;
+  if (sub?.status === 'active') {
+    return send(
+      chatId,
+      `Подписка <b>${sub.plan_code}</b> уже активна до ${new Date(sub.current_period_end).toLocaleDateString('ru-RU')}. Продление добавит дни к текущему сроку.` +
+        (data.payment_url ? `\nПродлить: <a href="${data.payment_url}">2400 ₽/мес</a>` : '')
+    );
+  }
+  return send(
+    chatId,
+    data.payment_url
+      ? `Подписка chlauncher Pro — <b>2400 ₽/мес</b>.\nОплатить: <a href="${data.payment_url}">ссылка оплаты</a>\n\nПосле оплаты тариф активируется автоматически на этот Telegram.`
+      : 'Оплатить можно из лаунчера: Подписка → Telegram.'
+  );
+}
+
+/** /grant <tg_id> <days> — owner-only: начислить дни подписки по TG id. */
+async function grant(chatId, from, args) {
+  if (!OWNER_IDS.size || !OWNER_IDS.has(from.id)) {
+    return send(chatId, 'Команда доступна только владельцу.');
+  }
+  const [idRaw, daysRaw] = args;
+  const tgId = Number(idRaw);
+  const days = Number(daysRaw);
+  if (!Number.isInteger(tgId) || !Number.isInteger(days) || days < 1 || days > 3660) {
+    return send(chatId, 'Использование: <code>/grant &lt;telegram_id&gt; &lt;дни&gt;</code>');
+  }
+  const res = await fetch(`${SERVER}/api/tg/grant`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-bot-secret': SECRET },
+    body: JSON.stringify({ telegram_user_id: tgId, days }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg =
+      data.error === 'NOT_BOUND'
+        ? `Telegram id ${tgId} не привязан ни к одному аккаунту.`
+        : `Ошибка (${data.error || res.status}).`;
+    return send(chatId, msg);
+  }
+  const sub = data.subscription;
+  return send(
+    chatId,
+    `Готово: +${days} дн для tg ${tgId}. Подписка ${sub.plan_code} активна до ${new Date(sub.current_period_end).toLocaleDateString('ru-RU')}.`
   );
 }
 
@@ -213,8 +322,10 @@ async function handleMessage(msg) {
           `📢 <b>Наш официальный канал:</b> ${CHANNEL_URL}\n\n` +
           'Команды:\n' +
           '• /start &lt;код&gt; — привязка аккаунта из лаунчера\n' +
-          '• /channel — ссылка на канал обновлений\n' +
-          '• /status — статус подписки'
+          '• /status — статус подписки\n' +
+          '• /pay — ссылка на оплату\n' +
+          '• /whoami — ваш Telegram ID\n' +
+          '• /channel — ссылка на канал обновлений'
       );
     }
     if (CODE_RE.test(code)) return bind(chatId, msg.from, code);
@@ -226,17 +337,32 @@ async function handleMessage(msg) {
         'Чтобы привязать аккаунт, сгенерируйте код в лаунчере: Подписка → «Привязать Telegram».'
     );
   }
-  if (text === '/status') return status(chatId, msg.from);
-  if (CODE_RE.test(text.toUpperCase())) return bind(chatId, msg.from, text.toUpperCase());
-  if (text === '/help' || text === '/status@') {
+  if (text === '/status' || text.startsWith('/status@')) return status(chatId, msg.from);
+  if (text === '/pay' || text.startsWith('/pay@')) return pay(chatId, msg.from);
+  if (text === '/whoami' || text.startsWith('/whoami@')) {
     return send(
       chatId,
-      `Команды: /start &lt;код&gt; — привязка аккаунта, /channel — канал обновлений, /status — статус подписки.\n\n📢 Канал: ${CHANNEL_URL}`
+      `Ваш Telegram ID: <code>${msg.from.id}</code>` +
+        (msg.from.username ? `\nUsername: @${msg.from.username}` : '')
     );
   }
-  await send(
-    chatId,
-    `Команды: /start &lt;код&gt; — привязка аккаунта, /channel — канал обновлений, /status — статус подписки.\n\n📢 Канал: ${CHANNEL_URL}`
+  if (text === '/grant' || text.startsWith('/grant ') || text.startsWith('/grant@')) {
+    const args = text.replace(/^\/grant(@\S+)?/, '').trim().split(/\s+/).filter(Boolean);
+    return grant(chatId, msg.from, args);
+  }
+  if (CODE_RE.test(text.toUpperCase())) return bind(chatId, msg.from, text.toUpperCase());
+  await send(chatId, helpText());
+}
+
+function helpText() {
+  return (
+    `Команды:\n` +
+    `• /start &lt;код&gt; — привязка аккаунта из лаунчера\n` +
+    `• /status — статус подписки\n` +
+    `• /pay — ссылка на оплату\n` +
+    `• /whoami — ваш Telegram ID\n` +
+    `• /channel — канал обновлений\n\n` +
+    `📢 Канал: ${CHANNEL_URL}`
   );
 }
 

@@ -15,6 +15,15 @@
   // `location` is absent under `node --test` — Engine is unit-tested headless.
   const QS = typeof location !== 'undefined' ? location.search : '';
   const TOKEN = new URLSearchParams(QS).get('t') || '';
+  /** HTML escaper — viewer-controlled strings (nicknames, gift names,
+   * comments) must go through it before landing in innerHTML (§P0.1). */
+  const esc = (s) =>
+    String(s ?? '').replace(/[&<>"']/g, (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+    );
+  // Write-scope token (§P0.6): game windows get `?w=` from the launcher;
+  // mutating routes (/games/report, /tts/say, /games/asset) require it.
+  const WTOKEN = new URLSearchParams(QS).get('w') || '';
 
   // ---- transport --------------------------------------------------------
 
@@ -127,19 +136,32 @@
 
     /**
      * Dedupes replays: a reconnect or WS re-deliver can re-send the same
-     * payload — we drop any (kind,user,name,coins,count) tuple already
-     * seen inside a sliding window. Entries expire with the window and
-     * the map is hard-capped so memory stays flat on long streams.
+     * payload — we drop it, but must never eat two legitimate identical
+     * gifts/comments. Contract (§15.2):
+     *  - A stable upstream `event_id` (connector msgId/eventId, DA alert
+     *    id) is authoritative: the same id is always a re-delivery.
+     *  - Without an id, the (kind,user,name,coins,count) fingerprint is a
+     *    replay only when its `ts_ms` lands within REPLAY_MS of the stored
+     *    one — a re-stamped retry arrives with a near-identical ts, while
+     *    a genuinely repeated identical gift is spaced seconds apart and
+     *    fires again.
+     * Entries expire with SEEN_TTL and the map is hard-capped so memory
+     * stays flat on long streams.
      */
     _dedupe(ev, now) {
-      // ts_ms in the key: only a true re-delivery (identical timestamp)
-      // counts as a replay. Legit repeats — two «патрик» comments or
-      // identical Roses seconds apart — share the tuple but never the
-      // timestamp, and must not be eaten as fake dupes.
-      const key = `${ev.event_kind}|${ev.user}|${ev.raw_name}|${ev.coins || 0}|${ev.count || 1}|${ev.ts_ms || 0}`;
-      const seen = this.seen.get(key);
-      if (seen !== undefined && now - seen < 10000) return true;
-      this.seen.set(key, now);
+      const uid = String(ev.event_id || ev.id || '');
+      const ets = Number(ev.ts_ms) || now;
+      let key, replay = false;
+      if (uid) {
+        key = `id|${ev.source || ''}|${uid}`;
+        replay = this.seen.has(key);
+      } else {
+        key = `fp|${ev.event_kind}|${ev.user}|${ev.raw_name}|${ev.coins || 0}|${ev.count || 1}`;
+        const prev = this.seen.get(key);
+        replay = prev !== undefined && Math.abs(ets - prev) <= Engine.REPLAY_MS;
+      }
+      if (replay) return true;
+      this.seen.set(key, ets);
       if (this.seen.size > 4096) {
         // Drop the oldest quarter — Map iterates in insertion order.
         let n = 1024;
@@ -179,6 +201,12 @@
       return out;
     }
   }
+
+  // Fingerprint re-delivery window: a replayed/re-stamped event lands
+  // within a few ms of the original ts; a human re-sending the same gift
+  // is spaced well beyond it. Upstream `event_id` matches ignore this
+  // window entirely (the id is authoritative).
+  Engine.REPLAY_MS = 3000;
 
   // ---- HUD helpers ---------------------------------------------------------
 
@@ -246,11 +274,14 @@
   }
   async function report(payload) {
     try {
-      await fetch(`/games/report?t=${encodeURIComponent(TOKEN)}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      await fetch(
+        `/games/report?t=${encodeURIComponent(TOKEN)}&w=${encodeURIComponent(WTOKEN)}`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        }
+      );
     } catch (_) { /* ledger is best-effort */ }
   }
   async function sessionState() {
@@ -322,7 +353,7 @@
       } catch (_) { return; }
       try {
         navigator.sendBeacon(
-          `/games/report?t=${encodeURIComponent(TOKEN)}`,
+          `/games/report?t=${encodeURIComponent(TOKEN)}&w=${encodeURIComponent(WTOKEN)}`,
           new Blob([body], { type: 'application/json' })
         );
       } catch (_) { /* closing — nothing else to do */ }
@@ -375,13 +406,13 @@
   }
 
   const api = {
-    TOKEN, connect, Engine, Feed, Banners, leaderboard, fmtTime, fmtNum,
+    TOKEN, connect, Engine, Feed, Banners, leaderboard, fmtTime, fmtNum, esc,
     fetchCfg, fetchTop, report, unloadReport, sessionState, watchSession,
     hud, loop, sfx, el,
   };
   if (typeof window !== 'undefined') window.GameKit = api;
   // Headless unit tests (node --test) exercise Engine + helpers only.
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { Engine, Banners, Feed, leaderboard, fmtTime, fmtNum, CMD_RE };
+    module.exports = { Engine, Banners, Feed, leaderboard, fmtTime, fmtNum, esc, CMD_RE };
   }
 })();

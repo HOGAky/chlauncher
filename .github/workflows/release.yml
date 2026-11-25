@@ -7,6 +7,10 @@
 #   Secrets:
 #     TAURI_SIGNING_PRIVATE_KEY          – contents of ~/.tauri/chlauncher
 #     TAURI_SIGNING_PRIVATE_KEY_PASSWORD – key password (empty ok if unset)
+#   Optional secrets:
+#     CODESIGN_PFX_BASE64 / CODESIGN_PFX_PASSWORD – Authenticode cert;
+#       when unset the installer ships unsigned (warning step notes it)
+#     ADMIN_EMAIL / ADMIN_PASSWORD – publish mock-game to the prod catalog
 #   Vars:
 #     VITE_API_URL – prod backend URL, baked into the release binary
 #
@@ -24,6 +28,9 @@ env:
   VITE_API_URL: ${{ vars.VITE_API_URL }}
   ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
   ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+  # Presence check for the optional Authenticode step — `if:` can't
+  # read secrets directly, so the value is surfaced at workflow level.
+  CODESIGN_PFX_B64: ${{ secrets.CODESIGN_PFX_BASE64 }}
 
 jobs:
   build:
@@ -121,6 +128,43 @@ jobs:
               throw "Non-static dependency in $exe — binary won't run on a clean OS: $bad"
             }
           }
+
+      # Authenticode signs the installer when a code-signing cert is
+      # provided (§14.8). Base64-encoded .pfx in the CODESIGN_PFX_BASE64
+      # secret + CODESIGN_PFX_PASSWORD; unsigned releases get a warning.
+      - name: Authenticode — sign installer (when cert configured)
+        if: env.CODESIGN_PFX_B64 != ''
+        env:
+          CODESIGN_PFX_PASSWORD: ${{ secrets.CODESIGN_PFX_PASSWORD }}
+        run: |
+          $cert = "$env:RUNNER_TEMP/codesign.pfx"
+          [IO.File]::WriteAllBytes($cert, [Convert]::FromBase64String($env:CODESIGN_PFX_B64))
+          $exe = Get-ChildItem "apps/launcher/src-tauri/target/release/bundle/nsis/*-setup.exe" | Select-Object -First 1
+          $signtool = Get-ChildItem "C:/Program Files (x86)/Windows Kits/10/bin/*/x64/signtool.exe" |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          & $signtool.FullName sign /fd SHA256 /td SHA256 `
+            /tr http://timestamp.digicert.com `
+            /f $cert /p $env:CODESIGN_PFX_PASSWORD $exe.FullName
+          if ($LASTEXITCODE -ne 0) { throw "signtool failed" }
+          & $signtool.FullName verify /pa $exe.FullName
+          if ($LASTEXITCODE -ne 0) { throw "signature verify failed" }
+          Remove-Item $cert -Force
+
+      - name: Note — unsigned build
+        if: env.CODESIGN_PFX_B64 == ''
+        run: |
+          Write-Warning "CODESIGN_PFX_BASE64 not set — installer ships WITHOUT Authenticode. SmartScreen will warn users."
+
+      # §14.8: SBOM for the shipped binaries — npm workspace + both Rust
+      # crates, attached to the release as CycloneDX JSON.
+      - name: Generate SBOM (CycloneDX)
+        run: |
+          npx --yes @cyclonedx/cdxgen -t node -o release-artifacts/sbom-npm.json --no-install
+          cargo install cargo-cyclonedx --locked
+          cargo cyclonedx --all -f json
+          Get-ChildItem -Recurse -Filter *.cdx.json |
+            Copy-Item -Destination release-artifacts/
+          Get-ChildItem release-artifacts/
 
       - name: Collect artifacts
         run: |

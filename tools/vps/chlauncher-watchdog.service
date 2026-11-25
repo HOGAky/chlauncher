@@ -1,0 +1,12 @@
+[Unit]
+Description=chlauncher watchdog (readiness + unit resurrection)
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/opt/chlauncher/tools/vps/watchdog.env
+ExecStart=/opt/chlauncher/tools/vps/chlauncher-watchdog.sh
+# Root: it may need `systemctl restart`, journald vacuum and disk stats.
+User=root
+Nice=19
+IOSchedulingClass=idle

@@ -1,0 +1,11 @@
+[Unit]
+Description=chlauncher watchdog timer (every minute)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=15s
+Unit=chlauncher-watchdog.service
+
+[Install]
+WantedBy=timers.target

@@ -13,6 +13,11 @@ process.env.NODE_ENV = 'production';
 // Production requires real secrets even in tests (config validation).
 process.env.JWT_SECRET ||= 'test-jwt-secret-for-no-mock-suite';
 process.env.HWID_HASH_SECRET ||= 'test-hwid-secret-for-no-mock-suite';
+process.env.OWNER_TG_IDS ||= '123456';
+process.env.PUBLIC_BASE_URL ||= 'https://api.example.com';
+// The dev machine's .env may bind a public interface; the simulated
+// production app here sits behind a proxy on loopback.
+process.env.SERVER_HOST = '127.0.0.1';
 
 let app;
 

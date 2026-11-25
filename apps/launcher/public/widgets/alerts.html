@@ -108,7 +108,7 @@
     $('nick').textContent = d.nickname || '???';
     $('ava').src = d.avatar || ('https://api.dicebear.com/9.x/thumbs/png?seed=' + encodeURIComponent(d.nickname||'x'));
     if (d.type === 'gift') {
-      $('detail').innerHTML = `x${d.count} <b>${esc(d.giftName)}</b>${d.coins ? ' · '+d.coins+' &#128142;' : ''}`;
+      $('detail').innerHTML = `x${esc(d.count)} <b>${esc(d.giftName)}</b>${d.coins ? ' · '+esc(d.coins)+' &#128142;' : ''}`;
       if (d.image) { $('giftimg').src = d.image; $('giftimg').style.display='block'; }
       else $('giftimg').style.display='none';
     } else {

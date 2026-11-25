@@ -37,6 +37,41 @@ import { fetchTikTokAccountInfo } from './auth.js';
 const CODE_TTL_MS = 10 * 60 * 1000;
 const SESSION_ID_RE = /^[A-Za-z0-9._%\-]{10,200}$/;
 
+/**
+ * §14: raw TikTok cookies must not rest in the DB — pair rows encrypt
+ * `tiktok_sessionid`/`tiktok_idc` with AES-256-GCM. The key derives from
+ * JWT_SECRET via HKDF, so no new operator secret is needed and rotating
+ * JWT_SECRET invalidates stored pair sessions (they live ≤10 min anyway).
+ * Rows written before this change still read as plaintext fallback.
+ */
+const PAIR_KEY = Buffer.from(
+  crypto.hkdfSync('sha256', config.jwtSecret, 'chlauncher', 'pair-code-secrets', 32)
+);
+
+function encSecret(v) {
+  if (!v) return null;
+  const iv = crypto.randomBytes(12);
+  const c = crypto.createCipheriv('aes-256-gcm', PAIR_KEY, iv);
+  const ct = Buffer.concat([c.update(String(v), 'utf8'), c.final()]);
+  return `enc:${iv.toString('base64')}.${c.getAuthTag().toString('base64')}.${ct.toString('base64')}`;
+}
+
+function decSecret(v) {
+  if (!v) return null;
+  if (!v.startsWith('enc:')) return v; // pre-encryption plaintext row
+  try {
+    const [iv, tag, ct] = v
+      .slice(4)
+      .split('.')
+      .map((s) => Buffer.from(s, 'base64'));
+    const d = crypto.createDecipheriv('aes-256-gcm', PAIR_KEY, iv);
+    d.setAuthTag(tag);
+    return Buffer.concat([d.update(ct), d.final()]).toString('utf8');
+  } catch {
+    return null; // rotated key / tampered row — session is dropped, not leaked
+  }
+}
+
 function safeEqual(a, b) {
   const ba = Buffer.from(String(a));
   const bb = Buffer.from(String(b));
@@ -219,7 +254,13 @@ export default async function pairRoutes(app, { db }) {
         `UPDATE pair_codes
          SET tiktok_sessionid = ?, tiktok_idc = ?, tiktok_uid = ?, tiktok_username = ?
          WHERE code = ?`
-      ).run(sid, idc || null, info.uid, info.username || null, row.code);
+      ).run(
+        encSecret(sid),
+        encSecret(idc) || null,
+        info.uid,
+        info.username || null,
+        row.code
+      );
       return { ok: true, username: info.username || '' };
     }
   );
@@ -262,10 +303,11 @@ export default async function pairRoutes(app, { db }) {
       if (!row || row.consumed || row.expires_at <= nowIso()) {
         return reply.code(404).send({ error: 'CODE_INVALID' });
       }
-      const tiktokSession = row.tiktok_sessionid
+      const sessionid = decSecret(row.tiktok_sessionid);
+      const tiktokSession = sessionid
         ? {
-            sessionid: row.tiktok_sessionid,
-            idc: row.tiktok_idc || null,
+            sessionid,
+            idc: decSecret(row.tiktok_idc) || null,
             uid: row.tiktok_uid || null,
             username: row.tiktok_username || null,
           }

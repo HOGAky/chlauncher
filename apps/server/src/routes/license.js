@@ -15,6 +15,7 @@ import {
   refreshSubscription,
   subscriptionView,
 } from '../subscriptions.js';
+import { gameEntitlementError } from './games.js';
 
 /**
  * @param {import('fastify').FastifyInstance} app
@@ -42,16 +43,29 @@ export default async function licenseRoutes(app, { db, authenticate }) {
     }
 
     const sub = refreshSubscription(db, user.id);
-    if (!sub || sub.status !== 'active') {
-      // §8.3: free-tier users can launch games flagged `is_free`.
-      const game = game_slug ? findGameBySlug(db, String(game_slug)) : null;
-      if (!game?.is_free) {
-        return reply.code(403).send({
-          allowed: false,
-          error: 'SUBSCRIPTION_REQUIRED',
-          subscription: subscriptionView(sub),
-        });
-      }
+    // P0.2: entitlement gate — the plan (not "any subscription") decides.
+    // Catalog rows need `paid_games` (or is_free); non-catalog slugs
+    // (built-in interactive packs) need the plan's `interactive_games`
+    // allow-list. A modified client asking for an unlisted slug gets a
+    // stable machine-readable denial.
+    const game = game_slug ? findGameBySlug(db, String(game_slug)) : null;
+    const denied = gameEntitlementError(
+      db,
+      user.id,
+      game || { slug: game_slug ? String(game_slug) : null, is_free: 0 }
+    );
+    if (denied !== true) {
+      // "Wrong plan for this slug" vs "no paid plan at all" — the client
+      // shows a paywall for the latter and a plan-upsell for the former.
+      const error =
+        sub && sub.status === 'active'
+          ? `PLAN_LIMIT:${denied}`
+          : 'SUBSCRIPTION_REQUIRED';
+      return reply.code(403).send({
+        allowed: false,
+        error,
+        subscription: subscriptionView(sub),
+      });
     }
 
     return { allowed: true, subscription: subscriptionView(sub) };

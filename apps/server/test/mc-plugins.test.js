@@ -168,21 +168,13 @@ test('premium plugin is gated by mc_premium_plugins', async () => {
   assert.equal(res.statusCode, 403);
   assert.equal(res.json().error, 'PLAN_LIMIT:mc_premium_plugins');
 
+  // Pro is the single all-inclusive paid tier — mc_premium included.
   const pro = await register('pro-user@example.com');
   await mockPay(pro.token, 'pro');
   res = await app.inject({
     method: 'GET',
     url: '/api/mc/plugins/vip-koth/download',
     headers: auth(pro.token),
-  });
-  assert.equal(res.statusCode, 403); // pro lacks mc_premium_plugins
-
-  const expert = await register('expert-user@example.com');
-  await mockPay(expert.token, 'expert');
-  res = await app.inject({
-    method: 'GET',
-    url: '/api/mc/plugins/vip-koth/download',
-    headers: auth(expert.token),
   });
   assert.equal(res.statusCode, 200);
   assert.deepEqual(res.rawPayload, FAKE_JAR);

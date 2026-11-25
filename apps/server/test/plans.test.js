@@ -57,11 +57,15 @@ test('GET /api/plans is public and returns seeded tiers', async () => {
   const res = await app.inject({ method: 'GET', url: '/api/plans' });
   assert.equal(res.statusCode, 200);
   const codes = res.json().plans.map((p) => p.code);
-  assert.deepEqual(codes, ['free', 'pro', 'expert']);
+  assert.deepEqual(codes, ['free', 'pro']);
   const free = res.json().plans[0];
   assert.equal(free.price_minor, 0);
   assert.equal(free.entitlements.tts, false);
   assert.equal(free.entitlements.earn_limit_coins_month, 5000);
+  // Single paid tier (owner decision): Pro = 2400₽/мес, all-inclusive.
+  const pro = res.json().plans[1];
+  assert.equal(pro.price_minor, 240000);
+  assert.equal(pro.entitlements.mc_premium_plugins, true);
 });
 
 // ---------------------------------------------------------- entitlements
@@ -87,12 +91,12 @@ test('mock-pay pro activates the pro plan', async () => {
   assert.equal(body.entitlements.earn_limit_coins_month, null);
 });
 
-test('mock-pay expert switches plan + stacks days', async () => {
+test('mock-pay pro again stacks days', async () => {
   const { token } = await register('vip@example.com');
   await mockPay(token, 'pro');
-  const pay2 = await mockPay(token, 'expert');
+  const pay2 = await mockPay(token, 'pro');
   assert.equal(pay2.status, 200);
-  assert.equal(pay2.body.subscription.plan_code, 'expert');
+  assert.equal(pay2.body.subscription.plan_code, 'pro');
   // §8.3: days stack without recalculation — ≥ 55 left of 60 paid.
   assert.ok(pay2.body.subscription.days_left >= 55);
 });

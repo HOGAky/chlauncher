@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Licensing & billing backend: JWT auth, HWID binding, 30-day subscriptions, game distribution.",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",

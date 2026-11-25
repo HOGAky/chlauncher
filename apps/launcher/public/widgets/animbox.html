@@ -228,7 +228,7 @@
     const cap = document.createElement('div');
     cap.className = 'anim-cap';
     const gift = ev.raw_name || 'Rose';
-    cap.innerHTML = `${esc(ev.user || 'зритель')} <b>${esc(gift)}${(ev.count||1) > 1 ? ' ×' + ev.count : ''}</b>`;
+    cap.innerHTML = `${esc(ev.user || 'зритель')} <b>${esc(gift)}${(ev.count||1) > 1 ? ' ×' + esc(ev.count) : ''}</b>`;
     if (!m) {
       inner.appendChild(roseNode());
     } else if (m.kind === 'video') {

@@ -1,0 +1,10 @@
+[Unit]
+Description=chlauncher junk/cache cleanup
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/chlauncher/tools/vps/chlauncher-cleanup.sh
+User=root
+Nice=19
+IOSchedulingClass=idle

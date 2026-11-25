@@ -63,14 +63,21 @@ export function loadConfig(env = process.env) {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+  // Relative paths are anchored to the server package root — never to the
+  // process cwd (systemd units often run with an unexpected cwd).
+  const resolvePath = (p, fallback) =>
+    path.resolve(SERVER_ROOT, p || fallback);
+  const trustedCidrs = (env.TRUSTED_PROXY_CIDRS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
   return {
     port: Number(env.SERVER_PORT || 8787),
     host: env.SERVER_HOST || '127.0.0.1',
     isProduction,
     jwtSecret: env.JWT_SECRET || DEV_JWT_SECRET,
-    databasePath:
-      env.DATABASE_PATH || path.join(SERVER_ROOT, 'data', 'chlauncher.db'),
-    staticDir: env.STATIC_DIR || path.join(SERVER_ROOT, 'static'),
+    databasePath: resolvePath(env.DATABASE_PATH, 'data/chlauncher.db'),
+    staticDir: resolvePath(env.STATIC_DIR, 'static'),
     /**
      * Emails that receive role='admin' on every register/login (§1.1).
      * Empty in production regardless of env — see warning above.
@@ -93,11 +100,29 @@ export function loadConfig(env = process.env) {
             ],
     /** Upload cap for admin build POSTs (§3). Default: 2 GiB. */
     maxBuildSize: Number(env.MAX_BUILD_SIZE || 2 * 1024 * 1024 * 1024),
+    /** P0.7 zip-bomb guards for uploaded game builds. */
+    maxZipEntries: Number(env.MAX_ZIP_ENTRIES || 20000),
+    maxZipExpandedBytes: Number(env.MAX_ZIP_EXPANDED_BYTES || 4 * 1024 * 1024 * 1024),
+    maxZipFileBytes: Number(env.MAX_ZIP_FILE_BYTES || 2 * 1024 * 1024 * 1024),
+    maxZipRatio: Number(env.MAX_ZIP_RATIO || 200),
     /**
      * Trust X-Forwarded-For / CF-Connecting-IP for client IPs. Enable ONLY
      * behind a reverse proxy / Cloudflare (rate-limit, webhook IP checks).
+     * `true` alone would trust forwarded headers from ANY client — instead
+     * we pass Fastify an allowlist of proxy hops: loopback always (local
+     * nginx/Caddy) plus every CIDR in TRUSTED_PROXY_CIDRS.
      */
-    trustProxy: env.TRUST_PROXY === 'true',
+    trustProxy:
+      env.TRUST_PROXY === 'true'
+        ? ['127.0.0.1', '::1', ...trustedCidrs]
+        : false,
+    trustedProxyCidrs: trustedCidrs,
+    /**
+     * Escape hatch for deployments that intentionally bind the API on a
+     * public interface without a proxy (NOT recommended). Production
+     * refuses 0.0.0.0/:: binds unless this is set — see vps-deploy.md.
+     */
+    allowPublicBind: env.ALLOW_PUBLIC_BIND === '1',
     /** mock-pay/mock-expire routes only exist when this is true (§5.5). */
     enableMockBilling:
       env.ENABLE_MOCK_BILLING === '1' || !isProduction,
@@ -224,6 +249,51 @@ export function validateProductionConfig(cfg) {
       '[config] FATAL: NODE_ENV=production requires HWID_HASH_SECRET ' +
         '(generate e.g. `openssl rand -hex 32`) — HWIDs are stored ' +
         'HMAC-hashed and need a stable key. Refusing to start.'
+    );
+  }
+  // P0.3: fail-closed ownership. Without OWNER_TG_IDS the legacy rule lets
+  // ANY admin grant subscriptions/roles/mint promos — unacceptable in prod.
+  if (cfg.ownerTgIds.size === 0) {
+    throw new Error(
+      '[config] FATAL: NODE_ENV=production requires OWNER_TG_IDS ' +
+        '(comma-separated Telegram ids of the owner accounts — the bind-bot ' +
+        'answers /whoami with yours). Bootstrap via tools/grant-admin.mjs + ' +
+        'tg bind, see docs/operations.md. Refusing to start.'
+    );
+  }
+  // P0.8: webhook IP-bypass is a test-only flag — enabling it in prod lets
+  // anyone forge provider notifications and mint subscriptions.
+  if (cfg.webhookSkipIpCheck) {
+    throw new Error(
+      '[config] FATAL: BILLING_WEBHOOK_SKIP_IP_CHECK=1 is forbidden in ' +
+        'production — it disables the YooKassa source-IP check. Refusing to start.'
+    );
+  }
+  // P0.8: the API must sit behind the proxy, not on a public interface.
+  // Binding 0.0.0.0/:: in prod exposes it around Cloudflare/firewall rules.
+  const publicBind = cfg.host === '0.0.0.0' || cfg.host === '::' || cfg.host === '';
+  if (publicBind && !cfg.allowPublicBind) {
+    throw new Error(
+      '[config] FATAL: SERVER_HOST binds a public interface in production. ' +
+        'Bind 127.0.0.1 and put nginx/Cloudflare Tunnel in front; if a public ' +
+        'bind is really intended, set ALLOW_PUBLIC_BIND=1 explicitly. ' +
+        'Refusing to start.'
+    );
+  }
+  // P0.8: OAuth/payment callbacks demand a real HTTPS public URL.
+  if (!/^https:\/\//.test(cfg.publicBaseUrl)) {
+    throw new Error(
+      '[config] FATAL: PUBLIC_BASE_URL must be the https origin nginx ' +
+        'exposes (e.g. https://api.example.com) in production — OAuth and ' +
+        'payment callbacks are derived from it. Refusing to start.'
+    );
+  }
+  if (!cfg.trustProxy) {
+    console.warn(
+      '[config] WARNING: TRUST_PROXY is off in production — client IPs are ' +
+        'the proxy address, which breaks per-IP rate limits and the ' +
+        'YooKassa webhook subnet check. Set TRUST_PROXY=true and ' +
+        'TRUSTED_PROXY_CIDRS=<proxy CIDRs> if a proxy fronts this API.'
     );
   }
 }

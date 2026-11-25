@@ -88,6 +88,7 @@ impl TimedEvents {
                 is_moderator: false,
                 is_superfan: false,
                 ts_ms: crate::types::now_ms(),
+                event_id: String::new(),
             };
             // Full channel — drop this tick rather than block the loop.
             let _ = self.raw_tx.try_send(ev);

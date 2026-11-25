@@ -17,6 +17,7 @@ import {
   updateSubscription,
   nowIso,
   isoInDays,
+  withTx,
 } from './db.js';
 
 const SUBSCRIPTION_DAYS = 30;
@@ -110,18 +111,22 @@ export function recordPayment(
   db,
   { userId, provider, externalId = null, days = SUBSCRIPTION_DAYS, actorId = null, planCode = null }
 ) {
-  const info = db
-    .prepare(
-      `INSERT OR IGNORE INTO payments
-         (user_id, provider, external_id, days, status, actor_id, plan_code, created_at)
-       VALUES (?,?,?,?, 'succeeded', ?, ?, ?)`
-    )
-    .run(userId, provider, externalId, days, actorId, planCode, nowIso());
-  if (info.changes === 0) {
-    return { applied: false, subscription: refreshSubscription(db, userId) };
-  }
-  const subscription = activateOrExtend(db, userId, days, planCode);
-  return { applied: true, subscription };
+  // Ledger insert + grant in one transaction (P0.4): a crash between
+  // them must not leave a succeeded payment without its days.
+  return withTx(db, () => {
+    const info = db
+      .prepare(
+        `INSERT OR IGNORE INTO payments
+           (user_id, provider, external_id, days, status, actor_id, plan_code, created_at)
+         VALUES (?,?,?,?, 'succeeded', ?, ?, ?)`
+      )
+      .run(userId, provider, externalId, days, actorId, planCode, nowIso());
+    if (info.changes === 0) {
+      return { applied: false, subscription: refreshSubscription(db, userId) };
+    }
+    const subscription = activateOrExtend(db, userId, days, planCode);
+    return { applied: true, subscription };
+  });
 }
 
 /**
@@ -156,5 +161,26 @@ export function startExpirySweeper(db) {
       `UPDATE subscriptions SET status = 'expired'
        WHERE status = 'active' AND current_period_end <= ?`
     ).run(nowIso());
+    // Pair codes hold an (encrypted) TikTok cookie — expired/consumed
+    // rows have no further use, so the sweep purges them on the same
+    // cadence (§14: credentials must not rest in the DB any longer
+    // than the handoff needs). The other one-shot/handshake tables get
+    // the same treatment so the DB can't grow unboundedly on a VPS
+    // that nobody babysits.
+    const now = nowIso();
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const purges = [
+      [`DELETE FROM pair_codes WHERE expires_at <= ? OR consumed = 1`, now],
+      [`DELETE FROM tg_login_codes WHERE expires_at <= ? OR consumed = 1`, now],
+      [`DELETE FROM billing_link_codes WHERE expires_at <= ? OR used = 1`, now],
+      [`DELETE FROM usage_nonces WHERE created_at <= ?`, dayAgo],
+    ];
+    for (const [sql, arg] of purges) {
+      try {
+        db.prepare(sql).run(arg);
+      } catch {
+        /* table from a newer schema may be absent — skip that purge */
+      }
+    }
   }, 60 * 60 * 1000).unref();
 }

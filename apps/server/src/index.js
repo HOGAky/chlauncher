@@ -10,6 +10,7 @@
 import { buildApp } from './app.js';
 import { config } from './config.js';
 import { startExpirySweeper } from './subscriptions.js';
+import { sweepUploadTemps } from './build_store.js';
 
 const { app, db } = await buildApp({
   databasePath: config.databasePath,
@@ -17,6 +18,25 @@ const { app, db } = await buildApp({
 });
 
 startExpirySweeper(db);
+sweepUploadTemps();
+
+// Graceful shutdown: stop accepting new requests, drain in-flight ones
+// (payments/uploads finish or the client retries), then close SQLite.
+let closing = false;
+async function shutdown(signal) {
+  if (closing) return;
+  closing = true;
+  app.log.info({ signal }, 'shutting down');
+  try {
+    await app.close(); // onClose hook closes the db
+    process.exit(0);
+  } catch (err) {
+    app.log.error(err);
+    process.exit(1);
+  }
+}
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));
 
 try {
   await app.listen({ port: config.port, host: config.host });

@@ -25,10 +25,16 @@ import {
   currentMonth,
   findMcPlugin,
   listAllMcPlugins,
+  validateEntitlements,
 } from '../db.js';
 import { subscriptionView, recordPayment, refreshSubscription } from '../subscriptions.js';
 import { ipHash } from '../hwid.js';
-import { SLUG_RE, storeGameBuild } from '../build_store.js';
+import {
+  SLUG_RE,
+  storeGameBuild,
+  addStreamingUploadParser,
+  cleanupUpload,
+} from '../build_store.js';
 import { isOwner, makeRequireOwner } from '../auth.js';
 
 /**
@@ -43,12 +49,9 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
   // admins keep moderation, support and catalog review.
   const ownerOnly = { preHandler: makeRequireOwner(db) };
 
-  // Raw build uploads arrive as application/octet-stream buffers.
-  app.addContentTypeParser(
-    'application/octet-stream',
-    { parseAs: 'buffer' },
-    (_req, body, done) => done(null, body)
-  );
+  // Raw build uploads stream to a temp file — never buffered in memory
+  // (P0.7). The route gets `request.body` = {filePath, size}.
+  addStreamingUploadParser(app);
 
   /** Writes one admin_audit row; called on every mutation below. */
   function audit(actorId, action, target, meta = {}) {
@@ -170,9 +173,10 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
         version: request.query.version || '',
         changelog:
           request.query.changelog || request.headers['x-changelog'] || '',
-        body: request.body,
+        upload: request.body,
         uploadedBy: request.auth.userId,
       });
+      cleanupUpload(request.body);
       if (!res.ok) {
         const code = res.error === 'VERSION_EXISTS' ? 409 : 400;
         const { ok: _ok, error: _e, ...extra } = res;
@@ -486,6 +490,14 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
     if (!title || !Number.isInteger(Number(price_minor)) || Number(price_minor) < 0) {
       return reply.code(400).send({ error: 'MISSING_FIELDS' });
     }
+    // P0.2: unknown entitlement keys / wrong types must never slip in —
+    // a typo could silently grant or deny access.
+    const entCheck = validateEntitlements(entitlements);
+    if (!entCheck.ok) {
+      return reply
+        .code(400)
+        .send({ error: 'INVALID_ENTITLEMENTS', detail: entCheck.error });
+    }
     db.prepare(
       `INSERT INTO plans (code, title, price_minor, period_days, entitlements, sort)
        VALUES (?, ?, ?, ?, ?, ?)`
@@ -507,6 +519,14 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
     if (!plan) return reply.code(404).send({ error: 'PLAN_NOT_FOUND' });
     const { title, price_minor, period_days, entitlements, active, sort } =
       request.body || {};
+    if (entitlements !== undefined) {
+      const entCheck = validateEntitlements(entitlements);
+      if (!entCheck.ok) {
+        return reply
+          .code(400)
+          .send({ error: 'INVALID_ENTITLEMENTS', detail: entCheck.error });
+      }
+    }
     db.prepare(
       `UPDATE plans SET
          title = COALESCE(?, title),
@@ -604,27 +624,51 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
     async (request, reply) => {
       const plugin = findMcPlugin(db, request.params.slug);
       if (!plugin) return reply.code(404).send({ error: 'PLUGIN_NOT_FOUND' });
-      const body = request.body;
-      if (!Buffer.isBuffer(body) || body.length === 0) {
+      const upload = request.body;
+      if (!upload?.filePath || !upload.size) {
+        cleanupUpload(upload);
         return reply.code(400).send({ error: 'EMPTY_BODY' });
       }
       // Jars are zips — cheap magic check catches wrong-file uploads.
-      if (body[0] !== 0x50 || body[1] !== 0x4b) {
-        return reply.code(400).send({ error: 'NOT_A_JAR' });
+      const head = Buffer.alloc(4);
+      const fd = fs.openSync(upload.filePath, 'r');
+      let sha256;
+      try {
+        fs.readSync(fd, head, 0, 4, 0);
+        if (head[0] !== 0x50 || head[1] !== 0x4b) {
+          fs.closeSync(fd);
+          cleanupUpload(upload);
+          return reply.code(400).send({ error: 'NOT_A_JAR' });
+        }
+        const h = crypto.createHash('sha256');
+        const buf = Buffer.alloc(4 * 1024 * 1024);
+        let off = 0;
+        for (;;) {
+          const n = fs.readSync(fd, buf, 0, buf.length, off);
+          if (n <= 0) break;
+          h.update(buf.subarray(0, n));
+          off += n;
+        }
+        sha256 = h.digest('hex');
+      } finally {
+        try {
+          fs.closeSync(fd);
+        } catch {
+          /* already closed */
+        }
       }
       const rel = `${plugin.slug}-${plugin.version}.jar`;
       const root = path.resolve(config.staticDir, 'plugins');
       fs.mkdirSync(root, { recursive: true });
-      fs.writeFileSync(path.join(root, rel), body);
-      const sha256 = crypto.createHash('sha256').update(body).digest('hex');
+      fs.renameSync(upload.filePath, path.join(root, rel));
       db.prepare(
         `UPDATE mc_plugins
            SET file_name = ?, sha256 = ?, size_bytes = ?, updated_at = ?
          WHERE slug = ?`
-      ).run(rel, sha256, body.length, nowIso(), plugin.slug);
+      ).run(rel, sha256, upload.size, nowIso(), plugin.slug);
       audit(request.auth.userId, 'upload_mc_plugin', plugin.slug, {
         sha256,
-        size_bytes: body.length,
+        size_bytes: upload.size,
       });
       return reply.code(201).send({
         plugin: listAllMcPlugins(db).find((p) => p.slug === plugin.slug),

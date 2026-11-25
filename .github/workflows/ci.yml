@@ -39,9 +39,9 @@ jobs:
       - run: npm run test:server
       - name: Gift catalog integrity
         run: node tools/fetch-gifts.mjs --check
-      - name: Launcher unit tests (error contract)
+      - name: Launcher unit tests (error contract + XSS sinks)
         working-directory: apps/launcher
-        run: node --test src/errorMessages.test.ts
+        run: node --test src/errorMessages.test.ts src/xss-scan.test.mjs
 
   rust:
     runs-on: ubuntu-latest
@@ -52,13 +52,15 @@ jobs:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo fmt --check
+      # --locked: CI must fail on lockfile/manifest drift instead of
+      # silently re-resolving (mock-game version drift slipped through once).
       - name: Clippy — workspace crates (game-sdk, mock-game)
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Clippy — Tauri launcher backend
         working-directory: apps/launcher/src-tauri
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --all-targets --locked -- -D warnings
       - name: Tests — workspace crates
-        run: cargo test --workspace
+        run: cargo test --workspace --locked
       - name: Check — Tauri launcher backend (see header note)
         working-directory: apps/launcher/src-tauri
-        run: cargo check
+        run: cargo check --locked

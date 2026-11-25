@@ -244,12 +244,14 @@ const MIGRATIONS = [
       );
     `);
 
-    // Seed the default tiers — placeholder prices/names (owner decides,
-    // spec §15). free/pro/expert map to §8.2 entitlement keys.
+    // Seed the default tiers — one paid plan ("просто"): Pro 2400₽/мес
+    // with every entitlement, Free as the no-subscription floor. Expert
+    // stays in the table but inactive (legacy subscriptions keep working;
+    // re-activate via the admin API if a second tier is ever wanted).
     const seed = db.prepare(
       `INSERT OR IGNORE INTO plans
          (code, title, price_minor, currency, period_days, entitlements, active, sort)
-       VALUES (?, ?, ?, 'RUB', 30, ?, 1, ?)`
+       VALUES (?, ?, ?, 'RUB', 30, ?, ?, ?)`
     );
     seed.run('free', 'Free', 0, JSON.stringify({
       max_presets: 3,
@@ -263,20 +265,20 @@ const MIGRATIONS = [
       paid_games: false,
       mc_premium_plugins: false,
       interactive_games: ['gift_tower', 'patrick_cabbage', 'aquarium'],
-    }), 0);
-    seed.run('pro', 'Pro', 29900, JSON.stringify({
-      max_presets: 25,
-      max_rules_per_preset: 50,
-      max_media_triggers: 50,
+    }), 1, 0);
+    seed.run('pro', 'Pro', 240000, JSON.stringify({
+      max_presets: 100,
+      max_rules_per_preset: 200,
+      max_media_triggers: 200,
       tts: true,
       spinner: true,
       custom_overlay_style: true,
       interrupts: true,
       earn_limit_coins_month: null,
       paid_games: true,
-      mc_premium_plugins: false,
+      mc_premium_plugins: true,
       interactive_games: ['gift_tower', 'boy_vs_girl', 'survive_horde', 'patrick_cabbage', 'aquarium'],
-    }), 1);
+    }), 1, 1);
     seed.run('expert', 'Expert', 59900, JSON.stringify({
       max_presets: 100,
       max_rules_per_preset: 200,
@@ -289,7 +291,7 @@ const MIGRATIONS = [
       paid_games: true,
       mc_premium_plugins: true,
       interactive_games: ['gift_tower', 'boy_vs_girl', 'survive_horde', 'patrick_cabbage', 'aquarium'],
-    }), 2);
+    }), 0, 2);
   },
   // v6 → v7: Minecraft plugin catalog (parity spec §9.4). Rows are
   // catalog entries the launcher can install into the managed Paper
@@ -611,7 +613,81 @@ const MIGRATIONS = [
       upd.run(JSON.stringify(ent), r.code);
     }
   },
+  // v16 → v17: hardened checkout/ledger. Pending orders are crash-safe:
+  // they carry the client idempotency key (client_ref), the provider
+  // checkout URL once known, and the expected amount in integer minor
+  // units so the webhook can prove the provider paid what we asked for.
+  (db) => {
+    db.exec(`
+      ALTER TABLE payments ADD COLUMN client_ref TEXT;
+      ALTER TABLE payments ADD COLUMN checkout_url TEXT;
+      ALTER TABLE payments ADD COLUMN amount_minor INTEGER;
+      ALTER TABLE payments ADD COLUMN currency TEXT;
+      ALTER TABLE payments ADD COLUMN provider_payload TEXT;
+      CREATE UNIQUE INDEX idx_payments_client_ref
+        ON payments(provider, client_ref, user_id)
+        WHERE client_ref IS NOT NULL;
+      CREATE INDEX idx_payments_status ON payments(status);
+    `);
+  },
+  // v17 → v18: single-tier pricing (owner decision): Pro = 2400₽/мес with
+  // every entitlement incl. mc_premium_plugins; Expert leaves the public
+  // catalog (active=0) — existing expert subscriptions still resolve via
+  // plan_code so nothing breaks. Only rows still carrying the seed
+  // values are touched, so an owner's custom pricing survives the update.
+  (db) => {
+    const pro = db.prepare("SELECT * FROM plans WHERE code = 'pro'").get();
+    if (pro && Number(pro.price_minor) === 29900) {
+      const ent = JSON.parse(pro.entitlements || '{}');
+      ent.mc_premium_plugins = true;
+      ent.max_presets = Math.max(Number(ent.max_presets) || 0, 100);
+      ent.max_rules_per_preset = Math.max(Number(ent.max_rules_per_preset) || 0, 200);
+      ent.max_media_triggers = Math.max(Number(ent.max_media_triggers) || 0, 200);
+      db.prepare(
+        "UPDATE plans SET price_minor = 240000, entitlements = ? WHERE code = 'pro'"
+      ).run(JSON.stringify(ent));
+    }
+    db.prepare(
+      "UPDATE plans SET active = 0 WHERE code = 'expert' AND price_minor = 59900"
+    ).run();
+  },
 ];
+
+const TX_DEPTH = Symbol('txDepth');
+
+/**
+ * Runs `fn` inside an immediate-write transaction — the unit of work for
+ * every payment ledger → subscription transition (P0.4: a crash between
+ * the two writes must not leave a paid payment without the grant).
+ * Nestable via savepoints so route-level transactions can wrap helpers
+ * that open their own.
+ * @template T
+ */
+export function withTx(db, fn) {
+  const depth = db[TX_DEPTH] || 0;
+  if (depth === 0) db.exec('BEGIN IMMEDIATE');
+  else db.exec(`SAVEPOINT withTx_${depth}`);
+  db[TX_DEPTH] = depth + 1;
+  try {
+    const result = fn();
+    db[TX_DEPTH] = depth;
+    if (depth === 0) db.exec('COMMIT');
+    else db.exec(`RELEASE withTx_${depth}`);
+    return result;
+  } catch (err) {
+    db[TX_DEPTH] = depth;
+    try {
+      if (depth === 0) db.exec('ROLLBACK');
+      else {
+        db.exec(`ROLLBACK TO withTx_${depth}`);
+        db.exec(`RELEASE withTx_${depth}`);
+      }
+    } catch {
+      /* connection already unusable — surface the original error */
+    }
+    throw err;
+  }
+}
 
 /** Runs all pending migrations in order. Idempotent via user_version. */
 function migrate(db) {
@@ -825,6 +901,66 @@ export function listAllPlans(db) {
 export function findPlan(db, code) {
   const row = db.prepare('SELECT * FROM plans WHERE code = ?').get(code);
   return row ? planView(row) : null;
+}
+
+/**
+ * Entitlement schema (P0.2): unknown keys or wrong types must never
+ * silently grant access — plan CRUD validates against this map.
+ *  - 'int'      — non-negative integer
+ *  - 'int|null' — non-negative integer or null (= unlimited)
+ *  - 'bool'     — true/false
+ *  - 'slugs'    — array of game slugs
+ */
+export const ENTITLEMENT_SCHEMA = {
+  max_presets: 'int',
+  max_rules_per_preset: 'int',
+  max_media_triggers: 'int',
+  tts: 'bool',
+  spinner: 'bool',
+  custom_overlay_style: 'bool',
+  interrupts: 'bool',
+  earn_limit_coins_month: 'int|null',
+  paid_games: 'bool',
+  mc_premium_plugins: 'bool',
+  interactive_games: 'slugs',
+};
+
+const ENT_SLUG_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+
+/**
+ * Validates an entitlements object against ENTITLEMENT_SCHEMA.
+ * @returns {{ok:true}|{ok:false, error:string}}
+ */
+export function validateEntitlements(ent) {
+  if (ent == null || typeof ent !== 'object' || Array.isArray(ent)) {
+    return { ok: false, error: 'entitlements must be an object' };
+  }
+  for (const [key, value] of Object.entries(ent)) {
+    const type = ENTITLEMENT_SCHEMA[key];
+    if (!type) return { ok: false, error: `unknown entitlement key: ${key}` };
+    if (type === 'bool' && typeof value !== 'boolean') {
+      return { ok: false, error: `${key} must be boolean` };
+    }
+    if (type === 'int' && !(Number.isInteger(value) && value >= 0)) {
+      return { ok: false, error: `${key} must be a non-negative integer` };
+    }
+    if (
+      type === 'int|null' &&
+      !(value === null || (Number.isInteger(value) && value >= 0))
+    ) {
+      return { ok: false, error: `${key} must be a non-negative integer or null` };
+    }
+    if (type === 'slugs') {
+      if (
+        !Array.isArray(value) ||
+        value.length > 200 ||
+        value.some((s) => typeof s !== 'string' || !ENT_SLUG_RE.test(s))
+      ) {
+        return { ok: false, error: `${key} must be an array of game slugs` };
+      }
+    }
+  }
+  return { ok: true };
 }
 
 /** Public plan shape — `entitlements` arrives already parsed. */

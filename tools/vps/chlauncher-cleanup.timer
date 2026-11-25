@@ -1,0 +1,11 @@
+[Unit]
+Description=chlauncher daily cleanup
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=30min
+Persistent=true
+Unit=chlauncher-cleanup.service
+
+[Install]
+WantedBy=timers.target

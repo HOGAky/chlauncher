@@ -123,7 +123,7 @@
   }
 
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const fmt = n => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : String(Math.floor(n));
+  const fmt = n => { n = Math.floor(Number(n)) || 0; return n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : String(n); };
   const cntLabel = metric === 'coins' ? 'монет' : 'лайков';
   const icon = metric === 'coins' ? '&#128142;' : '&#10084;';
 
@@ -134,8 +134,8 @@
     $('rows').innerHTML = top.map((u, i) => `
       <div class="row r${i+1}">
         <div class="rank">${i+1}</div>
-        <img class="ava" src="${u.avatar || 'https://api.dicebear.com/9.x/thumbs/png?seed=' + encodeURIComponent(u.nickname)}"
-             onerror="this.src='https://api.dicebear.com/9.x/thumbs/png?seed=${encodeURIComponent(u.nickname)}'">
+        <img class="ava" src="${esc(u.avatar || 'https://api.dicebear.com/9.x/thumbs/png?seed=' + encodeURIComponent(u.nickname))}"
+             onerror="this.src='https://api.dicebear.com/9.x/thumbs/png?seed=x'">
         <div class="info">
           <div class="nick">${esc(u.nickname)}</div>
           <div class="cnt"><b>${icon} ${fmt(u.count ?? u.coins ?? 0)}</b><span>${cntLabel}</span></div>

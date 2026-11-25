@@ -350,9 +350,9 @@ impl TriggerMapper {
     }
 
     /// Looks up a preset by name — built-ins first, then streamer customs.
-    pub fn find_preset<'a>(
+    pub fn find_preset(
         name: &str,
-        customs: &'a std::collections::HashMap<String, TriggerPreset>,
+        customs: &std::collections::HashMap<String, TriggerPreset>,
     ) -> Option<TriggerPreset> {
         Self::builtin_presets()
             .into_iter()
@@ -443,6 +443,7 @@ mod tests {
             is_moderator: false,
             is_superfan: false,
             ts_ms: 0,
+            event_id: String::new(),
         };
         let ev = TriggerMapper::map(&whale, &profile).unwrap();
         assert_eq!(ev.action_command, "yeet");
@@ -470,6 +471,7 @@ mod tests {
             is_moderator: false,
             is_superfan: false,
             ts_ms: 0,
+            event_id: String::new(),
         };
         let a = TriggerMapper::map(&raw, &profile).unwrap();
         let b = TriggerMapper::map(&raw, &profile).unwrap();

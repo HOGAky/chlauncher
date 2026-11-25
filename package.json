@@ -13,6 +13,6 @@
     "test:server": "npm test --workspace @chlauncher/server"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.5.0"
   }
 }

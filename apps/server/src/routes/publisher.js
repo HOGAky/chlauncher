@@ -20,7 +20,12 @@
 import rateLimit from '@fastify/rate-limit';
 import { config } from '../config.js';
 import { findUserById, nowIso } from '../db.js';
-import { SLUG_RE, storeGameBuild } from '../build_store.js';
+import {
+  SLUG_RE,
+  storeGameBuild,
+  addStreamingUploadParser,
+  cleanupUpload,
+} from '../build_store.js';
 
 /**
  * @param {import('fastify').FastifyInstance} app
@@ -30,11 +35,9 @@ export default async function publisherRoutes(app, { db, requirePublisher }) {
   await app.register(rateLimit, { max: 120, timeWindow: '1 minute' });
   app.addHook('preHandler', requirePublisher);
 
-  app.addContentTypeParser(
-    'application/octet-stream',
-    { parseAs: 'buffer' },
-    (_req, body, done) => done(null, body)
-  );
+  // Octet-stream uploads stream to a temp file (P0.7) — the route gets
+  // `request.body` = {filePath, size}, never an in-memory buffer.
+  addStreamingUploadParser(app);
 
   const findOwnGame = (slug, userId) =>
     db
@@ -116,9 +119,10 @@ export default async function publisherRoutes(app, { db, requirePublisher }) {
         version: request.query.version || '',
         changelog:
           request.query.changelog || request.headers['x-changelog'] || '',
-        body: request.body,
+        upload: request.body,
         uploadedBy: request.auth.userId,
       });
+      cleanupUpload(request.body);
       if (!res.ok) {
         const code = res.error === 'VERSION_EXISTS' ? 409 : 400;
         const { ok: _ok, error: _e, ...extra } = res;

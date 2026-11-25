@@ -38,6 +38,7 @@ apps/server/data/
 apps/server/static/games/*.zip
 apps/server/static/games/**/*.zip
 apps/server/static/plugins/*.jar
+apps/server/static/.uploads/
 
 # ---- OS / Editor ----
 .DS_Store
@@ -63,3 +64,6 @@ tools/rvc-server/*-test*.wav
 *.db
 *.db-shm
 *.db-wal
+
+# Google Drive Desktop sync temps
+.tmp.driveupload/

@@ -12,8 +12,29 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { hasActiveSubscription } from '../subscriptions.js';
+import { activePlanForUser } from '../db.js';
 import { config } from '../config.js';
+
+/**
+ * Server-side entitlement check for a catalog game (P0.2): `is_free`
+ * rows are open to everyone; paid rows need the plan's `paid_games`
+ * entitlement OR the slug on the plan's `interactive_games` allow-list.
+ * A mere "active subscription" is NOT enough — plans differ.
+ * @returns {true|string} true when allowed, else the PLAN_LIMIT key.
+ */
+export function gameEntitlementError(db, userId, game) {
+  if (game?.is_free) return true;
+  const ent = activePlanForUser(db, userId)?.entitlements || {};
+  if (ent.paid_games === true) return true;
+  if (
+    game?.slug &&
+    Array.isArray(ent.interactive_games) &&
+    ent.interactive_games.includes(game.slug)
+  ) {
+    return true;
+  }
+  return 'paid_games';
+}
 
 /** Game slug boundary rule — same as admin.js and the launcher. */
 const SLUG_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
@@ -109,10 +130,16 @@ export default async function gamesRoutes(app, { db, authenticate }) {
     }
     const game = findPublished(db, request.params.slug);
     if (!game) return reply.code(404).send({ error: 'GAME_NOT_FOUND' });
-    // §8.3: free-tier users may download is_free games; everything else
-    // requires an active subscription (any paid plan).
-    if (!game.is_free && !hasActiveSubscription(db, request.auth.userId)) {
-      return reply.code(403).send({ error: 'SUBSCRIPTION_REQUIRED' });
+    // P0.2: the PLAN's entitlement decides, not just "any subscription" —
+    // a modified client on a cheaper plan must not fetch another tier's
+    // artifact.
+    const denied = gameEntitlementError(db, request.auth.userId, game);
+    if (denied !== true) {
+      const plan = activePlanForUser(db, request.auth.userId);
+      return reply.code(403).send({
+        error: `PLAN_LIMIT:${denied}`,
+        plan: plan?.code || 'free',
+      });
     }
 
     const filePath = safeBuildPath(game.file_name);

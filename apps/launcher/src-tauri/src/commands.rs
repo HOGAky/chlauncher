@@ -66,7 +66,7 @@ pub struct AppState {
     pub polls: Arc<crate::polls::PollTracker>,
     /// Subathon countdown — paid events extend the clock (§S2E parity).
     pub subathon: Arc<crate::subathon::Subathon>,
-    /// EFIR-style timer engine — see efirtimer.rs (	imer WS channel).
+    /// EFIR-style timer engine — see efirtimer.rs (`timer` WS channel).
     pub efirtimer: Arc<crate::efirtimer::EfirTimer>,
     /// Viewer queue (!join) — `queue_next` injects a `queue` event.
     pub queue: Arc<crate::queue::ViewerQueue>,
@@ -83,6 +83,9 @@ pub struct AppState {
     /// Live overlay access token — the overlay server reads this cell
     /// per request, so `rotate_overlay_token` must update it.
     pub overlay_token: Arc<std::sync::RwLock<String>>,
+    /// Write-scope overlay token (`?w=` / `X-Overlay-Token`) — rotated
+    /// together with `overlay_token`.
+    pub overlay_write_token: Arc<std::sync::RwLock<String>>,
     /// Last seen slug→version snapshot for catalog-change detection (§6.3).
     pub catalog_seen: Arc<Mutex<Option<std::collections::BTreeMap<String, String>>>>,
     /// Actual OS-assigned overlay port (None until bound / on bind failure).
@@ -268,6 +271,11 @@ pub async fn logout(state: State<'_, AppState>) -> Result<(), String> {
     s.data.auth_token = None;
     s.data.email = None;
     s.data.role = None;
+    // §P0.5/P1: logout clears the OS-stored credential too — the marker
+    // in settings.json must not resolve back to a live token.
+    crate::secrets::delete("auth_token");
+    crate::secrets::delete("tiktok_session");
+    s.data.tiktok_session = None;
     let _ = s.save();
     Ok(())
 }
@@ -507,7 +515,10 @@ pub async fn pair_login_status(
             // Same automation as the embedded login window: a fresh session
             // retries an in-flight or WAF-blocked connect by itself.
             let st = state.integrations.tiktok_status.lock().await.clone();
-            if matches!(st, IntegrationStatus::Connecting | IntegrationStatus::Error(_)) {
+            if matches!(
+                st,
+                IntegrationStatus::Connecting | IntegrationStatus::Error(_)
+            ) {
                 if let Some(u) = state.integrations.tiktok_username.lock().await.clone() {
                     let bs = sidecar_bootstrap(&state.settings, &state.api.base()).await;
                     let _ = state.integrations.tiktok_connect(u, bs).await;
@@ -1151,7 +1162,7 @@ pub(crate) fn parse_tiktok_handle(input: &str) -> String {
     } else {
         s.trim_start_matches('@')
     };
-    s.split(|c| matches!(c, '/' | '?' | '#' | '&'))
+    s.split(['/', '?', '#', '&'])
         .next()
         .unwrap_or("")
         .trim()
@@ -1171,14 +1182,12 @@ pub(crate) async fn sidecar_bootstrap(
         let s = settings.lock().await;
         (s.data.auth_token.clone(), s.data.tiktok_session.clone())
     };
-    (auth_token.is_some() || session.is_some()).then(|| {
-        crate::integrations::SidecarBootstrap {
-            sign_url: auth_token
-                .as_ref()
-                .map(|_| format!("{api_base}/api/tiktok-sign")),
-            token: auth_token,
-            session,
-        }
+    (auth_token.is_some() || session.is_some()).then(|| crate::integrations::SidecarBootstrap {
+        sign_url: auth_token
+            .as_ref()
+            .map(|_| format!("{api_base}/api/tiktok-sign")),
+        token: auth_token,
+        session,
     })
 }
 
@@ -1210,9 +1219,15 @@ pub async fn set_tiktok_session(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let mut s = state.settings.lock().await;
-    s.data.tiktok_session = session
+    let session = session
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty());
+    if session.is_none() {
+        // §P0.5: clearing must drop the OS-store copy too — otherwise a
+        // stale marker could resurrect the cookie on the next load.
+        crate::secrets::delete("tiktok_session");
+    }
+    s.data.tiktok_session = session;
     s.save().map_err(|e| e.to_string())
 }
 
@@ -1941,6 +1956,7 @@ pub async fn test_rule(
         is_moderator: false,
         is_superfan: false,
         ts_ms: now_ms(),
+        event_id: String::new(),
     };
     // Single-rule profile so match_all can't pull in neighbors.
     let p = TriggerProfile {
@@ -2321,11 +2337,20 @@ pub async fn rotate_overlay_token(state: State<'_, AppState>) -> Result<(), Stri
         uuid::Uuid::new_v4().simple(),
         uuid::Uuid::new_v4().simple()
     );
+    let new_write = format!(
+        "{}{}",
+        uuid::Uuid::new_v4().simple(),
+        uuid::Uuid::new_v4().simple()
+    );
     let mut s = state.settings.lock().await;
     s.data.overlay_token = new_token.clone();
+    s.data.overlay_write_token = new_write.clone();
     let _ = s.save();
     if let Ok(mut t) = state.overlay_token.write() {
         *t = new_token;
+    }
+    if let Ok(mut t) = state.overlay_write_token.write() {
+        *t = new_write;
     }
     Ok(())
 }
@@ -2386,8 +2411,16 @@ pub async fn open_overlay_window(
         .read()
         .map(|t| t.clone())
         .unwrap_or_default();
+    // Capture windows are opened by the launcher itself — they get the
+    // write-scope token so Escape→/overlay-close and game report/TTS
+    // work. OBS browser-source URLs never carry `w` (§P0.6).
+    let wtoken = state
+        .overlay_write_token
+        .read()
+        .map(|t| t.clone())
+        .unwrap_or_default();
     let label = format!("overlay-{}", page.replace('/', "-"));
-    let mut url = format!("http://127.0.0.1:{port}/{page}?t={token}");
+    let mut url = format!("http://127.0.0.1:{port}/{page}?t={token}&w={wtoken}");
     if chroma {
         url.push_str("&bg=ff00ff");
     }
@@ -2419,8 +2452,8 @@ pub async fn open_overlay_window(
     const ESC_CLOSE: &str = concat!(
         "window.addEventListener('keydown',function(e){",
         "if(e.key==='Escape'){",
-        "var t=new URLSearchParams(location.search).get('t')||'';",
-        "fetch('/overlay-close?page='+encodeURIComponent(location.pathname.slice(1))+'&t='+t);",
+        "var w=new URLSearchParams(location.search).get('w')||'';",
+        "fetch('/overlay-close?page='+encodeURIComponent(location.pathname.slice(1))+'&w='+w);",
         "}});"
     );
     // Game pages declare their capture size in `game.json`
@@ -2677,10 +2710,7 @@ pub async fn efirtimer_import(
 /// Ручной выбор карты с Пульта — «ход судьбы» (cards-рулетка ждёт
 /// цифру; стример может выбрать за донатера, index 0-based).
 #[tauri::command]
-pub async fn efirtimer_card_pick(
-    index: usize,
-    state: State<'_, AppState>,
-) -> Result<bool, String> {
+pub async fn efirtimer_card_pick(index: usize, state: State<'_, AppState>) -> Result<bool, String> {
     Ok(state.efirtimer.manual_card_pick(index).await)
 }
 
@@ -2724,10 +2754,38 @@ pub async fn open_timer_window(
     // Все окна — с системной рамкой: перетаскивание и сворачивание работают
     // штатно (на внешних URL __TAURI__ не инжектится — своего драга нет).
     let (label, file, title, w, h, transparent) = match kind.as_str() {
-        "timer" => ("efir-timer", "efirtimer.html", "EFIR — Таймер", 1000.0, 560.0, true),
-        "roll" => ("efir-roll", "efirroll.html", "EFIR — Рулетка", 1200.0, 420.0, true),
-        "stats" => ("efir-stats", "efirstats.html", "EFIR — Статистика", 700.0, 420.0, true),
-        "pult" => ("efir-pult", "efirpult.html", "Пульт управления", 460.0, 860.0, false),
+        "timer" => (
+            "efir-timer",
+            "efirtimer.html",
+            "EFIR — Таймер",
+            1000.0,
+            560.0,
+            true,
+        ),
+        "roll" => (
+            "efir-roll",
+            "efirroll.html",
+            "EFIR — Рулетка",
+            1200.0,
+            420.0,
+            true,
+        ),
+        "stats" => (
+            "efir-stats",
+            "efirstats.html",
+            "EFIR — Статистика",
+            700.0,
+            420.0,
+            true,
+        ),
+        "pult" => (
+            "efir-pult",
+            "efirpult.html",
+            "Пульт управления",
+            460.0,
+            860.0,
+            false,
+        ),
         _ => return Err(format!("unknown timer window: {kind}")),
     };
     if let Some(win) = app.get_webview_window(label) {
@@ -2744,7 +2802,18 @@ pub async fn open_timer_window(
         .read()
         .map_err(|_| "token lock".to_string())?
         .clone();
-    let url: tauri::Url = format!("http://127.0.0.1:{port}/widgets/{file}?t={token}")
+    // Only the control surface (пульт → POST /timer/cmd) needs the
+    // write-scope token; display widgets stay read-only (§P0.6).
+    let mut qs = format!("t={token}");
+    if kind == "pult" {
+        let w = state
+            .overlay_write_token
+            .read()
+            .map_err(|_| "token lock".to_string())?
+            .clone();
+        qs.push_str(&format!("&w={w}"));
+    }
+    let url: tauri::Url = format!("http://127.0.0.1:{port}/widgets/{file}?{qs}")
         .parse()
         .map_err(|_| "bad widget url".to_string())?;
     tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::External(url))
@@ -3031,10 +3100,7 @@ pub async fn set_forward_config(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let u = forward_url.trim().trim_end_matches('/').to_string();
-    if enabled
-        && !u.is_empty()
-        && !(u.starts_with("http://") || u.starts_with("https://"))
-    {
+    if enabled && !u.is_empty() && !(u.starts_with("http://") || u.starts_with("https://")) {
         return Err("forward_url должен начинаться с http:// или https://".into());
     }
     {
@@ -3267,7 +3333,12 @@ pub async fn roblox_play(
         let mut s = state.settings.lock().await;
         let f = &mut s.data.forward;
         f.enabled = true;
-        if f.forward_url.as_deref().map(str::trim).unwrap_or("").is_empty() {
+        if f.forward_url
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or("")
+            .is_empty()
+        {
             f.forward_url = None; // empty = the licensing server itself
         }
         let _ = s.save();
@@ -3315,7 +3386,9 @@ pub async fn roblox_bridge_set(
         if f.stream_key.is_none() {
             f.stream_key = Some(format!("sk_{}", uuid::Uuid::new_v4().simple()));
         }
-        let port = f.local_bridge_port.unwrap_or(crate::roblox_bridge::DEFAULT_PORT);
+        let port = f
+            .local_bridge_port
+            .unwrap_or(crate::roblox_bridge::DEFAULT_PORT);
         let _ = s.save();
         port
     };

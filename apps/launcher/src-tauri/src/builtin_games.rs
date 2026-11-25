@@ -81,7 +81,7 @@ pub fn registry(data_dir: &Path) -> Vec<GameEntry> {
             }
         })
         .collect();
-    out.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+    out.sort_by_key(|g| g.title.to_lowercase());
     out
 }
 
@@ -353,13 +353,17 @@ mod tests {
         // Prototype packs are `hidden: true` — the only live bundled
         // pack today is patrick_cabbage.
         assert!(bundled.contains(&"patrick_cabbage".to_string()));
-        let mut ent = Entitlements::default();
-        ent.interactive_games = Some(vec!["patrick_cabbage".into()]);
+        let mut ent = Entitlements {
+            interactive_games: Some(vec!["patrick_cabbage".into()]),
+            ..Default::default()
+        };
         let allowed = allowed_games(&ent, &empty);
         assert!(allowed.contains(&"patrick_cabbage".to_string()));
         ent.interactive_games = None;
         // None = «all bundled» + user/remote extras.
-        assert!(bundled.iter().all(|id| allowed_games(&ent, &empty).contains(id)));
+        assert!(bundled
+            .iter()
+            .all(|id| allowed_games(&ent, &empty).contains(id)));
         ent.interactive_games = Some(vec![]);
         // Empty list still exempts remote/user entries; bundled vanish.
         let allowed = allowed_games(&ent, &empty);

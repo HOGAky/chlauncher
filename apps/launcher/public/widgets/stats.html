@@ -90,7 +90,7 @@
   addEventListener('resize', fit); fit();
 
   const $ = id => document.getElementById(id);
-  const fmt = n => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : String(n);
+  const fmt = n => { n = Math.floor(Number(n)) || 0; return n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : String(n); };
 
   io().on('state', s => {
     $('viewers').textContent = fmt(s.room ? s.room.viewers : 0);

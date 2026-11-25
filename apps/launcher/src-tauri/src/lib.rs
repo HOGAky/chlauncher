@@ -40,6 +40,7 @@ pub mod process;
 pub mod queue;
 pub mod roblox_bridge;
 pub mod scheduler;
+pub mod secrets;
 pub mod settings;
 pub mod subathon;
 pub mod timed;
@@ -190,13 +191,22 @@ pub fn run() {
                 tauri::async_runtime::spawn(async move { t.run().await });
             }
 
-            let (overlay_token, overlay_port_cfg) = settings
+            let (overlay_token, overlay_write_token, overlay_port_cfg) = settings
                 .try_lock()
-                .map(|s| (s.data.overlay_token.clone(), s.data.overlay_port))
+                .map(|s| {
+                    (
+                        s.data.overlay_token.clone(),
+                        s.data.overlay_write_token.clone(),
+                        s.data.overlay_port,
+                    )
+                })
                 .unwrap_or_default();
             // Shared token cell: the overlay server validates `?t=` per
             // request, `rotate_overlay_token` writes the new value here.
             let overlay_token = Arc::new(std::sync::RwLock::new(overlay_token));
+            // Write-scope token for mutating overlay routes (§P0.6) —
+            // rotated together with the read token.
+            let overlay_write_token = Arc::new(std::sync::RwLock::new(overlay_write_token));
             // Stream-goal counters — counted on raw events in the mapper
             // loop, rendered by /overlay/goals via /goals.json.
             let goals = goals::GoalTracker::new(settings.clone(), hub.clone(), overlay_tx.clone());
@@ -240,6 +250,7 @@ pub fn run() {
                 hub.clone(),
                 overlay_tx.clone(),
                 overlay_token.clone(),
+                overlay_write_token.clone(),
                 overlay_port_cfg,
                 media::media_dir(&data_dir),
                 settings.clone(),
@@ -415,6 +426,7 @@ pub fn run() {
                 mc: mc.clone(),
                 adapter_key: adapter_key.clone(),
                 overlay_token: overlay_token.clone(),
+                overlay_write_token: overlay_write_token.clone(),
                 catalog_seen: Arc::new(Mutex::new(None)),
                 overlay_port: Mutex::new(overlay_port),
                 service_error: Mutex::new(service_error),
@@ -493,8 +505,10 @@ pub fn run() {
                     for attempt in 1..=3u8 {
                         let bs =
                             commands::sidecar_bootstrap(&state.settings, &state.api.base()).await;
-                        if let Err(e) =
-                            state.integrations.tiktok_connect(username.clone(), bs).await
+                        if let Err(e) = state
+                            .integrations
+                            .tiktok_connect(username.clone(), bs)
+                            .await
                         {
                             tracing::warn!(error = %e, attempt, "tiktok auto-connect failed");
                         }
@@ -503,8 +517,7 @@ pub fn run() {
                         // the user (or the session-capture flow) took
                         // over — retrying now would kill their connect.
                         let epoch = state.integrations.tiktok_epoch();
-                        let my_epoch =
-                            epoch.load(std::sync::atomic::Ordering::SeqCst);
+                        let my_epoch = epoch.load(std::sync::atomic::Ordering::SeqCst);
                         // Re-check: poll the reported status for ~60 s.
                         // Connecting = the sidecar is up and waiting for
                         // the room to go live — normal, but the next round
@@ -522,12 +535,7 @@ pub fn run() {
                             // Narrow window cover: a manual connect that
                             // landed between our spawn and the epoch read
                             // points the room handle elsewhere — bail.
-                            if state
-                                .integrations
-                                .tiktok_username
-                                .lock()
-                                .await
-                                .as_deref()
+                            if state.integrations.tiktok_username.lock().await.as_deref()
                                 != Some(username.as_str())
                             {
                                 return;
@@ -536,8 +544,7 @@ pub fn run() {
                                 IntegrationStatus::Live | IntegrationStatus::Connected => {
                                     return;
                                 }
-                                IntegrationStatus::Disconnected
-                                | IntegrationStatus::Error(_) => {
+                                IntegrationStatus::Disconnected | IntegrationStatus::Error(_) => {
                                     settled = true;
                                     break;
                                 }
@@ -955,6 +962,9 @@ const MAPPING_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(30
 /// hands them to the [`ActionScheduler`], which owns cooldowns,
 /// accumulators, the priority queue, alerts and interrupts. An active
 /// paid-interrupt takeover swaps the profile in memory only (§3.3).
+// Event-pipeline wiring — the subsystem handles are already Arc'd;
+// a config struct would just re-wrap the same handles.
+#[allow(clippy::too_many_arguments)]
 async fn mapper_loop(
     mut raw_rx: mpsc::Receiver<RawStreamEvent>,
     settings: Arc<Mutex<SettingsStore>>,

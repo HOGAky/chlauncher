@@ -177,8 +177,7 @@ impl IntegrationManager {
         let app = self.app.clone();
         let raw_tx = self.raw_tx.clone();
         let handle = tokio::spawn(async move {
-            if let Err(e) =
-                run_da(token, raw_tx, status.clone(), app.clone(), coins_per_rub).await
+            if let Err(e) = run_da(token, raw_tx, status.clone(), app.clone(), coins_per_rub).await
             {
                 *status.lock().await = IntegrationStatus::Error(e.clone());
                 let _ = app.emit(
@@ -353,6 +352,12 @@ async fn run_da(
                 is_moderator: false,
                 is_superfan: false,
                 ts_ms: now_ms(),
+                // DA alert id is stable across Centrifugo re-deliveries.
+                event_id: data["id"]
+                    .as_i64()
+                    .map(|i| i.to_string())
+                    .or_else(|| data["id"].as_str().map(str::to_string))
+                    .unwrap_or_default(),
             })
             .await;
     }
@@ -629,6 +634,7 @@ async fn run_tiktok(
                     is_moderator: v["is_moderator"].as_bool().unwrap_or(false),
                     is_superfan: v["is_superfan"].as_bool().unwrap_or(false),
                     ts_ms: now_ms(),
+                    event_id: v["event_id"].as_str().unwrap_or_default().into(),
                 };
                 // Account-binding proof: the pending bind's owner posted the
                 // code in this chat — only possible from their own account.
@@ -673,8 +679,7 @@ async fn run_tiktok(
                     // deficit; dropping a like/join loses nothing.
                     let _ = raw_tx.try_send(ev);
                 } else {
-                    let sent =
-                        tokio::time::timeout(Duration::from_secs(10), raw_tx.send(ev)).await;
+                    let sent = tokio::time::timeout(Duration::from_secs(10), raw_tx.send(ev)).await;
                     if sent.is_err() || matches!(sent, Ok(Err(_))) {
                         tracing::warn!(kind = %ev_kind, "ingest queue congested — event dropped");
                     }
@@ -696,7 +701,9 @@ async fn run_tiktok(
     let status_out = match child.try_wait() {
         Ok(Some(s)) if !s.success() => IntegrationStatus::Error(format!(
             "tiktok-sidecar завершился (код {})",
-            s.code().map(|c| c.to_string()).unwrap_or_else(|| "сигнал".into())
+            s.code()
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "сигнал".into())
         )),
         _ => IntegrationStatus::Disconnected,
     };

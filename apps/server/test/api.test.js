@@ -161,15 +161,17 @@ test('mock-pay grants 30 days and unlocks license verify + download', async () =
   assert.ok(games.json().games.some((g) => g.slug === 'mock-game'));
 });
 
-test('game download is gated by subscription', async () => {
+test('game download is gated by entitlement', async () => {
   const { body } = await register('gate@example.com', 'HWID-G');
   const res = await app.inject({
     method: 'GET',
     url: '/api/games/mock-game/download',
     headers: auth(body.token),
   });
+  // Free-plan users lack the `paid_games` entitlement (§4.2) — the
+  // server is authoritative, not the launcher.
   assert.equal(res.statusCode, 403);
-  assert.equal(res.json().error, 'SUBSCRIPTION_REQUIRED');
+  assert.equal(res.json().error, 'PLAN_LIMIT:paid_games');
 });
 
 test('mock-expire immediately locks the account out again', async () => {

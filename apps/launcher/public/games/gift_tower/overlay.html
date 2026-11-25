@@ -180,7 +180,7 @@ function draw() {
   for (const [u, n] of Object.entries(S.teams.B.supporters)) all[u] = (all[u] || 0) + n;
   document.getElementById('board').innerHTML =
     GameKit.leaderboard(all, 5)
-      .map((r, i) => `${i + 1}. ${r.user} — ${r.score}`)
+      .map((r, i) => `${i + 1}. ${GameKit.esc(r.user)} — ${GameKit.fmtNum(r.score)}`)
       .join('<br>');
 }
 
@@ -222,7 +222,8 @@ async function main() {
   const s = document.createElement('script');
   s.src = '/gamekit.js?t=' + encodeURIComponent(new URLSearchParams(location.search).get('t') || '');
   s.onload = () => main().catch((e) => {
-    document.body.innerHTML = `<pre style="color:#f66;padding:20px">${e}</pre>`;
+    document.body.innerHTML = '<pre id="err" style="color:#f66;padding:20px"></pre>';
+    document.getElementById('err').textContent = String(e);
   });
   s.onerror = () => { document.body.innerHTML = '<pre style="color:#f66;padding:20px">gamekit: 403 — проверьте токен</pre>'; };
   document.head.appendChild(s);

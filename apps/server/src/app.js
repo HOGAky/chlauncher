@@ -11,6 +11,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import { openDatabase } from './db.js';
 import { config } from './config.js';
 import { registerErrorContract } from './errors.js';
@@ -124,7 +125,29 @@ export async function buildApp(opts = {}) {
     oauthFetch: opts.tiktokOauthFetch,
   };
 
+  // Liveness: cheap "the process is up" — no DB, no config details.
   app.get('/api/health', async () => ({ ok: true, ts: Date.now() }));
+  // Readiness: the dependencies that make the API actually serve —
+  // SQLite answers a trivial query and the static dir is writable.
+  // Nothing here may leak paths/schema/secrets.
+  app.get('/api/ready', async (_request, reply) => {
+    const checks = {};
+    try {
+      db.prepare('SELECT 1').get();
+      checks.db = 'ok';
+    } catch {
+      checks.db = 'fail';
+    }
+    try {
+      fs.mkdirSync(config.staticDir, { recursive: true });
+      fs.accessSync(config.staticDir, fs.constants.W_OK);
+      checks.static = 'ok';
+    } catch {
+      checks.static = 'fail';
+    }
+    const ok = Object.values(checks).every((v) => v === 'ok');
+    return reply.code(ok ? 200 : 503).send({ ok, checks });
+  });
   await app.register(adminRoutes, { prefix: '/api/admin', ...deps });
   await app.register(authRoutes, { prefix: '/api/auth', ...deps });
   await app.register(accountRoutes, { prefix: '/api/account', ...deps });

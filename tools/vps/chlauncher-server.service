@@ -1,0 +1,24 @@
+[Unit]
+Description=chlauncher licensing/game server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=chlauncher
+WorkingDirectory=/opt/chlauncher/apps/server
+EnvironmentFile=/opt/chlauncher/apps/server/.env
+ExecStart=/usr/bin/node src/index.js
+Restart=always
+RestartSec=3
+# Restart-rate burst protection: after 5 crashes in 30s systemd marks the
+# unit failed — the watchdog timer revives it a minute later.
+StartLimitIntervalSec=30
+StartLimitBurst=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/chlauncher/apps/server/data /opt/chlauncher/apps/server/static
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

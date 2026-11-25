@@ -14,7 +14,7 @@
  */
 
 import crypto from 'node:crypto';
-import { nowIso } from '../db.js';
+import { nowIso, withTx } from '../db.js';
 import { recordPayment, subscriptionView } from '../subscriptions.js';
 
 const CODE_RE = /^[A-Z0-9_-]{4,32}$/i;
@@ -65,15 +65,11 @@ export default async function promoRoutes(app, { db, authenticate }) {
       .get(code, request.auth.userId);
     if (already) return reply.code(409).send({ error: 'PROMO_ALREADY_USED' });
 
-    db.exec('BEGIN');
-    try {
+    const { exhausted } = withTx(db, () => {
       const bump = db
         .prepare('UPDATE promo_codes SET uses = uses + 1 WHERE code = ? AND uses < max_uses')
         .run(code);
-      if (bump.changes === 0) {
-        db.exec('ROLLBACK');
-        return reply.code(410).send({ error: 'PROMO_EXHAUSTED' });
-      }
+      if (bump.changes === 0) return { exhausted: true };
       db.prepare(
         'INSERT INTO promo_redemptions (code, user_id, days, created_at) VALUES (?,?,?,?)'
       ).run(code, request.auth.userId, promo.days, nowIso());
@@ -83,11 +79,9 @@ export default async function promoRoutes(app, { db, authenticate }) {
         externalId: `promo:${code}:${request.auth.userId}`,
         days: promo.days,
       });
-      db.exec('COMMIT');
-    } catch (err) {
-      db.exec('ROLLBACK');
-      throw err;
-    }
+      return { exhausted: false };
+    });
+    if (exhausted) return reply.code(410).send({ error: 'PROMO_EXHAUSTED' });
     const sub = db.prepare('SELECT * FROM subscriptions WHERE user_id = ?').get(request.auth.userId);
     return { ok: true, days: promo.days, subscription: subscriptionView(sub) };
   });
@@ -138,15 +132,11 @@ export default async function promoRoutes(app, { db, authenticate }) {
       return reply.code(400).send({ error: 'REFERRAL_SELF' });
     }
 
-    db.exec('BEGIN');
-    try {
+    const { already } = withTx(db, () => {
       const claimed = db
         .prepare('UPDATE users SET referred_by = ? WHERE id = ? AND referred_by IS NULL')
         .run(referrer.id, me.id);
-      if (claimed.changes === 0) {
-        db.exec('ROLLBACK');
-        return reply.code(409).send({ error: 'REFERRAL_ALREADY_APPLIED' });
-      }
+      if (claimed.changes === 0) return { already: true };
       const rewarded = db
         .prepare('SELECT COUNT(*) AS n FROM referral_rewards WHERE referrer_id = ?')
         .get(referrer.id).n;
@@ -168,10 +158,10 @@ export default async function promoRoutes(app, { db, authenticate }) {
           days: REFERRER_DAYS,
         });
       }
-      db.exec('COMMIT');
-    } catch (err) {
-      db.exec('ROLLBACK');
-      throw err;
+      return { already: false };
+    });
+    if (already) {
+      return reply.code(409).send({ error: 'REFERRAL_ALREADY_APPLIED' });
     }
     const sub = db.prepare('SELECT * FROM subscriptions WHERE user_id = ?').get(me.id);
     return { ok: true, days: REFEREE_DAYS, subscription: subscriptionView(sub) };

@@ -127,7 +127,7 @@
   }
   addEventListener('resize', fit); fit();
 
-  const fmt = n => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : String(n);
+  const fmt = n => { n = Math.floor(Number(n)) || 0; return n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : String(n); };
   const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const ava = u => u.avatar || `https://api.dicebear.com/9.x/thumbs/png?seed=${encodeURIComponent(u.nickname)}`;
   const socket = io();
@@ -140,7 +140,7 @@
     const slot = (u, cls, place) => u ? `
       <div class="p ${cls}">
         ${cls==='p1' ? '<div class="crown">&#128081;</div>' : ''}
-        <img class="ava" src="${ava(u)}" onerror="this.src='https://api.dicebear.com/9.x/thumbs/png?seed=x${place}'">
+        <img class="ava" src="${esc(ava(u))}" onerror="this.src='https://api.dicebear.com/9.x/thumbs/png?seed=x${place}'">
         <div class="nick">${esc(u.nickname)}</div>
         <div class="coins">${fmt(u.coins)} &#128142;</div>
         <div class="place">${place} PLACE</div>
@@ -151,7 +151,7 @@
     document.getElementById('list').innerHTML = top.slice(3).map((u,i)=>`
       <div class="row">
         <div class="num">${i+4}.</div>
-        <img class="mini-ava" src="${ava(u)}">
+        <img class="mini-ava" src="${esc(ava(u))}">
         <div class="rnick">${esc(u.nickname)}</div>
         <div class="rcoins">${fmt(u.coins)} &#128142;</div>
       </div>`).join('');

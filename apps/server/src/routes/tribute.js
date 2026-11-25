@@ -35,9 +35,11 @@ import {
 } from '../db.js';
 import {
   activateOrExtend,
+  recordPayment,
   refreshSubscription,
   subscriptionView,
 } from '../subscriptions.js';
+import { withTx } from '../db.js';
 
 const LINK_CODE_TTL_MIN = 30;
 const LINK_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -93,16 +95,20 @@ function logEvent(db, { event, externalId, telegramUserId, matchedUserId, applie
 function applyPaidEvent(db, { userId, subscriptionId, period, expiresAt, planCode }) {
   const externalId = `trb:${subscriptionId}:${expiresAt}`;
   const days = PERIOD_DAYS[period] || 30;
-  const info = db
-    .prepare(
-      `INSERT OR IGNORE INTO payments
-         (user_id, provider, external_id, days, status, plan_code, created_at)
-       VALUES (?, 'tribute', ?, ?, 'succeeded', ?, ?)`
-    )
-    .run(userId, externalId, days, planCode, nowIso());
-  if (info.changes === 0) return false; // already applied
-  activateOrExtend(db, userId, days, planCode);
-  return true;
+  // Ledger row + grant atomically — a crash between them must not leave
+  // a paid payment without its days (P0.4).
+  return withTx(db, () => {
+    const info = db
+      .prepare(
+        `INSERT OR IGNORE INTO payments
+           (user_id, provider, external_id, days, status, plan_code, created_at)
+         VALUES (?, 'tribute', ?, ?, 'succeeded', ?, ?)`
+      )
+      .run(userId, externalId, days, planCode, nowIso());
+    if (info.changes === 0) return false; // already applied
+    activateOrExtend(db, userId, days, planCode);
+    return true;
+  });
 }
 
 /**
@@ -222,12 +228,15 @@ export default async function tributeRoutes(app, { db, authenticate }) {
         return { ok: true };
       }
       const planCode = planForSubscription(db, subscriptionId, userId);
-      const applied = applyPaidEvent(db, {
-        userId, subscriptionId, period: payload.period, expiresAt, planCode,
+      const applied = withTx(db, () => {
+        const ok = applyPaidEvent(db, {
+          userId, subscriptionId, period: payload.period, expiresAt, planCode,
+        });
+        db.prepare(
+          'UPDATE subscriptions SET auto_renew = 1 WHERE user_id = ?'
+        ).run(userId);
+        return ok;
       });
-      db.prepare(
-        'UPDATE subscriptions SET auto_renew = 1 WHERE user_id = ?'
-      ).run(userId);
       logEvent(db, {
         event: name, externalId, telegramUserId: tgId,
         matchedUserId: userId, applied, payload,
@@ -240,10 +249,12 @@ export default async function tributeRoutes(app, { db, authenticate }) {
         });
         return { ok: true };
       }
-      applyCancelEvent(db, userId, expiresAt);
-      logEvent(db, {
-        event: name, externalId, telegramUserId: tgId,
-        matchedUserId: userId, applied: true, payload,
+      withTx(db, () => {
+        applyCancelEvent(db, userId, expiresAt);
+        logEvent(db, {
+          event: name, externalId, telegramUserId: tgId,
+          matchedUserId: userId, applied: true, payload,
+        });
       });
     } else {
       // Donations, physical orders, digital products — not our surface.
@@ -321,18 +332,22 @@ export async function tgRoutes(app, { db, authenticate }) {
     if (!row || row.used || row.expires_at <= nowIso()) {
       return reply.code(410).send({ error: 'CODE_INVALID' });
     }
-    db.prepare('UPDATE billing_link_codes SET used = 1 WHERE code = ?').run(code);
-    // Rebind semantics: the latest code wins — the Telegram id moves to
-    // the new account, and any previous binding on this account drops.
-    db.prepare('DELETE FROM tg_bindings WHERE telegram_user_id = ? OR user_id = ?').run(
-      tgId,
-      row.user_id
-    );
-    db.prepare(
-      `INSERT INTO tg_bindings (user_id, telegram_user_id, telegram_username, bound_at)
-       VALUES (?, ?, ?, ?)`
-    ).run(row.user_id, tgId, String(tgName || ''), nowIso());
-    const applied = replayUnmatched(db, tgId, row.user_id);
+    // Consume + rebind + replay as one transaction — a crash mid-bind
+    // must not burn the code without a binding.
+    const applied = withTx(db, () => {
+      db.prepare('UPDATE billing_link_codes SET used = 1 WHERE code = ?').run(code);
+      // Rebind semantics: the latest code wins — the Telegram id moves to
+      // the new account, and any previous binding on this account drops.
+      db.prepare('DELETE FROM tg_bindings WHERE telegram_user_id = ? OR user_id = ?').run(
+        tgId,
+        row.user_id
+      );
+      db.prepare(
+        `INSERT INTO tg_bindings (user_id, telegram_user_id, telegram_username, bound_at)
+         VALUES (?, ?, ?, ?)`
+      ).run(row.user_id, tgId, String(tgName || ''), nowIso());
+      return replayUnmatched(db, tgId, row.user_id);
+    });
     const planCode = row.plan_code || 'pro';
     return {
       ok: true,
@@ -400,10 +415,180 @@ export async function tgRoutes(app, { db, authenticate }) {
     const [local, domain = ''] = (user?.email || '?').split('@');
     const masked =
       local.length <= 2 ? `${local[0] || '?'}…@${domain}` : `${local.slice(0, 2)}…@${domain}`;
+    const sub = refreshSubscription(db, binding.user_id);
+    const planCode = sub?.plan_code || 'pro';
+    const links = config.tributeProductLinks || {};
     return {
       bound: true,
       email_masked: masked,
+      subscription: subscriptionView(sub),
+      payment_url: links[planCode] || links.pro || null,
+    };
+  });
+
+  /**
+   * POST /api/tg/grant — bot-side owner action: credit days to the
+   * account bound to a Telegram id (manual gifts/compensation — the
+   * "подписка по tg id" control surface). Same shared-secret auth as
+   * /bind; the bot itself gates the command by OWNER_TG_IDS.
+   * Body: {telegram_user_id, days, plan_code?} → updated subscription.
+   */
+  app.post('/grant', async (request, reply) => {
+    if (!config.tgBindSecret) {
+      return reply.code(501).send({ error: 'PROVIDER_NOT_CONFIGURED' });
+    }
+    if (!safeEqual(request.headers['x-bot-secret'] || '', config.tgBindSecret)) {
+      return reply.code(401).send({ error: 'INVALID_SECRET' });
+    }
+    const {
+      telegram_user_id: tgId,
+      days,
+      plan_code: planCode,
+    } = request.body || {};
+    const nDays = Number(days);
+    if (!Number.isInteger(tgId) || !Number.isInteger(nDays) || nDays < 1 || nDays > 3660) {
+      return reply.code(400).send({ error: 'INVALID_PAYLOAD' });
+    }
+    if (planCode && !findPlan(db, String(planCode))) {
+      return reply.code(400).send({ error: 'UNKNOWN_PLAN' });
+    }
+    const binding = db
+      .prepare('SELECT user_id FROM tg_bindings WHERE telegram_user_id = ?')
+      .get(tgId);
+    if (!binding) {
+      return reply.code(404).send({ error: 'NOT_BOUND' });
+    }
+    const { subscription } = recordPayment(db, {
+      userId: binding.user_id,
+      provider: 'tg_admin',
+      externalId: null,
+      days: nDays,
+      planCode: planCode || null,
+    });
+    request.log.info({ tgId, days: nDays }, 'subscription granted via tg bot');
+    return { ok: true, subscription: subscriptionView(subscription) };
+  });
+
+  /**
+   * POST /api/tg/admin/revoke — bot-side owner action: expire the bound
+   * account's subscription immediately (chargeback/refund/manual off —
+   * the paid days are simply cut). Same shared-secret auth as /bind.
+   */
+  app.post('/admin/revoke', async (request, reply) => {
+    if (!config.tgBindSecret) {
+      return reply.code(501).send({ error: 'PROVIDER_NOT_CONFIGURED' });
+    }
+    if (!safeEqual(request.headers['x-bot-secret'] || '', config.tgBindSecret)) {
+      return reply.code(401).send({ error: 'INVALID_SECRET' });
+    }
+    const tgId = Number(request.body?.telegram_user_id);
+    if (!Number.isInteger(tgId)) {
+      return reply.code(400).send({ error: 'INVALID_PAYLOAD' });
+    }
+    const binding = db
+      .prepare('SELECT user_id FROM tg_bindings WHERE telegram_user_id = ?')
+      .get(tgId);
+    if (!binding) {
+      return reply.code(404).send({ error: 'NOT_BOUND' });
+    }
+    db.prepare(
+      `UPDATE subscriptions
+         SET status = 'expired', current_period_end = ?, auto_renew = 0
+       WHERE user_id = ?`
+    ).run(nowIso(), binding.user_id);
+    request.log.info({ tgId }, 'subscription revoked via tg bot');
+    return {
+      ok: true,
       subscription: subscriptionView(refreshSubscription(db, binding.user_id)),
+    };
+  });
+
+  /**
+   * POST /api/tg/admin/set-role — bot-side owner action: set the bound
+   * account's role {user|publisher|admin} — e.g. publisher can release
+   * games to the catalog. Same shared-secret auth as /bind.
+   */
+  app.post('/admin/set-role', async (request, reply) => {
+    if (!config.tgBindSecret) {
+      return reply.code(501).send({ error: 'PROVIDER_NOT_CONFIGURED' });
+    }
+    if (!safeEqual(request.headers['x-bot-secret'] || '', config.tgBindSecret)) {
+      return reply.code(401).send({ error: 'INVALID_SECRET' });
+    }
+    const tgId = Number(request.body?.telegram_user_id);
+    const role = String(request.body?.role || '');
+    if (!Number.isInteger(tgId)) {
+      return reply.code(400).send({ error: 'INVALID_PAYLOAD' });
+    }
+    if (!['user', 'publisher', 'admin'].includes(role)) {
+      return reply.code(400).send({ error: 'INVALID_ROLE' });
+    }
+    const binding = db
+      .prepare('SELECT user_id FROM tg_bindings WHERE telegram_user_id = ?')
+      .get(tgId);
+    if (!binding) {
+      return reply.code(404).send({ error: 'NOT_BOUND' });
+    }
+    db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, binding.user_id);
+    request.log.info({ tgId, role }, 'role set via tg bot');
+    return { ok: true, role };
+  });
+
+  /**
+   * GET /api/tg/admin/subscribers?limit=&offset= — bot-side owner view:
+   * every bound Telegram id with role + subscription state. Same
+   * shared-secret auth as /bind.
+   */
+  app.get('/admin/subscribers', async (request, reply) => {
+    if (!config.tgBindSecret) {
+      return reply.code(501).send({ error: 'PROVIDER_NOT_CONFIGURED' });
+    }
+    if (!safeEqual(request.headers['x-bot-secret'] || '', config.tgBindSecret)) {
+      return reply.code(401).send({ error: 'INVALID_SECRET' });
+    }
+    const limit = Math.min(Number(request.query?.limit) || 50, 200);
+    const offset = Math.max(Number(request.query?.offset) || 0, 0);
+    const rows = db
+      .prepare(
+        `SELECT b.telegram_user_id, b.telegram_username, b.bound_at,
+                u.id AS user_id, u.role, u.email,
+                s.status AS sub_status, s.plan_code, s.current_period_end, s.auto_renew
+           FROM tg_bindings b
+           JOIN users u ON u.id = b.user_id
+           LEFT JOIN subscriptions s ON s.user_id = u.id
+          ORDER BY b.bound_at DESC
+          LIMIT ? OFFSET ?`
+      )
+      .all(limit, offset);
+    const total = db
+      .prepare('SELECT COUNT(*) AS c FROM tg_bindings')
+      .get().c;
+    return {
+      total,
+      subscribers: rows.map((r) => {
+        const active =
+          r.sub_status === 'active' &&
+          (!r.current_period_end || r.current_period_end > nowIso());
+        return {
+          telegram_user_id: r.telegram_user_id,
+          telegram_username: r.telegram_username,
+          bound_at: r.bound_at,
+          user_id: r.user_id,
+          role: r.role,
+          subscription: {
+            status: active ? 'active' : 'expired',
+            plan_code: r.plan_code || 'pro',
+            current_period_end: r.current_period_end,
+            auto_renew: !!r.auto_renew,
+            days_left: active
+              ? Math.max(
+                  0,
+                  Math.ceil((new Date(r.current_period_end) - Date.now()) / 86400000)
+                )
+              : 0,
+          },
+        };
+      }),
     };
   });
 

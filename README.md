@@ -103,11 +103,14 @@ Required env vars for `NODE_ENV=production` (see [`.env.example`](.env.example))
 | `NODE_ENV=production` | enables strict startup checks | yes |
 | `JWT_SECRET` | signs JWTs; `openssl rand -hex 64` | yes |
 | `HWID_HASH_SECRET` | HMAC for stored HWIDs/IPs; `openssl rand -hex 32` | yes |
+| `OWNER_TG_IDS` | comma-separated Telegram ids of owner accounts (grant/revoke admins); find yours via the bind-bot `/whoami` | yes |
+| `PUBLIC_BASE_URL` | public https origin of this API (OAuth redirect, webhook docs); must be `https://` | yes |
 | `CORS_ORIGINS` | comma-separated browser origin whitelist; **only** these get CORS headers | yes, if browsers connect |
-| `TRUST_PROXY=true` | only behind a reverse proxy / Cloudflare (client-IP for rate limits + webhook checks) | no |
-| `SERVER_HOST` / `SERVER_PORT` | bind address; `0.0.0.0` only when intentionally public | no (default `127.0.0.1:8787`) |
+| `TRUST_PROXY=true` + `TRUSTED_PROXY_CIDRS` | only behind a reverse proxy / Cloudflare (client-IP for rate limits + webhook checks); production warns when off | no |
+| `SERVER_HOST` / `SERVER_PORT` | bind address; `0.0.0.0` requires `ALLOW_PUBLIC_BIND=1` | no (default `127.0.0.1:8787`) |
 | `DATABASE_PATH` | SQLite file location | no |
 | `ENABLE_MOCK_BILLING` | **forbidden** in production — startup fails | never set to `1` |
+| `BILLING_WEBHOOK_SKIP_IP_CHECK` | dev-only webhook IP bypass — forbidden in production | never |
 | `ADMIN_EMAILS` | **ignored** in production — grant roles via `node tools/grant-admin.mjs <email>` | never |
 | `YOOKASSA_*` / `STRIPE_WEBHOOK_SECRET` | real billing webhooks | when billing is live |
 | `VITE_API_URL` | launcher → backend base URL | launcher build |
@@ -116,8 +119,44 @@ Production checks the startup validator enforces:
 
 - `JWT_SECRET` missing or the dev sentinel → **refuse to boot**
 - `HWID_HASH_SECRET` missing → **refuse to boot**
+- `OWNER_TG_IDS` empty → **refuse to boot** (fail-closed ownership)
 - `ENABLE_MOCK_BILLING=1` → **refuse to boot**
+- `BILLING_WEBHOOK_SKIP_IP_CHECK=1` → **refuse to boot**
+- public `SERVER_HOST` (`0.0.0.0`/`::`/empty) without `ALLOW_PUBLIC_BIND=1` → **refuse to boot**
+- `PUBLIC_BASE_URL` not `https://` → **refuse to boot**
 - `ADMIN_EMAILS` set → warning + ignored (no auto-admin promotion)
+- `TRUST_PROXY` off → warning (rate limits and webhook IP checks see proxy IPs)
+
+### Probes & shutdown
+
+- `GET /api/health` — liveness (cheap, no deps).
+- `GET /api/ready` — readiness: SQLite answers + static dir writable;
+  `503` with per-check status otherwise. Wire it to your uptime probe.
+- `SIGTERM`/`SIGINT` stop accepting connections, drain in-flight
+  requests (payments, uploads) and close the DB — see
+  `apps/server/src/index.js`.
+
+### Launcher secrets (OS key store)
+
+Credentials in `settings.json` — the auth JWT, the TikTok `sessionid`
+cookie, the DonationAlerts token, stream key, relay admin secret, RCON
+password, adapter key and Gemini key — are stored in the **OS credential
+store** (Windows Credential Manager / DPAPI on Windows; Keychain /
+Secret Service on other desktops). The JSON file only keeps a `kr:v1`
+marker; values from older installs migrate automatically on first load.
+Logout clears the stored tokens. Nothing key-derived is written to logs
+or the diagnostics report.
+
+### Overlay token scopes
+
+The local overlay server (loopback-only, `127.0.0.1`) uses two
+capability tokens: `?t=` read-scope for widget/game pages + WebSocket,
+and `?w=` write-scope (or the `X-Overlay-Token` header) for mutating
+routes (`/timer/cmd`, `/games/asset`, `/tts/say`, `/games/report`,
+`/overlay-close`). Host/Origin headers are validated against loopback
+(DNS-rebinding / CSWSH protection), responses are `no-store` +
+`no-referrer`. Rotate both tokens anytime via the Integrations page —
+widget URLs carry the read token, so keep them out of screenshots.
 
 ### Verification commands
 
@@ -174,7 +213,9 @@ VC++ Redist needed on clean Windows 10/11.
   `TAURI_SIGNING_PRIVATE_KEY` (+ `..._PASSWORD` if set), and optional
   `ADMIN_EMAIL`/`ADMIN_PASSWORD` for auto-publishing mock-game.
 - Server deployment on a VPS: [`docs/vps-deploy.md`](docs/vps-deploy.md)
-  (systemd unit, Cloudflare, SQLite `.backup` cron via `tools/backup-db.sh`).
+  (systemd unit, Cloudflare, SQLite `.backup` via `tools/backup-db.sh`) and
+  [`docs/vps-automation.md`](docs/vps-automation.md) — watchdog/cleanup/backup
+  timers (`sudo bash tools/vps/install.sh`).
 
 ## Publishing games
 

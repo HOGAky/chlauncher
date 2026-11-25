@@ -77,7 +77,7 @@
   const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const ICONS = { gift:'&#127873;', follow:'&#128153;', share:'&#8599;' };
   const TEXTS = {
-    gift:   d => `отправил x${d.count} ${esc(d.giftName)}${d.coins ? ' · '+d.coins+' 💎' : ''}`,
+    gift:   d => `отправил x${esc(d.count)} ${esc(d.giftName)}${d.coins ? ' · '+esc(d.coins)+' 💎' : ''}`,
     follow: () => 'подписался на эфир',
     share:  () => 'поделился трансляцией'
   };
@@ -92,7 +92,7 @@
         <div class="e-nick">${esc(d.nickname||'???')}</div>
         <div class="e-text">${(TEXTS[d.type]||(()=> 'событие'))(d)}</div>
       </div>
-      ${d.image ? `<img class="e-gift" src="${d.image}">` : ''}`;
+      ${d.image ? `<img class="e-gift" src="${esc(d.image)}">` : ''}`;
     wrap.prepend(el);
     while (wrap.children.length > MAX) wrap.lastElementChild.remove();
     [...wrap.children].forEach((c,i) => c.classList.toggle('old', i > 4));

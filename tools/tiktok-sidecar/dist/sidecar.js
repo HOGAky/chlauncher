@@ -84799,11 +84799,17 @@ var connConnected = () => {
     return true;
   }
 };
+var upstreamId = (d) => {
+  const v = d?.msgId ?? d?.eventId ?? d?.common?.msgId ?? "";
+  const s = String(v ?? "");
+  return s && s !== "0" ? s : "";
+};
 var ev = (event_kind, d, raw_name, amount = 0, extra = {}) => {
   evCount++;
   out({
     type: "event",
     event_kind,
+    event_id: upstreamId(d),
     user: userOf(d),
     unique_id: uniqueIdOf(d),
     avatar_url: avatarOf(d),

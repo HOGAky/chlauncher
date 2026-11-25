@@ -73,8 +73,9 @@
   const $ = id => document.getElementById(id);
   if (q.get('title')) $('label').textContent = q.get('title');
 
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const ACTIONS = {
-    gift: d => `подарил ${d.giftName}${d.count > 1 ? ' ×' + d.count : ''}`,
+    gift: d => `подарил ${esc(d.giftName)}${d.count > 1 ? ' ×' + esc(d.count) : ''}`,
     follow: () => 'подписался',
     share: () => 'поделился эфиром',
     join: () => 'зашёл на стрим',
@@ -87,7 +88,7 @@
     ava.style.display = 'block';
     $('nick').textContent = d.nickname;
     $('act').innerHTML =
-      (d.type === 'gift' && d.image ? `<img src="${d.image}" alt="">` : '') +
+      (d.type === 'gift' && d.image ? `<img src="${esc(d.image)}" alt="">` : '') +
       `<span>${fn(d)}</span>`;
     const card = $('card');
     card.classList.remove('pop'); void card.offsetWidth; card.classList.add('pop');

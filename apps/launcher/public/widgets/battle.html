@@ -176,9 +176,10 @@
   TTW.apply('comic');
   const _q = new URLSearchParams(location.search);
   if (_q.get('title')) {
+    const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
     const parts = _q.get('title').split('|');
     document.getElementById('hTitle').innerHTML =
-      parts.length > 1 ? `${parts[0]} <span>${parts.slice(1).join(' ')}</span>` : parts[0];
+      parts.length > 1 ? `${esc(parts[0])} <span>${esc(parts.slice(1).join(' '))}</span>` : esc(parts[0]);
   }
   const stage = document.getElementById('stage');
   function fit(){

@@ -284,6 +284,141 @@ test('status/unbind reflect and clear the binding', async () => {
   );
 });
 
+test('bot /api/tg/grant credits days by telegram id', async () => {
+  const { token } = await register('trb10@example.com');
+  const { code } = await linkCode(token);
+  await bind(code, 900010);
+
+  // Wrong secret → 401.
+  const bad = await app.inject({
+    method: 'POST',
+    url: '/api/tg/grant',
+    headers: { 'content-type': 'application/json', 'x-bot-secret': 'nope' },
+    payload: { telegram_user_id: 900010, days: 30 },
+  });
+  assert.equal(bad.statusCode, 401);
+
+  // Unbound telegram id → 404.
+  const unbound = await app.inject({
+    method: 'POST',
+    url: '/api/tg/grant',
+    headers: { 'content-type': 'application/json', ...BOT },
+    payload: { telegram_user_id: 424242, days: 30 },
+  });
+  assert.equal(unbound.statusCode, 404);
+  assert.equal(unbound.json().error, 'NOT_BOUND');
+
+  // Happy path: +30 days, recorded in the ledger.
+  const ok = await app.inject({
+    method: 'POST',
+    url: '/api/tg/grant',
+    headers: { 'content-type': 'application/json', ...BOT },
+    payload: { telegram_user_id: 900010, days: 30 },
+  });
+  assert.equal(ok.statusCode, 200, ok.body);
+  assert.equal(ok.json().subscription.status, 'active');
+  assert.ok(ok.json().subscription.days_left >= 29);
+  const pay = db
+    .prepare("SELECT * FROM payments WHERE provider = 'tg_admin' AND days = 30")
+    .get();
+  assert.ok(pay, 'grant recorded in payments ledger');
+
+  // bind-status exposes the payment link for the bot's /pay reply.
+  const st = await app.inject({
+    method: 'GET',
+    url: '/api/tg/bind-status?telegram_user_id=900010',
+    headers: BOT,
+  });
+  assert.equal(st.json().bound, true);
+  assert.equal(st.json().payment_url, 'https://t.me/tribute?startapp=pro');
+});
+
+test('bot admin endpoints: subscribers list, revoke, set-role', async () => {
+  const { token } = await register('trb11@example.com');
+  const { code } = await linkCode(token);
+  await bind(code, 900011, 'subuser');
+
+  const bot = { 'content-type': 'application/json', ...BOT };
+
+  // Subscribers list shows the binding with role + subscription state.
+  const list = await app.inject({
+    method: 'GET',
+    url: '/api/tg/admin/subscribers',
+    headers: BOT,
+  });
+  assert.equal(list.statusCode, 200);
+  const row = list
+    .json()
+    .subscribers.find((s) => s.telegram_user_id === 900011);
+  assert.ok(row, 'binding listed');
+  assert.equal(row.telegram_username, 'subuser');
+  assert.equal(row.subscription.status, 'expired');
+  assert.equal(list.json().total >= 1, true);
+
+  // Grant then revoke — subscription flips to expired immediately.
+  await app.inject({
+    method: 'POST',
+    url: '/api/tg/grant',
+    headers: bot,
+    payload: { telegram_user_id: 900011, days: 30 },
+  });
+  const revoked = await app.inject({
+    method: 'POST',
+    url: '/api/tg/admin/revoke',
+    headers: bot,
+    payload: { telegram_user_id: 900011 },
+  });
+  assert.equal(revoked.statusCode, 200, revoked.body);
+  assert.equal(revoked.json().subscription.status, 'expired');
+
+  // Revoke on an unbound tg id → 404.
+  const missing = await app.inject({
+    method: 'POST',
+    url: '/api/tg/admin/revoke',
+    headers: bot,
+    payload: { telegram_user_id: 31337 },
+  });
+  assert.equal(missing.statusCode, 404);
+
+  // set-role → publisher, then admin; bogus role → 400.
+  const pub = await app.inject({
+    method: 'POST',
+    url: '/api/tg/admin/set-role',
+    headers: bot,
+    payload: { telegram_user_id: 900011, role: 'publisher' },
+  });
+  assert.equal(pub.statusCode, 200, pub.body);
+  assert.equal(
+    db.prepare('SELECT role FROM users WHERE id = ?').get(row.user_id).role,
+    'publisher'
+  );
+  const adm = await app.inject({
+    method: 'POST',
+    url: '/api/tg/admin/set-role',
+    headers: bot,
+    payload: { telegram_user_id: 900011, role: 'admin' },
+  });
+  assert.equal(adm.statusCode, 200);
+  const bad = await app.inject({
+    method: 'POST',
+    url: '/api/tg/admin/set-role',
+    headers: bot,
+    payload: { telegram_user_id: 900011, role: 'superadmin' },
+  });
+  assert.equal(bad.statusCode, 400);
+
+  // Wrong secret is refused on every admin endpoint.
+  for (const url of ['/api/tg/admin/subscribers', '/api/tg/admin/revoke', '/api/tg/admin/set-role']) {
+    const res = await app.inject({
+      method: url.endsWith('subscribers') ? 'GET' : 'POST',
+      url,
+      headers: { 'content-type': 'application/json', 'x-bot-secret': 'nope' },
+      payload: {},
+    });
+    assert.equal(res.statusCode, 401, url);
+  }
+});
+
 test('providers endpoint reports configured rails', async () => {
   const { token } = await register('trb9@example.com');
   const res = await app.inject({

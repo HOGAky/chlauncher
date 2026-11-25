@@ -1,0 +1,20 @@
+[Unit]
+Description=chlauncher Telegram bind-bot
+After=network-online.target chlauncher-server.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=chlauncher
+WorkingDirectory=/opt/chlauncher/apps/launcher/tg-bot
+EnvironmentFile=/opt/chlauncher/apps/launcher/tg-bot/.env
+ExecStart=/usr/bin/node index.js
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=10
+NoNewPrivileges=true
+ProtectSystem=strict
+
+[Install]
+WantedBy=multi-user.target

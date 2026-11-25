@@ -35,34 +35,18 @@ DATABASE_PATH=/opt/chlauncher/apps/server/data/chlauncher.db
 Без `JWT_SECRET`/`HWID_HASH_SECRET` или с `ENABLE_MOCK_BILLING=1` сервер
 откажется стартовать — это защитное поведение, не баг.
 
-## 3. systemd unit (`/etc/systemd/system/chlauncher-server.service`)
+## 3. systemd unit + автономность (рекомендуется)
 
-```ini
-[Unit]
-Description=chlauncher licensing/game server
-After=network.target
-
-[Service]
-Type=simple
-User=chlauncher
-WorkingDirectory=/opt/chlauncher/apps/server
-EnvironmentFile=/opt/chlauncher/apps/server/.env
-ExecStart=/usr/bin/node src/index.js
-Restart=always
-RestartSec=3
-NoNewPrivileges=true
-ProtectSystem=strict
-ReadWritePaths=/opt/chlauncher/apps/server/data /opt/chlauncher/apps/server/static
-
-[Install]
-WantedBy=multi-user.target
-```
+Все unit-файлы лежат в `tools/vps/` — ставятся одной командой вместе с
+watchdog (самолечение), cleanup (очистка мусора) и backup-таймером:
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now chlauncher-server
+sudo bash /opt/chlauncher/tools/vps/install.sh
 journalctl -u chlauncher-server -f   # логи с x-request-id
 ```
+
+Подробности и таблица авто-лечения частых сбоев: `docs/vps-automation.md`.
+Если нужен только голый unit — он же в `tools/vps/chlauncher-server.service`.
 
 ## 4. TLS и Cloudflare
 
@@ -76,12 +60,8 @@ journalctl -u chlauncher-server -f   # логи с x-request-id
 ## 5. Бэкапы SQLite
 
 БД в WAL-режиме — обычный `cp` может скопировать битую БД. Скрипт
-`tools/backup-db.sh` использует `sqlite3 .backup` + gzip + ротацию (14 шт).
-
-```cron
-# /etc/cron.d/chlauncher-backup
-15 3 * * * chlauncher /opt/chlauncher/tools/backup-db.sh >> /var/log/chlauncher-backup.log 2>&1
-```
+`tools/backup-db.sh` использует `sqlite3 .backup` + gzip + ротацию (14 шт)
+и запускается таймером `chlauncher-backup.timer` (ставится install.sh).
 
 Копию сливать наружу (S3/rclone/телеграм админу) — добавить в конец скрипта
 при необходимости.
@@ -110,30 +90,51 @@ API-ключу, ретраи идемпотентны).
 
 ### Настройка Tribute (кабинет)
 
-1. Создайте подписку/продукт в Tribute Creator Dashboard, запомните
-   `subscription_id` каждого тарифа (виден в API `GET /api/v1/subscriptions`
+Один платный тариф: **Pro — 2400 ₽/мес**, все функции включены.
+
+1. Создайте подписку «Pro» (2400 ₽, месячная) в Tribute Creator Dashboard,
+   запомните `subscription_id` (виден в API `GET /api/v1/subscriptions`
    или в payload webhook).
 2. Settings → API Keys → сгенерируйте ключ → `TRIBUTE_API_KEY`.
 3. Там же укажите Webhook URL: `https://api.<домен>/api/billing/tribute/webhook`.
-4. Скопируйте ссылку оплаты каждого продукта → `TRIBUTE_PRODUCT_LINKS`.
+4. Скопируйте ссылку оплаты продукта → `TRIBUTE_PRODUCT_LINKS`.
 
 ### Bind-бот (BotFather + apps/launcher/tg-bot)
 
 ```bash
 # 1. @BotFather → /newbot → токен
-# 2. На VPS: отдельный systemd-сервис рядом с сервером
+# 2. На VPS: отдельный systemd-сервис рядом с сервером (ставится install.sh)
 sudo -u chlauncher mkdir -p /opt/chlauncher/apps/launcher/tg-bot
 cat | sudo -u chlauncher tee /opt/chlauncher/apps/launcher/tg-bot/.env <<'EOF'
 TG_BOT_TOKEN=<токен BotFather>
 TG_BIND_SECRET=<openssl rand -hex 32>
 SERVER_URL=http://127.0.0.1:8787
+OWNER_TG_IDS=<ваш telegram id — бот отвечает на /whoami>
 EOF
 ```
 
-`/etc/systemd/system/chlauncher-tgbot.service` — аналогичный unit, только
-`WorkingDirectory=/opt/chlauncher/apps/launcher/tg-bot`, `EnvironmentFile=.../.env`,
-`ExecStart=/usr/bin/node index.js`. Бот сам делает `deleteWebhook` и
-работает через long-polling — публичный endpoint ему не нужен.
+Unit — `tools/vps/chlauncher-tgbot.service` (ставится install.sh). Бот сам
+делает `deleteWebhook` и работает через long-polling — публичный endpoint
+ему не нужен. Команды: `/status`, `/pay`, `/whoami`, `/grant <tg_id> <дни>`
+(только для OWNER_TG_IDS — начисление подписки по TG id).
+
+### Admin-бот (apps/launcher/tg-admin-bot)
+
+Второй, ПРИВАТНЫЙ бот — панель владельца. Отвечает только на `ADMIN_TG_ID`:
+
+```bash
+cat | sudo -u chlauncher tee /opt/chlauncher/apps/launcher/tg-admin-bot/.env <<'EOF'
+TG_ADMIN_BOT_TOKEN=<отдельный токен BotFather — НЕ bind-бот>
+ADMIN_TG_ID=<ваш telegram id>
+TG_BIND_SECRET=<тот же, что у сервера>
+SERVER_URL=http://127.0.0.1:8787
+EOF
+```
+
+Команды: `/subs` (список привязанных TG id + подписки), `/status <tg_id>`,
+`/grant <tg_id> <дни>` (начислить вне оплаты), `/revoke <tg_id>` (отключить),
+`/role <tg_id> user|publisher|admin` (publisher = разработчик, публикует игры).
+Unit — `tools/vps/chlauncher-tgadmin.service`, watchdog его воскрешает.
 
 ### Переменные сервера (.env)
 
@@ -141,8 +142,8 @@ EOF
 TRIBUTE_API_KEY=<из дашборда Tribute>
 TRIBUTE_BOT_URL=https://t.me/<имя_бота>?start=
 TG_BIND_SECRET=<тот же, что у бота>
-TRIBUTE_PRODUCT_LINKS={"pro":"https://t.me/tribute?startapp=abc","expert":"https://t.me/tribute?startapp=xyz"}
-TRIBUTE_PLAN_MAP={"1644":"pro","1645":"expert"}
+TRIBUTE_PRODUCT_LINKS={"pro":"https://t.me/tribute?startapp=abc"}
+TRIBUTE_PLAN_MAP={"1644":"pro"}
 ```
 
 Смоук-тест: привязать свой Telegram → оплатить тестовый тариф →

@@ -186,25 +186,171 @@ pub fn sha256_file(path: &Path) -> io::Result<String> {
 }
 
 /// Extracts a zip archive into `dest` (blocking — run via spawn_blocking).
+/// Thin path-wrapper over [`extract_zip_reader`].
 fn extract_zip(zip_path: &Path, dest: &Path) -> io::Result<()> {
-    let file = fs::File::open(zip_path)?;
-    let mut archive = zip::ZipArchive::new(file)?;
+    extract_zip_reader(fs::File::open(zip_path)?, dest)
+}
+
+/// Bounded zip extraction shared by every client-side unzip (game
+/// builds, JRE bundle, Piper release). P0.7: same bomb/entry/collision
+/// guards the server enforces on upload — a hostile archive that
+/// somehow reached the client cannot fill the disk or overwrite files
+/// outside `dest`.
+pub(crate) fn extract_zip_reader<R: io::Read + io::Seek>(reader: R, dest: &Path) -> io::Result<()> {
+    use std::collections::HashSet;
+    // Mirrors apps/server build_store limits (config-overridable there;
+    // fixed here — the client has no reason to relax them).
+    const MAX_ENTRIES: usize = 20_000;
+    const MAX_FILE: u64 = 2 * 1024 * 1024 * 1024; // 2 GiB per entry
+    const MAX_TOTAL: u64 = 4 * 1024 * 1024 * 1024; // 4 GiB expanded
+    const MAX_RATIO: u64 = 200;
+    const UNIX_SYMLINK: u32 = 0o120000; // S_IFLNK
+    let bomb = |m: &str| io::Error::new(io::ErrorKind::InvalidData, format!("unsafe zip: {m}"));
+
+    let mut archive = zip::ZipArchive::new(reader)?;
+    if archive.len() > MAX_ENTRIES {
+        return Err(bomb("entry count"));
+    }
+    let mut seen: HashSet<String> = HashSet::with_capacity(archive.len());
+    let mut total: u64 = 0;
     for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
+        let file = archive.by_index(i)?;
+        // Symlinks/special files never materialize on disk.
+        if file
+            .unix_mode()
+            .is_some_and(|m| (m & 0o170000) == UNIX_SYMLINK)
+        {
+            return Err(bomb("symlink entry"));
+        }
         // Guard against zip-slip: only allow relative, normalized paths.
         let Some(name) = file.enclosed_name().map(|p| p.to_owned()) else {
             continue;
         };
+        // Windows FS is case-insensitive — `A/x` and `a/X` collide.
+        if !seen.insert(name.to_string_lossy().to_lowercase()) {
+            return Err(bomb("duplicate entry"));
+        }
+        if file.size() > MAX_FILE {
+            return Err(bomb("entry too large"));
+        }
+        if file.compressed_size() >= 4096 && file.size() > file.compressed_size() * MAX_RATIO {
+            return Err(bomb("compression ratio"));
+        }
+        total = total.saturating_add(file.size());
+        if total > MAX_TOTAL {
+            return Err(bomb("expanded size"));
+        }
         let out_path = dest.join(&name);
         if file.is_dir() {
             fs::create_dir_all(&out_path)?;
-        } else {
-            if let Some(p) = out_path.parent() {
-                fs::create_dir_all(p)?;
-            }
-            let mut out = fs::File::create(&out_path)?;
-            io::copy(&mut file, &mut out)?;
+            continue;
+        }
+        if let Some(p) = out_path.parent() {
+            fs::create_dir_all(p)?;
+        }
+        let mut out = fs::File::create(&out_path)?;
+        // Count the bytes actually written — a hostile header may lie
+        // about the uncompressed size, so the declared check above is
+        // not sufficient on its own.
+        let written = io::copy(&mut io::Read::take(file, MAX_FILE + 1), &mut out)?;
+        if written > MAX_FILE {
+            let _ = fs::remove_file(&out_path);
+            return Err(bomb("entry too large"));
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+    use zip::write::SimpleFileOptions;
+
+    fn tmpdir(tag: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("chlz-zip-test-{}-{tag}", std::process::id()));
+        let _ = fs::remove_dir_all(&d);
+        fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    fn zip_bytes(build: impl FnOnce(&mut zip::ZipWriter<Cursor<Vec<u8>>>)) -> Vec<u8> {
+        let mut w = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        build(&mut w);
+        w.finish().unwrap().into_inner()
+    }
+
+    /// Baseline: a well-formed archive extracts with the path layout intact.
+    #[test]
+    fn extract_ok() {
+        let dir = tmpdir("ok");
+        let bytes = zip_bytes(|w| {
+            let o = SimpleFileOptions::default();
+            w.start_file("game.exe", o).unwrap();
+            io::Write::write_all(w, b"exe").unwrap();
+            w.start_file("assets/a.txt", o).unwrap();
+            io::Write::write_all(w, b"hi").unwrap();
+        });
+        extract_zip_reader(Cursor::new(bytes), &dir).unwrap();
+        assert_eq!(fs::read(dir.join("assets/a.txt")).unwrap(), b"hi");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Zip-slip: entries outside `dest` must never materialize on disk.
+    #[test]
+    fn extract_rejects_traversal() {
+        let dir = tmpdir("slip");
+        let bytes = zip_bytes(|w| {
+            w.start_file("../evil.txt", SimpleFileOptions::default())
+                .unwrap();
+            io::Write::write_all(w, b"no").unwrap();
+            w.start_file("ok.txt", SimpleFileOptions::default())
+                .unwrap();
+            io::Write::write_all(w, b"yes").unwrap();
+        });
+        extract_zip_reader(Cursor::new(bytes), &dir).unwrap();
+        assert!(dir.join("ok.txt").exists());
+        assert!(!dir.join("../evil.txt").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Case-colliding paths would overwrite each other on Windows —
+    /// reject the archive outright like the server-side validator does.
+    #[test]
+    fn extract_rejects_duplicate() {
+        let dir = tmpdir("dup");
+        let bytes = zip_bytes(|w| {
+            let o = SimpleFileOptions::default();
+            w.start_file("A/x.txt", o).unwrap();
+            io::Write::write_all(w, b"1").unwrap();
+            w.start_file("a/X.txt", o).unwrap();
+            io::Write::write_all(w, b"2").unwrap();
+        });
+        assert!(extract_zip_reader(Cursor::new(bytes), &dir).is_err());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Symlink entries never materialize — same rule as the server.
+    /// The zip writer masks the file-type bits out of `unix_permissions`,
+    /// so a hostile archive is emulated by patching the central
+    /// directory: unix `version_made_by` + `S_IFLNK` external attrs,
+    /// exactly what a *nix zip tool writes for a real symlink.
+    #[test]
+    fn extract_rejects_symlink() {
+        let dir = tmpdir("link");
+        let mut bytes = zip_bytes(|w| {
+            w.start_file("link", SimpleFileOptions::default().unix_permissions(0o777))
+                .unwrap();
+            io::Write::write_all(w, b"/etc/passwd").unwrap();
+        });
+        let pos = bytes
+            .windows(4)
+            .position(|w| w == b"PK\x01\x02")
+            .expect("central directory");
+        bytes[pos + 5] = 3; // version-made-by host = unix
+        bytes[pos + 38..pos + 42].copy_from_slice(&(0o120777u32 << 16).to_le_bytes());
+        assert!(extract_zip_reader(Cursor::new(bytes), &dir).is_err());
+        assert!(!dir.join("link").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
 }

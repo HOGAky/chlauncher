@@ -161,6 +161,7 @@
 <script>
 'use strict';
 const TOKEN = new URLSearchParams(location.search).get('t') || '';
+const WTOKEN = new URLSearchParams(location.search).get('w') || '';
 const GAME = new URLSearchParams(location.search).get('g') || 'aquarium';
 const packDir = 'aquarium';
 const AB = '/games-assets/aquarium';
@@ -261,7 +262,7 @@ function esc(s) { const d = document.createElement('i'); d.textContent = s || ''
 function card(user, icon, label) {
   const c = document.createElement('div');
   c.className = 'card';
-  c.innerHTML = `${icon ? `<img src="${icon}">` : ''}` +
+  c.innerHTML = `${icon ? `<img src="${esc(icon)}">` : ''}` +
     `<span>${esc(user || 'зритель')}</span><span class="act">${esc(label)}</span>`;
   cardsBox.appendChild(c);
   while (cardsBox.children.length > 5) cardsBox.firstChild.remove();
@@ -374,7 +375,7 @@ function applyRules(rules, custom) {
 }
 
 async function postAsset(path, data_b64) {
-  const r = await fetch(`/games/asset?t=${encodeURIComponent(TOKEN)}`, {
+  const r = await fetch(`/games/asset?w=${encodeURIComponent(WTOKEN)}`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ dir: packDir, path, data_b64 }),
   });

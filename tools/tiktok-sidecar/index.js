@@ -217,11 +217,21 @@ const connConnected = () => {
   }
 };
 
+// Upstream stable id (protobuf msgId/eventId) — gamekit dedupes
+// reconnect replays by it instead of fingerprinting. "0"/"" is the
+// proto3 default, not a real id.
+const upstreamId = (d) => {
+  const v = d?.msgId ?? d?.eventId ?? d?.common?.msgId ?? '';
+  const s = String(v ?? '');
+  return s && s !== '0' ? s : '';
+};
+
 const ev = (event_kind, d, raw_name, amount = 0, extra = {}) => {
   evCount++;
   out({
     type: 'event',
     event_kind,
+    event_id: upstreamId(d),
     user: userOf(d),
     unique_id: uniqueIdOf(d),
     avatar_url: avatarOf(d),

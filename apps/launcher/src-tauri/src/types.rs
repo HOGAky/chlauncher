@@ -85,6 +85,11 @@ pub struct RawStreamEvent {
     /// Unix ms when the event reached the launcher (queueing latency).
     #[serde(default)]
     pub ts_ms: u64,
+    /// Upstream stable id (connector `msgId`/`eventId`, DA alert id) —
+    /// lets gamekit dedupe reconnect replays authoritatively instead of
+    /// fingerprinting. Empty for sources without stable ids.
+    #[serde(default)]
+    pub event_id: String,
 }
 
 /// Current unix time in milliseconds — fills `ts_ms` at ingest points.
@@ -400,20 +405,11 @@ pub struct StreamGoal {
 /// Gift-specific time rule for the timer app: exact gift-name match
 /// (case-insensitive) → flat `sec` per gift unit. Negative values
 /// STEAL time — the classic "Rose −10 s" prank rule.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GiftTimeRule {
     pub name: String,
     pub sec: i64,
-}
-
-impl Default for GiftTimeRule {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            sec: 0,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
