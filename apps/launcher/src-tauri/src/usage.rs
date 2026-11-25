@@ -73,6 +73,9 @@ pub struct UsageMeter {
     path: std::path::PathBuf,
     api: ApiClient,
     settings: Arc<Mutex<SettingsStore>>,
+    /// For `auth-changed` when the server-side role flips (owner TG bind
+    /// promotions land here, not just on login).
+    app: Option<tauri::AppHandle>,
 }
 
 impl UsageMeter {
@@ -81,6 +84,7 @@ impl UsageMeter {
         data_dir: &std::path::Path,
         api: ApiClient,
         settings: Arc<Mutex<SettingsStore>>,
+        app: Option<tauri::AppHandle>,
     ) -> Arc<Self> {
         let path = data_dir.join("usage.json");
         let inner = std::fs::read_to_string(&path)
@@ -99,6 +103,7 @@ impl UsageMeter {
             path,
             api,
             settings,
+            app,
         })
     }
 
@@ -181,6 +186,26 @@ impl UsageMeter {
         {
             let mut c = self.cached.lock().await;
             *c = Some(res.clone());
+        }
+        // Server-authoritative role (owner TG bind promotes without a
+        // re-login; a revocation removes admin UI on the next poll too).
+        if let Some(role) = res.role.as_deref() {
+            let changed = {
+                let mut s = self.settings.lock().await;
+                if s.data.role.as_deref() != Some(role) {
+                    s.data.role = Some(role.to_string());
+                    let _ = s.save();
+                    true
+                } else {
+                    false
+                }
+            };
+            if changed {
+                if let Some(app) = &self.app {
+                    use tauri::Emitter;
+                    let _ = app.emit("auth-changed", true);
+                }
+            }
         }
         let mut f = self.inner.lock().await;
         if f.month == res.usage.month {
@@ -364,13 +389,13 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("usage-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let settings = Arc::new(Mutex::new(crate::settings::SettingsStore::load(&dir)));
-        let meter = UsageMeter::new(&dir, ApiClient::new("http://127.0.0.1:1".into()), settings);
+        let meter = UsageMeter::new(&dir, ApiClient::new("http://127.0.0.1:1".into()), settings, None);
         meter.note(50).await;
         meter.note(25).await;
         assert_eq!(meter.month_coins().await, 75);
         // Persistence: a fresh meter over the same dir sees the pending sum.
         let settings2 = Arc::new(Mutex::new(crate::settings::SettingsStore::load(&dir)));
-        let meter2 = UsageMeter::new(&dir, ApiClient::new("http://127.0.0.1:1".into()), settings2);
+        let meter2 = UsageMeter::new(&dir, ApiClient::new("http://127.0.0.1:1".into()), settings2, None);
         assert_eq!(meter2.month_coins().await, 75);
         let _ = std::fs::remove_dir_all(&dir);
     }

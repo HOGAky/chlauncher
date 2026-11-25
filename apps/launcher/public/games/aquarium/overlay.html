@@ -90,7 +90,11 @@
   .stat { padding: 4px 12px; border-radius: 999px; font-size: 13px; color: #cfe8ff;
     background: rgba(8,20,35,.7); border: 1px solid rgba(120,190,255,.25); }
 
-  /* ══ Конструктор (Tab/D) ══ */
+  /* ══ Конструктор (Tab/D или кнопка ⚙) ══ */
+  #gearBtn { position: absolute; top: 8px; left: 8px; z-index: 30; width: 30px;
+    height: 30px; border-radius: 8px; border: 1px solid #3a4a6a; background: #16223cd9;
+    color: #cfe0ff; font-size: 16px; cursor: pointer; opacity: 0; transition: opacity .2s; }
+  #gearBtn:hover, #gearBtn.on { opacity: .95; }
   #panel { position: absolute; top: 8px; right: 8px; width: 330px; max-height: 94%;
     overflow-y: auto; display: none; background: rgba(10,15,30,.94);
     border: 1px solid #3a4a6a; border-radius: 10px; padding: 10px;
@@ -128,6 +132,7 @@
     <div id="fishWrap"><img id="fish" alt="" draggable="false"></div>
     <div id="fxLayer" class="fx"></div>
   </div>
+  <button id="gearBtn" title="Конструктор (Tab/D)" type="button">⚙️</button>
   <div id="cards"></div>
   <div id="stats">
     <span class="stat" id="stFed">🐟 Корм: 0</span>
@@ -406,10 +411,18 @@ document.getElementById('devReset').addEventListener('click', () => {
 });
 
 const DEBUG_ACT = { '1': 'nudge', '2': 'feed', '3': 'bubble', '4': 'zap', '5': 'heart', '6': 'crown' };
+const gearBtn = document.getElementById('gearBtn');
+function togglePanel(force) {
+  const panel = document.getElementById('panel');
+  const show = force ?? !panel.classList.contains('show');
+  panel.classList.toggle('show', show);
+  gearBtn.classList.toggle('on', show);
+}
+gearBtn.addEventListener('click', () => togglePanel());
 addEventListener('keydown', (e) => {
   if (e.key === 'Tab' || e.key === 'd' || e.key === 'D' || e.key === 'в' || e.key === 'В') {
     e.preventDefault();
-    document.getElementById('panel').classList.toggle('show');
+    togglePanel();
     return;
   }
   const t = DEBUG_ACT[e.key];

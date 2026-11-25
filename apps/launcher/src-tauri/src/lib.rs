@@ -341,7 +341,12 @@ pub fn run() {
 
             // Earn-limit meter + entitlements cache (§8) — reports coins
             // every 60 s, refreshes the plan snapshot every 10 min.
-            let usage = usage::UsageMeter::new(&data_dir, api.clone(), settings.clone());
+            let usage = usage::UsageMeter::new(
+                &data_dir,
+                api.clone(),
+                settings.clone(),
+                Some(app.handle().clone()),
+            );
             {
                 let u = usage.clone();
                 tauri::async_runtime::spawn(async move { u.reporter_loop().await });

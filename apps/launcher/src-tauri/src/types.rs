@@ -1635,6 +1635,10 @@ pub struct EntitlementsResponse {
     pub plan: Plan,
     pub entitlements: Entitlements,
     pub usage: MonthlyUsage,
+    /// Server-authoritative account role — lets a TG-bind promotion (or a
+    /// demotion) reach the client without a re-login.
+    #[serde(default)]
+    pub role: Option<String>,
 }
 
 /// `usage_monthly` view for the UI progress bar.
