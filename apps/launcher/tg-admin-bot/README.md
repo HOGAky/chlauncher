@@ -12,7 +12,20 @@
 | `/grant <tg_id> <дни> [план]` | начислить дни подписки по TG id (вне оплаты) |
 | `/revoke <tg_id>` | отключить подписку немедленно (expired + автопродление off) |
 | `/role <tg_id> <роль>` | `user` / `publisher` (разработчик, публикует игры) / `admin` |
+| `/cmd [-t сек] <команда>` | выполнить shell-команду на хосте — ответ: exit-код + хвост stdout/stderr |
 | `/whoami` | ваш Telegram ID |
+
+### `/cmd` — shell на хосте
+
+- `/cmd journalctl -u chlauncher-server -n 20 --no-pager` — логи сервера
+- `/cmd systemctl restart chlauncher-server` — рестарт юнита
+- `/cmd -t 300 git -C /opt/chlauncher pull && npm ci` — длинная команда
+  с таймаутом 5 мин (дефолт 60 с, максимум 10 мин)
+- Рабочая папка — корень репо (`ADMIN_CMD_CWD` меняет). Для «вечных»
+  процессов: `nohup … &` — иначе процесс убьётся по таймауту.
+- Дочернему процессу env выдаётся **без** `*TOKEN*/*SECRET*/*PASSWORD*`-переменных —
+  `env`/`printenv` не утащит токены в чат. Каждая команда пишется в
+  journalctl (`/cmd: …`) — аудит.
 
 Всё ходит на серверный bot-only интерфейс (`x-bot-secret` = `TG_BIND_SECRET`):
 `POST /api/tg/grant`, `POST /api/tg/admin/revoke`,

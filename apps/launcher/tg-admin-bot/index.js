@@ -13,19 +13,26 @@
  *   /grant <tg_id> <days> [plan] — credit subscription days by TG id
  *   /revoke <tg_id>       — expire the subscription immediately
  *   /role <tg_id> <role>  — user | publisher | admin
+ *   /cmd [-t sec] <shell> — run a shell command on the host, reply
+ *                         with exit code + stdout/stderr tail
  *   /whoami               — your Telegram user id
  *
  * Env: TG_ADMIN_BOT_TOKEN, TG_BIND_SECRET (shared with the server),
- *      SERVER_URL (default http://127.0.0.1:8787), ADMIN_TG_ID (required).
+ *      SERVER_URL (default http://127.0.0.1:8787), ADMIN_TG_ID (required),
+ *      ADMIN_CMD_CWD (default: repo root), ADMIN_CMD_TIMEOUT_MS
+ *      (default 60000, /cmd -t overrides per call, cap 600000).
  */
 
+import { exec } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+const BOT_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 // Hydrate from ./.env when present — real env vars still win (systemd
 // EnvironmentFile / pm2 env), matching the server and bind-bot.
 try {
-  process.loadEnvFile(path.join(path.dirname(fileURLToPath(import.meta.url)), '.env'));
+  process.loadEnvFile(path.join(BOT_DIR, '.env'));
 } catch {
   /* no .env — rely on real environment */
 }
@@ -42,6 +49,14 @@ if (!TOKEN || !SECRET || !Number.isInteger(ADMIN_ID)) {
 
 const API = `https://api.telegram.org/bot${TOKEN}`;
 const PAGE = 15;
+
+// /cmd defaults: run from the repo root (…/apps/launcher/tg-admin-bot →
+// repo root is ../../.. — /opt/chlauncher on the VPS), 60 s ceiling.
+const CMD_CWD = process.env.ADMIN_CMD_CWD || path.resolve(BOT_DIR, '..', '..', '..');
+const CMD_TIMEOUT_MS = Number(process.env.ADMIN_CMD_TIMEOUT_MS) || 60_000;
+const CMD_MAX_TIMEOUT_MS = 600_000;
+// Telegram message cap is 4096; the wrapper eats a bit — keep the tail.
+const CMD_OUT_LIMIT = 3600;
 
 async function tgCall(method, body) {
   const res = await fetch(`${API}/${method}`, {
@@ -93,6 +108,9 @@ const HELP =
   '/grant &lt;tg_id&gt; &lt;дни&gt; [план] — начислить подписку\n' +
   '/revoke &lt;tg_id&gt; — отключить подписку\n' +
   '/role &lt;tg_id&gt; &lt;user|publisher|admin&gt; — выдать роль\n' +
+  '/cmd [-t сек] &lt;команда&gt; — выполнить shell-команду на хосте\n' +
+  '    <i>вывод: exit-код + хвост stdout/stderr; ' +
+  'длинное — через -t или nohup … &amp;</i>\n' +
   '/whoami — мой Telegram ID';
 
 // ---------------------------------------------------------------- commands
@@ -202,6 +220,70 @@ async function setRole(chatId, tgId, role) {
   return send(chatId, `TG <code>${tgId}</code> теперь: <b>${names[role] || role}</b>.`);
 }
 
+/**
+ * Env for /cmd children minus anything credential-shaped — the output
+ * comes back into Telegram, so `env`/`printenv`/`set` must not leak
+ * bot tokens or server secrets into the chat.
+ */
+function cmdEnv() {
+  const env = { ...process.env };
+  for (const k of Object.keys(env)) {
+    if (/TOKEN|SECRET|PASSWORD|PRIVATE_KEY|API_KEY/i.test(k)) delete env[k];
+  }
+  return env;
+}
+
+/** Runs `command` in the host shell and reports exit + output tail. */
+function runCmd(chatId, raw) {
+  // Optional leading "-t <seconds>" overrides the timeout per call.
+  let timeout = CMD_TIMEOUT_MS;
+  let command = raw;
+  const t = raw.match(/^-t\s+(\d+)\s+/);
+  if (t) {
+    timeout = Math.min(Math.max(Number(t[1]) * 1000, 1000), CMD_MAX_TIMEOUT_MS);
+    command = raw.slice(t[0].length);
+  }
+  if (!command) {
+    return send(
+      chatId,
+      'Использование: <code>/cmd [-t сек] &lt;команда&gt;</code>\n' +
+        `Пример: <code>/cmd journalctl -u chlauncher-server -n 20 --no-pager</code>`
+    );
+  }
+  // Audit trail — every shell command lands in journalctl.
+  console.log(`[tg-admin] /cmd: ${command}`);
+  const started = Date.now();
+  exec(
+    command,
+    {
+      cwd: CMD_CWD,
+      env: cmdEnv(),
+      timeout,
+      killSignal: 'SIGKILL',
+      maxBuffer: 1024 * 1024,
+      windowsHide: true,
+    },
+    (err, stdout, stderr) => {
+      const secs = ((Date.now() - started) / 1000).toFixed(1);
+      let head;
+      if (err?.killed) {
+        head = `⏱ убит по таймауту ${Math.round(timeout / 1000)}с`;
+      } else if (err) {
+        head = `✗ exit ${err.code ?? '?'}${err.signal ? ` (signal ${err.signal})` : ''}`;
+      } else {
+        head = '✓ exit 0';
+      }
+      let out = `${stdout || ''}${stderr ? `${stdout ? '\n' : ''}[stderr]\n${stderr}` : ''}`;
+      out = out.trimEnd();
+      if (!out) out = '(нет вывода)';
+      else if (out.length > CMD_OUT_LIMIT) {
+        out = `… (обрезано ${out.length - CMD_OUT_LIMIT} симв.)\n` + out.slice(-CMD_OUT_LIMIT);
+      }
+      send(chatId, `${head} · ${secs}с\n<pre>${esc(out)}</pre>`);
+    }
+  );
+}
+
 // ---------------------------------------------------------------- dispatch
 
 async function handleMessage(msg) {
@@ -259,6 +341,10 @@ async function handleMessage(msg) {
         );
       }
       return setRole(chatId, tgId, role);
+    }
+    case '/cmd': {
+      // The shell line is the raw remainder — never tokenized.
+      return runCmd(chatId, text.slice(cmd.length).trim());
     }
     default:
       return send(chatId, HELP);
