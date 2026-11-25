@@ -264,7 +264,7 @@ const MIGRATIONS = [
       earn_limit_coins_month: 5000,
       paid_games: false,
       mc_premium_plugins: false,
-      interactive_games: ['gift_tower', 'patrick_cabbage', 'aquarium'],
+      interactive_games: ['patrick_cabbage', 'aquarium'],
     }), 1, 0);
     seed.run('pro', 'Pro', 240000, JSON.stringify({
       max_presets: 100,
@@ -277,7 +277,7 @@ const MIGRATIONS = [
       earn_limit_coins_month: null,
       paid_games: true,
       mc_premium_plugins: true,
-      interactive_games: ['gift_tower', 'boy_vs_girl', 'survive_horde', 'patrick_cabbage', 'aquarium'],
+      interactive_games: ['patrick_cabbage', 'aquarium'],
     }), 1, 1);
     seed.run('expert', 'Expert', 59900, JSON.stringify({
       max_presets: 100,
@@ -290,7 +290,7 @@ const MIGRATIONS = [
       earn_limit_coins_month: null,
       paid_games: true,
       mc_premium_plugins: true,
-      interactive_games: ['gift_tower', 'boy_vs_girl', 'survive_horde', 'patrick_cabbage', 'aquarium'],
+      interactive_games: ['patrick_cabbage', 'aquarium'],
     }), 0, 2);
   },
   // v6 → v7: Minecraft plugin catalog (parity spec §9.4). Rows are

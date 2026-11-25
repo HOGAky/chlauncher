@@ -174,7 +174,10 @@ share|subscribe`, поля `vip|fan_level|is_moderator|is_superfan|gift_id|coins
   `/games-assets`). Той же панелью правятся правила (`custom_rules.json`,
   `.json` тоже принимает `/games/asset`). Универсальный вариант панели —
   `GameKit.devPanel({actions})` (gamekit.js): кнопка-шестерёнка + редактор
-  rules-таблицы для любой игры, подключён во всех bundled-пакетах.
+  rules-таблицы для любой игры, вызывается из overlay.html пакета.
+  Каталог bundled-пакетов сокращён до трёх: `aquarium`, `patrick`,
+  `roblox_sts` — прототипы (boy_vs_girl, flappy_gifts, gift_tower,
+  prism_break, snake_gifts, survive_horde) удалены, в git-истории живы.
 - Редактор манифеста (админ-роль, карандаш на карточке в Библиотеке):
   `pack_manifest` (effective-манифест с merge) → `save_pack_manifest`
   (пишет патч в `<data>/games/<dir>/game.json`, `id` форсится,
