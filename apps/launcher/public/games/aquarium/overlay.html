@@ -11,6 +11,10 @@
   /* ══ Сцена ══ */
   #tank { position: absolute; inset: 0; overflow: hidden;
     background: linear-gradient(180deg, #0e3a5e 0%, #0a2c4a 45%, #071e33 100%); }
+  #bgImg { position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; display: none; }
+  /* Свой фон скрывает дефолтный подводный декор. */
+  #tank.custombg .ray, #tank.custombg #sand, #tank.custombg .weed { display: none; }
   .ray { position: absolute; top: -20%; width: 90px; height: 130%;
     background: linear-gradient(180deg, rgba(140,200,255,.14), transparent 75%);
     transform: skewX(-14deg); animation: ray-sway 9s ease-in-out infinite alternate; }
@@ -120,6 +124,7 @@
 </head>
 <body>
   <div id="tank">
+    <img id="bgImg" alt="">
     <div class="ray" style="left:18%"></div>
     <div class="ray" style="left:46%; animation-delay:-4s"></div>
     <div class="ray" style="left:74%; animation-delay:-7s"></div>
@@ -147,6 +152,13 @@
     <button id="devReset">Стандартная</button>
     <div class="msg" id="devMsg">sprites/custom.gif заменяет стандартную гифку</div>
     <img id="devPrev" style="display:none">
+
+    <div class="t" style="margin-top:10px">🖼 Свой фон</div>
+    <input type="file" id="bgFile" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none">
+    <button id="bgPick">Загрузить фон</button>
+    <button id="bgReset">Стандартный</button>
+    <div class="msg" id="bgMsg">png/jpg/webp/gif — заменяет аквариум (песок/водоросли скрываются)</div>
+    <img id="bgPrev" style="display:none">
 
     <div class="t" style="margin-top:10px">⚙️ Конструктор действий</div>
     <div id="rulesBox">
@@ -218,6 +230,33 @@ function probeCustom() {
   };
   im.onerror = () => { fishImg.src = FISH_DEF; devPrev.style.display = 'none'; };
   im.src = `${FISH_CUST}&v=${Date.now()}`;
+}
+
+/* ══ Свой фон: sprites/bg.<ext> в user-папке перекрывает сцену ══ */
+const tank = document.getElementById('tank');
+const bgImg = document.getElementById('bgImg');
+const bgMsg = document.getElementById('bgMsg');
+const bgPrev = document.getElementById('bgPrev');
+const BG_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
+const bgUrl = (ext) => `${AB}/sprites/bg.${ext}?t=${encodeURIComponent(TOKEN)}&v=${Date.now()}`;
+function probeCustomBg(i = 0) {
+  if (i >= BG_EXTS.length) {
+    bgImg.style.display = 'none';
+    tank.classList.remove('custombg');
+    bgPrev.style.display = 'none';
+    return;
+  }
+  const url = bgUrl(BG_EXTS[i]);
+  const im = new Image();
+  im.onload = () => {
+    bgImg.src = url;
+    bgImg.style.display = 'block';
+    tank.classList.add('custombg');
+    bgPrev.src = url;
+    bgPrev.style.display = 'block';
+  };
+  im.onerror = () => probeCustomBg(i + 1);
+  im.src = url;
 }
 
 /* ══ Эффекты — диспетчер по action.type ══ */
@@ -410,6 +449,32 @@ document.getElementById('devReset').addEventListener('click', () => {
     .catch((e) => { devMsg.textContent = `Ошибка: ${e.message}`; });
 });
 
+/* ══ Фон: загрузка / сброс ══ */
+const bgFile = document.getElementById('bgFile');
+const BG_MIME = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
+document.getElementById('bgPick').addEventListener('click', () => bgFile.click());
+bgFile.addEventListener('change', () => {
+  const f = bgFile.files && bgFile.files[0];
+  bgFile.value = '';
+  if (!f) return;
+  const ext = BG_MIME[f.type];
+  if (!ext) { bgMsg.textContent = 'Нужен png/jpg/webp/gif'; return; }
+  const rd = new FileReader();
+  rd.onload = () => {
+    // Другие расширения удаляем — иначе старый bg.png перекроет новый bg.jpg.
+    Promise.all(BG_EXTS.filter((e) => e !== ext).map((e) => postAsset(`sprites/bg.${e}`, null)))
+      .then(() => postAsset(`sprites/bg.${ext}`, rd.result.split(',')[1]))
+      .then(() => { bgMsg.textContent = 'Фон сохранён'; probeCustomBg(); })
+      .catch((e) => { bgMsg.textContent = `Ошибка: ${e.message}`; });
+  };
+  rd.readAsDataURL(f);
+});
+document.getElementById('bgReset').addEventListener('click', () => {
+  Promise.all(BG_EXTS.map((e) => postAsset(`sprites/bg.${e}`, null)))
+    .then(() => { bgMsg.textContent = 'Стандартный фон'; probeCustomBg(); })
+    .catch((e) => { bgMsg.textContent = `Ошибка: ${e.message}`; });
+});
+
 const DEBUG_ACT = { '1': 'nudge', '2': 'feed', '3': 'bubble', '4': 'zap', '5': 'heart', '6': 'crown' };
 const gearBtn = document.getElementById('gearBtn');
 function togglePanel(force) {
@@ -448,6 +513,7 @@ async function main() {
   applyRules(rulesRes || S.cfg.rules, !!rulesRes);
   rulesToRows(rulesRes || S.cfg.rules);
   probeCustom();
+  probeCustomBg();
   stat();
 
   GameKit.connect(['game'], (ev) => {
