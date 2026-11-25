@@ -160,6 +160,8 @@ share|subscribe`, поля `vip|fan_level|is_moderator|is_superfan|gift_id|coins
   `tts` (правило `/tts/say`), `launch{}`, `rules` (дефолтная таблица
   `BuiltinGameCfg.rules`), `hidden` (прототип вне каталога),
   `afk` (самоиграющая игра → вкладка «АФК-стримы» в Библиотеке),
+  `free` (bundled-пакет без гейта `interactive_games` → вкладка
+  «Бесплатные»; без флага гейтится тарифом → «По тарифу»),
   `section` (имя своей вкладки-раздела в Библиотеке — каждое уникальное
   значение = новая вкладка после «АФК-стримы»).
 - Пакет `aquarium` — «GIF-конструктор»: своя гифка плавает по сцене,
@@ -176,7 +178,14 @@ share|subscribe`, поля `vip|fan_level|is_moderator|is_superfan|gift_id|coins
   (пишет патч в `<data>/games/<dir>/game.json`, `id` форсится,
   эмит `catalog-changed`) → `reset_pack_manifest` (удаляет патч;
   hidden-патчи находит сканом user-корня). Валидация —
-  `validate_pack_manifest` в commands.rs.
+  `validate_pack_manifest` в commands.rs. `pack_manifest`/
+  `save_pack_manifest` работают через `find_any` (scan с hidden) —
+  скрытый пакет редактируется и разскрывается из панели.
+- Админ-панель разделов: вкладка «Каталог» в `AdminPage` — ВСЕ пакеты
+  включая hidden (`pack_admin_list` → `registry_all`/`scan_all`),
+  построчно: раздел (datalist), тумблеры АФК/Free/Скрыта, «Изменено» +
+  сброс. Патч идёт через `pack_manifest` + `save_pack_manifest`
+  (сохраняет чужие поля user-оверрайда).
 - Пайплайн: `game_packs::scan/find` → `builtin_games::registry/exists/
   allowed_games/default_cfg` → `/overlay/game/{id}` (disk-страница;
   remote 404 естественно) → ассеты `/games-assets/<dir>/...` (user →

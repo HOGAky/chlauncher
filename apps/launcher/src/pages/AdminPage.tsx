@@ -14,15 +14,17 @@ import {
   Upload, Plus, RefreshCw, RotateCcw, EyeOff, Check, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import * as api from '../api';
-import type { AdminGame, AdminUser, AuditEntry, Plan } from '../types';
+import { useApp } from '../App';
+import type { AdminGame, AdminUser, AuditEntry, BuiltinGameMeta, Plan } from '../types';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Input } from '../components/ui/input';
+import { Switch } from '../components/ui/switch';
 import { cn } from '../lib/utils';
 
 import { humanError } from '../errorMessages';
-type Tab = 'games' | 'users' | 'plans' | 'promo' | 'support' | 'audit';
+type Tab = 'games' | 'packs' | 'users' | 'plans' | 'promo' | 'support' | 'audit';
 const fmtSize = (n: number) => `${(n / 1024 / 1024).toFixed(1)} МБ`;
 
 export default function AdminPage() {
@@ -32,7 +34,7 @@ export default function AdminPage() {
       <div className="flex items-center gap-3">
         <h1 className="text-lg font-semibold">Управление</h1>
         <div className="flex gap-1 text-sm">
-          {(['games', 'users', 'plans', 'promo', 'support', 'audit'] as Tab[]).map((t) => (
+          {(['games', 'packs', 'users', 'plans', 'promo', 'support', 'audit'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -43,7 +45,9 @@ export default function AdminPage() {
             >
               {t === 'games'
                 ? 'Игры'
-                : t === 'users'
+                : t === 'packs'
+                  ? 'Каталог'
+                  : t === 'users'
                   ? 'Пользователи'
                   : t === 'plans'
                     ? 'Тарифы'
@@ -57,6 +61,7 @@ export default function AdminPage() {
         </div>
       </div>
       {tab === 'games' && <GamesTab />}
+      {tab === 'packs' && <PacksTab />}
       {tab === 'users' && <UsersTab />}
       {tab === 'plans' && <PlansTab />}
       {tab === 'promo' && <PromoTab />}
@@ -303,6 +308,188 @@ function UploadForm({ slug, act }: { slug: string; act: (f: () => Promise<unknow
           <div className="h-1.5 rounded bg-primary transition-all" style={{ width: `${progress}%` }} />
         </div>
       )}
+    </div>
+  );
+}
+
+// ================================================================ Packs (разделы каталога)
+
+/**
+ * Локальный каталог папок-игр: распределение по разделам библиотеки.
+ * Каждая строка — патч user-манифеста поверх bundled (merge-семантика):
+ * section → своя вкладка, afk → «АФК-стримы», free → «Бесплатные»
+ * (иначе гейтится тарифом → «По тарифу»), hidden → убрать из каталога.
+ */
+function PacksTab() {
+  const { overlayUrl } = useApp();
+  const [packs, setPacks] = useState<BuiltinGameMeta[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
+
+  const refresh = useCallback(() => {
+    api.packAdminList().then((r) => setPacks(r.games)).catch((e) => setError(humanError(e)));
+  }, []);
+  useEffect(() => {
+    refresh();
+    let un: (() => void) | undefined;
+    api.onCatalogChanged(() => refresh()).then((u) => (un = u));
+    return () => un?.();
+  }, [refresh]);
+
+  /** Все разделы, уже используемые в манифестах — подсказки для поля. */
+  const sections = [
+    ...new Set(packs.map((p) => p.section).filter((s): s is string => !!s)),
+  ].sort((a, b) => a.localeCompare(b));
+
+  const iconUrl = (p: BuiltinGameMeta) => {
+    const origin = overlayUrl.match(/^(https?:\/\/[^/]+)/)?.[1];
+    return p.icon && origin ? `${origin}${p.icon}` : null;
+  };
+
+  /**
+   * Патч одного поля манифеста: читает effective-манифест, меняет ключ и
+   * пишет как user-оверрайд — остальные оверрайды сохраняются.
+   * '' / undefined в значении = удалить ключ (наследовать bundled).
+   */
+  const patch = async (id: string, fields: Record<string, unknown>) => {
+    setBusy((b) => ({ ...b, [id]: true }));
+    setError(null);
+    try {
+      const cur = await api.packManifest(id);
+      const manifest = { ...cur.manifest, ...fields };
+      for (const [k, v] of Object.entries(fields)) {
+        if (v === undefined || v === '') delete manifest[k];
+      }
+      await api.savePackManifest(id, manifest);
+    } catch (e) {
+      setError(`${id}: ${humanError(e)}`);
+    } finally {
+      setBusy((b) => ({ ...b, [id]: false }));
+      refresh();
+    }
+  };
+
+  const reset = async (id: string, title: string) => {
+    if (!window.confirm(`Сбросить «${title}» к стандартному манифесту?`)) return;
+    setBusy((b) => ({ ...b, [id]: true }));
+    setError(null);
+    try {
+      await api.resetPackManifest(id);
+    } catch (e) {
+      setError(`${id}: ${humanError(e)}`);
+    } finally {
+      setBusy((b) => ({ ...b, [id]: false }));
+      refresh();
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-muted-foreground">
+          {packs.length} пакетов · раздел = вкладка в Библиотеке; «Без тарифа» — игра доступна
+          на free-плане, иначе попадает в «По тарифу»
+        </span>
+        <Button size="sm" variant="outline" onClick={refresh}>
+          <RefreshCw size={14} className="mr-1" /> Обновить
+        </Button>
+      </div>
+      {error && <div className="text-sm text-destructive">{error}</div>}
+      <datalist id="pack-sections">
+        {sections.map((s) => (
+          <option key={s} value={s} />
+        ))}
+      </datalist>
+
+      <Card>
+        <CardContent className="flex flex-col gap-0 pt-3 text-sm">
+          <div className="grid grid-cols-[auto_1fr_minmax(140px,220px)_auto] items-center gap-x-4 border-b border-border pb-2 text-xs text-muted-foreground">
+            <span />
+            <span>Игра</span>
+            <span>Раздел</span>
+            <span className="flex gap-4">АФК · Free · Скрыта</span>
+          </div>
+          {packs.map((p) => (
+            <div
+              key={p.id}
+              className={cn(
+                'grid grid-cols-[auto_1fr_minmax(140px,220px)_auto] items-center gap-x-4 border-b border-border/50 py-2',
+                p.hidden && 'opacity-50'
+              )}
+            >
+              <span className="w-8 text-center">
+                {iconUrl(p) ? (
+                  <img src={iconUrl(p)!} alt="" className="mx-auto h-7 w-7 object-contain" />
+                ) : (
+                  <span className="text-lg">🎮</span>
+                )}
+              </span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 truncate">
+                  <span className="truncate font-medium">{p.title}</span>
+                  {p.hidden && <Badge variant="outline">Скрыта</Badge>}
+                  {p.remote && <Badge variant="outline">Серверная</Badge>}
+                  {p.user_pack && !p.overridden && <Badge variant="outline">Своя папка</Badge>}
+                  {p.overridden && <Badge variant="warning">Изменено</Badge>}
+                </div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {p.id}
+                  {p.section ? ` · ${p.section}` : ''}
+                </div>
+              </div>
+              <Input
+                className="h-8 text-xs"
+                list="pack-sections"
+                placeholder="—"
+                disabled={!!busy[p.id]}
+                defaultValue={p.section ?? ''}
+                key={`${p.id}:${p.section ?? ''}`}
+                onBlur={(e) => {
+                  const v = e.target.value.trim();
+                  if (v !== (p.section ?? '')) void patch(p.id, { section: v || undefined });
+                }}
+              />
+              <div className="flex items-center gap-3">
+                <span title="АФК-стримы" className="inline-flex">
+                  <Switch
+                    disabled={!!busy[p.id]}
+                    checked={p.afk === true}
+                    onCheckedChange={(v) => void patch(p.id, { afk: v })}
+                  />
+                </span>
+                <span title="Без тарифа (бесплатная)" className="inline-flex">
+                  <Switch
+                    disabled={!!busy[p.id]}
+                    checked={p.free === true}
+                    onCheckedChange={(v) => void patch(p.id, { free: v })}
+                  />
+                </span>
+                <span title="Скрыть из каталога" className="inline-flex">
+                  <Switch
+                    disabled={!!busy[p.id]}
+                    checked={p.hidden === true}
+                    onCheckedChange={(v) => void patch(p.id, { hidden: v })}
+                  />
+                </span>
+                {p.overridden && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    title="Вернуть стандартный манифест"
+                    disabled={!!busy[p.id]}
+                    onClick={() => void reset(p.id, p.title)}
+                  >
+                    <RotateCcw size={13} />
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+          {packs.length === 0 && (
+            <p className="py-4 text-muted-foreground">Пакетов нет.</p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

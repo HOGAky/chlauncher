@@ -686,6 +686,7 @@ pub fn run() {
             commands::game_set_cfg,
             commands::game_results,
             commands::pack_manifest,
+            commands::pack_admin_list,
             commands::save_pack_manifest,
             commands::reset_pack_manifest,
             commands::mock_pay,

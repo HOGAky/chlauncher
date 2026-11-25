@@ -92,6 +92,10 @@ pub struct PackManifest {
     /// `true` = game runs itself (idle loops, viewer-driven) — shows
     /// up under the «АФК-стримы» library tab.
     pub afk: Option<bool>,
+    /// `true` = playable without a plan — the bundled pack bypasses the
+    /// `interactive_games` allow-list and lands in «Бесплатные». The
+    /// admin panel flips this to distribute games free ↔ по тарифу.
+    pub free: Option<bool>,
     /// Library section (custom tab name) — e.g. `"Мои игры"`. Free-form;
     /// every distinct value becomes its own tab in the library.
     pub section: Option<String>,
@@ -114,6 +118,7 @@ struct RawManifest {
     rules: Option<serde_json::Value>,
     hidden: Option<bool>,
     afk: Option<bool>,
+    free: Option<bool>,
     section: Option<String>,
 }
 
@@ -177,6 +182,11 @@ impl GamePack {
     /// `afk: true` — idle/viewer-driven game for the «АФК-стримы» tab.
     pub fn is_afk(&self) -> bool {
         self.manifest.afk == Some(true)
+    }
+
+    /// `free: true` — bundled pack exempt from the plan allow-list.
+    pub fn is_free(&self) -> bool {
+        self.manifest.free == Some(true)
     }
 }
 
@@ -294,6 +304,7 @@ fn parse_manifest(text: &str) -> PackManifest {
                 rules: raw.rules,
                 hidden: raw.hidden,
                 afk: raw.afk,
+                free: raw.free,
                 section: raw.section.filter(|s| !s.trim().is_empty()),
             }
         }
@@ -304,7 +315,7 @@ fn parse_manifest(text: &str) -> PackManifest {
     }
 }
 
-fn scan_root(root: &Path, user: bool) -> Vec<GamePack> {
+fn scan_root(root: &Path, user: bool, include_hidden: bool) -> Vec<GamePack> {
     let mut out = Vec::new();
     let Ok(rd) = std::fs::read_dir(root) else {
         return out;
@@ -336,8 +347,9 @@ fn scan_root(root: &Path, user: bool) -> Vec<GamePack> {
                 base_dir: None,
             };
             // `hidden: true` — prototype stays on disk, invisible to the
-            // catalogue, the overlay route and the window whitelist.
-            if !pack.is_hidden() {
+            // catalogue, the overlay route and the window whitelist
+            // (the admin section-panel scans with include_hidden).
+            if include_hidden || !pack.is_hidden() {
                 out.push(pack);
             }
         } else {
@@ -408,6 +420,9 @@ fn merged_over(mut user: GamePack, bundled: &GamePack) -> GamePack {
     if m.afk.is_none() {
         m.afk = b.afk;
     }
+    if m.free.is_none() {
+        m.free = b.free;
+    }
     if m.section.is_none() {
         m.section = b.section.clone();
     }
@@ -420,10 +435,20 @@ fn merged_over(mut user: GamePack, bundled: &GamePack) -> GamePack {
 /// ones on `id` clashes (drop-in overrides shipped content; fields the
 /// user manifest omits inherit the bundled values).
 pub fn scan(data_dir: &Path) -> Vec<GamePack> {
+    scan_inner(data_dir, false)
+}
+
+/// Scan including `hidden: true` packs — for the admin section panel,
+/// which must see (and un-hide) every folder on disk.
+pub fn scan_all(data_dir: &Path) -> Vec<GamePack> {
+    scan_inner(data_dir, true)
+}
+
+fn scan_inner(data_dir: &Path, include_hidden: bool) -> Vec<GamePack> {
     let mut out: Vec<GamePack> = bundled_dir()
-        .map(|d| scan_root(&d, false))
+        .map(|d| scan_root(&d, false, include_hidden))
         .unwrap_or_default();
-    for pack in scan_root(&user_dir(data_dir), true) {
+    for pack in scan_root(&user_dir(data_dir), true, include_hidden) {
         if let Some(pos) = out.iter().position(|p| p.id == pack.id) {
             out[pos] = merged_over(pack, &out[pos]);
         } else {
@@ -436,6 +461,12 @@ pub fn scan(data_dir: &Path) -> Vec<GamePack> {
 /// Single pack lookup by game id (user overrides bundled).
 pub fn find(id: &str, data_dir: &Path) -> Option<GamePack> {
     scan(data_dir).into_iter().find(|p| p.id == id)
+}
+
+/// Lookup including hidden packs — the manifest editor needs it to
+/// un-hide games (a hidden pack never reaches `find`).
+pub fn find_any(id: &str, data_dir: &Path) -> Option<GamePack> {
+    scan_all(data_dir).into_iter().find(|p| p.id == id)
 }
 
 /// Effective manifest of a pack re-serialized to `game.json` shape — the
@@ -490,6 +521,9 @@ pub fn manifest_json(pack: &GamePack) -> serde_json::Value {
     }
     if let Some(v) = m.afk {
         o.insert("afk".into(), v.into());
+    }
+    if let Some(v) = m.free {
+        o.insert("free".into(), v.into());
     }
     if let Some(v) = &m.section {
         o.insert("section".into(), v.clone().into());

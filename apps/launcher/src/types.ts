@@ -888,6 +888,10 @@ export interface BuiltinGameMeta {
   overlay_path: string | null;
   /** Манифест `afk: true` — самоиграющий контент для вкладки «АФК-стримы». */
   afk?: boolean;
+  /** Манифест `free: true` — bundled-пакет без гейта тарифа («Бесплатные»). */
+  free?: boolean;
+  /** Манифест `hidden: true` — только в pack_admin_list (скрытые пакеты). */
+  hidden?: boolean;
   /** Манифест `section` — имя пользовательской вкладки-раздела в библиотеке. */
   section?: string | null;
   /** true — манифест уже пропатчен user-оверрайдом (можно сбросить). */

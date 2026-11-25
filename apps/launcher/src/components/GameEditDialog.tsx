@@ -179,6 +179,16 @@ export default function GameEditDialog({ gameId, sections, onClose }: Props) {
                         onCheckedChange={(v) => set('afk', v || undefined)}
                       />
                     </label>
+                    <label
+                      className="flex items-center gap-2 text-muted-foreground"
+                      title="Без гейта тарифа — попадёт в «Бесплатные»"
+                    >
+                      Без тарифа
+                      <Switch
+                        checked={manifest.free === true}
+                        onCheckedChange={(v) => set('free', v || undefined)}
+                      />
+                    </label>
                     <label className="flex items-center gap-2 text-muted-foreground">
                       Скрытая
                       <Switch

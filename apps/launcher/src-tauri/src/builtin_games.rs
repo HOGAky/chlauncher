@@ -47,37 +47,52 @@ pub struct GameEntry {
     pub icon: Option<String>,
     /// `afk: true` in the manifest — idle/viewer-driven («АФК-стримы»).
     pub afk: bool,
+    /// `free: true` in the manifest — bundled pack exempt from the plan
+    /// allow-list («Бесплатные» vs «По тарифу» distribution).
+    pub free: bool,
     /// `section` in the manifest — custom library tab name.
     pub section: Option<String>,
     /// `true` — user `game.json` patches a bundled pack (editable entry).
     pub overridden: bool,
+    /// `hidden: true` in the manifest — populated only by `registry_all`
+    /// (the admin section panel); the public catalogue never sees these.
+    pub hidden: bool,
 }
 
 /// Full game catalogue — folder packs only, sorted by title for a
 /// stable Games-page order.
 pub fn registry(data_dir: &Path) -> Vec<GameEntry> {
-    let mut out: Vec<GameEntry> = crate::game_packs::scan(data_dir)
+    registry_from(crate::game_packs::scan(data_dir))
+}
+
+/// Catalogue including `hidden` packs — admin panel only.
+pub fn registry_all(data_dir: &Path) -> Vec<GameEntry> {
+    registry_from(crate::game_packs::scan_all(data_dir))
+}
+
+fn registry_from(packs: Vec<crate::game_packs::GamePack>) -> Vec<GameEntry> {
+    let mut out: Vec<GameEntry> = packs
         .into_iter()
         .map(|p| {
             let assets_base = p.assets_base();
-            let remote = p.is_remote();
-            let afk = p.is_afk();
             GameEntry {
                 section: p.manifest.section.clone(),
                 overridden: p.overridden,
+                hidden: p.is_hidden(),
                 title: p
                     .manifest
                     .title
                     .clone()
                     .unwrap_or_else(|| p.dir_name.clone()),
                 desc: p.manifest.desc.clone().unwrap_or_default(),
-                id: p.id,
-                remote,
+                remote: p.is_remote(),
                 launch: p.manifest.launch.clone(),
                 user: p.user,
                 assets_base: Some(assets_base),
                 icon: p.manifest.icon.clone(),
-                afk,
+                afk: p.is_afk(),
+                free: p.is_free(),
+                id: p.id,
             }
         })
         .collect();
@@ -103,6 +118,7 @@ pub fn allowed_games(ent: &Entitlements, data_dir: &Path) -> Vec<String> {
         .filter(|e| {
             e.user
                 || e.remote
+                || e.free
                 || match &ent.interactive_games {
                     Some(list) => list.iter().any(|x| x == &e.id),
                     None => true,
@@ -304,6 +320,7 @@ pub fn catalog_view(
                 "assets_base": g.assets_base,
                 "icon": g.icon.as_ref().map(|i| format!("{}/{}", g.assets_base.as_deref().unwrap_or(""), i)),
                 "afk": g.afk,
+                "free": g.free,
                 "section": g.section,
                 "overridden": g.overridden,
                 "cfg": cfg_for(settings, &g.id, data_dir),
@@ -312,6 +329,34 @@ pub fn catalog_view(
         })
         .collect();
     json!({ "games": games, "session": session.status() })
+}
+
+/// Admin catalogue — EVERY pack on disk including `hidden` ones, so the
+/// section-distribution panel can re-show hidden games too. Local data
+/// only; the UI gates the panel by role.
+pub fn admin_catalog(data_dir: &Path) -> serde_json::Value {
+    let games: Vec<_> = registry_all(data_dir)
+        .iter()
+        .map(|g| {
+            json!({
+                "id": g.id,
+                "title": g.title,
+                "desc": g.desc,
+                "pack": !g.remote,
+                "remote": g.remote,
+                "user_pack": g.user,
+                "launch": g.launch,
+                "assets_base": g.assets_base,
+                "icon": g.icon.as_ref().map(|i| format!("{}/{}", g.assets_base.as_deref().unwrap_or(""), i)),
+                "afk": g.afk,
+                "free": g.free,
+                "hidden": g.hidden,
+                "section": g.section,
+                "overridden": g.overridden,
+            })
+        })
+        .collect();
+    json!({ "games": games })
 }
 
 /// Result-history view (newest first for the UI).

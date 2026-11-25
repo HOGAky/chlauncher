@@ -19,6 +19,7 @@ import type {
   AuditEntry,
   Bootstrap,
   BuiltinGameCfg,
+  BuiltinGameMeta,
   BuiltinGamesView,
   GameResult,
   GameSessionInfo,
@@ -830,6 +831,9 @@ export const savePackManifest = (gameId: string, manifest: Record<string, unknow
 /** Removes the user manifest patch — bundled defaults are restored. */
 export const resetPackManifest = (gameId: string) =>
   cmd<{ ok: boolean }>('reset_pack_manifest', { gameId });
+/** Admin catalogue — every pack on disk including hidden (section panel). */
+export const packAdminList = () =>
+  cmd<{ games: BuiltinGameMeta[] }>('pack_admin_list');
 
 // --- EFIR stream timer (efirtimer.rs) -----------------------------------------
 export const efirtimerStatus = () =>

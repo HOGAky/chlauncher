@@ -768,7 +768,8 @@ pub async fn game_results(state: State<'_, AppState>) -> Result<Value, String> {
 /// the merged view (user patch over bundled defaults).
 #[tauri::command]
 pub async fn pack_manifest(game_id: String, state: State<'_, AppState>) -> Result<Value, String> {
-    let pack = crate::game_packs::find(&game_id, &state.data_dir).ok_or("UNKNOWN_GAME")?;
+    // find_any: hidden packs are editable too (the panel un-hides them).
+    let pack = crate::game_packs::find_any(&game_id, &state.data_dir).ok_or("UNKNOWN_GAME")?;
     Ok(json!({
         "id": pack.id,
         "dir_name": pack.dir_name,
@@ -776,6 +777,14 @@ pub async fn pack_manifest(game_id: String, state: State<'_, AppState>) -> Resul
         "overridden": pack.overridden,
         "manifest": crate::game_packs::manifest_json(&pack),
     }))
+}
+
+/// Admin catalogue — every pack on disk INCLUDING hidden ones, for the
+/// section-distribution panel (AdminPage «Каталог»). Local scan only;
+/// the panel itself is gated by `boot.role === 'admin'` in the UI.
+#[tauri::command]
+pub async fn pack_admin_list(state: State<'_, AppState>) -> Result<Value, String> {
+    Ok(crate::builtin_games::admin_catalog(&state.data_dir))
 }
 
 /// Type/shape checks for an editor-supplied manifest before it is
@@ -800,7 +809,7 @@ fn validate_pack_manifest(v: &Value) -> Result<(), String> {
         Some(s) if s.as_str() == Some("pack") || s.as_str() == Some("remote") => {}
         _ => return Err("type: \"pack\" | \"remote\"".into()),
     }
-    for k in ["hidden", "afk"] {
+    for k in ["hidden", "afk", "free"] {
         if let Some(b) = o.get(k) {
             if !b.is_boolean() && !b.is_null() {
                 return Err(format!("{k}: boolean"));
@@ -848,7 +857,8 @@ pub async fn save_pack_manifest(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
-    let pack = crate::game_packs::find(&game_id, &state.data_dir).ok_or("UNKNOWN_GAME")?;
+    // find_any: saving `hidden:false` must work on a hidden pack.
+    let pack = crate::game_packs::find_any(&game_id, &state.data_dir).ok_or("UNKNOWN_GAME")?;
     validate_pack_manifest(&manifest)?;
     let mut m = manifest;
     // The id binds the patch to this pack — it is not user-editable.
