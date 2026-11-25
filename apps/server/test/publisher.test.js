@@ -55,6 +55,9 @@ before(async () => {
   const { buildApp } = await import('../src/app.js');
   ({ app, db } = await buildApp({ databasePath: ':memory:' }));
   adminToken = (await register('root@example.com')).body.token;
+  // set-role (publisher grants) is owner-gated — bind as an owner.
+  const { bindOwner } = await import('./helpers.js');
+  bindOwner(db, db.prepare('SELECT id FROM users WHERE email = ?').get('root@example.com').id);
   pubToken = (await register('dev@example.com', 'HWID-DEV')).body.token;
   pub2Token = (await register('other@example.com', 'HWID-OTHER')).body.token;
 });

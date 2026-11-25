@@ -303,6 +303,10 @@ async function main() {
   HUD = GameKit.hud();
   const { cfg } = await GameKit.fetchCfg(GAME);
   S.cfg = cfg; S.eng = new GameKit.Engine(cfg);
+  await GameKit.devPanel({
+    packDir: 'survive_horde', engine: S.eng, defaults: cfg.rules,
+    actions: [['spawn_enemy', 'Враг'], ['meteor', 'Метеор'], ['random_buff', 'Бафф'], ['heal', 'Лечение'], ['weapon', 'Оружие'], ['shield', 'Щит'], ['slow', 'Замедление']],
+  });
   S.roundLeft = cfg.round_sec || 300;
   S.player.x = cv.width / 2; S.player.y = cv.height / 2;
   S.waveT = 2;

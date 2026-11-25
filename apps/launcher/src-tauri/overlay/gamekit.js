@@ -405,10 +405,183 @@
     return { pause: () => (running = false), resume: (now2) => { if (!running) { running = true; last = performance.now(); requestAnimationFrame(frame); } } };
   }
 
+  // ---- shared constructor panel (rules editor for any game page) ----------
+
+  const DEVPANEL_EVENTS = [
+    ['gift', 'Подарок'], ['like', 'Лайк'], ['comment', 'Комментарий'],
+    ['subscribe', 'Подписка'], ['share', 'Репост'], ['follow', 'Подписка на канал'],
+  ];
+
+  const DEVPANEL_CSS = `
+  .gkdp-gear{position:absolute;top:8px;left:8px;z-index:30;width:30px;height:30px;
+    border-radius:8px;border:1px solid #3a4a6a;background:#16223cd9;color:#cfe0ff;
+    font-size:16px;cursor:pointer;opacity:0;transition:opacity .2s}
+  .gkdp-gear:hover,.gkdp-gear.on{opacity:.95}
+  .gkdp-panel{position:absolute;top:8px;right:8px;width:330px;max-height:94%;
+    overflow-y:auto;display:none;background:rgba(10,15,30,.94);border:1px solid #3a4a6a;
+    border-radius:10px;padding:10px;color:#cfe0ff;font:12px 'Segoe UI',system-ui,sans-serif;z-index:29}
+  .gkdp-panel.show{display:block}
+  .gkdp-panel .t{font-weight:700;margin-bottom:6px}
+  .gkdp-panel button{background:#22314e;color:#cfe0ff;border:1px solid #3a4a6a;
+    border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px}
+  .gkdp-panel button:hover{background:#2c3f63}
+  .gkdp-msg{margin-top:6px;color:#8fd3ff;min-height:14px}
+  .gkdp-rule{display:grid;grid-template-columns:1fr;gap:3px;padding:6px;
+    background:rgba(255,255,255,.04);border:1px solid #2c3a58;border-radius:8px;margin-bottom:6px}
+  .gkdp-rule .row{display:flex;gap:4px;align-items:center}
+  .gkdp-rule select,.gkdp-rule input{background:#16223c;color:#cfe0ff;
+    border:1px solid #3a4a6a;border-radius:5px;padding:3px 6px;font-size:12px}
+  .gkdp-rule input{flex:1;min-width:0}
+  .gkdp-rule .del{margin-left:auto;padding:2px 8px}
+  .gkdp-hint{color:#7f95bd;font-size:11px;margin-bottom:6px}`;
+
+  /**
+   * Generic rules constructor — same panel the aquarium ships, shared by
+   * every game page: gear button (or Tab/D) opens an editor for
+   * event → condition → action rules; saved as `custom_rules.json` in
+   * the pack's USER dir via POST /games/asset (raw-b64).
+   *
+   * @param {object} o
+   * @param {string} o.packDir — pack folder name (`/games-assets/<dir>`).
+   * @param {Engine} o.engine — live engine; rules hot-apply on save.
+   * @param {Array}  o.defaults — fallback rules (cfg.rules).
+   * @param {Array}  o.actions — [[type,label],…] the game understands.
+   * @param {Array}  [o.events] — [[kind,label],…] (default: standard six).
+   * @param {boolean} [o.fetch=true] — also fetch custom_rules.json now.
+   * @returns {Promise<{rules:Array, custom:boolean}>} effective rules the
+   *   page should install on the engine (devPanel already does it).
+   */
+  async function devPanel(o) {
+    const packDir = o.packDir;
+    const events = o.events || DEVPANEL_EVENTS;
+    const actions = o.actions || [];
+    const defaults = Array.isArray(o.defaults) ? o.defaults : [];
+    const hasCond = (ev) => ev === 'gift' || ev === 'comment';
+    const condPh = (ev) => ev === 'gift'
+      ? 'Подарки через запятую (Rose, Galaxy)'
+      : ev === 'comment' ? 'Слово из текста' : '—';
+    const RULES_URL = `/games-assets/${packDir}/custom_rules.json?t=${encodeURIComponent(TOKEN)}`;
+
+    let custom = false;
+    if (!document.getElementById('gkdp-style')) {
+      const st = document.createElement('style');
+      st.id = 'gkdp-style';
+      st.textContent = DEVPANEL_CSS;
+      document.head.appendChild(st);
+    }
+    const gear = el('button', 'gkdp-gear', document.body);
+    gear.type = 'button';
+    gear.title = 'Конструктор правил (Tab/D)';
+    gear.textContent = '⚙️';
+    const panel = el('div', 'gkdp-panel', document.body);
+    panel.innerHTML =
+      `<div class="t">${esc(o.title || '⚙️ Конструктор правил')}</div>` +
+      `<div class="gkdp-hint">Событие → условие → реакция. Для подарка — имена через ` +
+      `запятую (Rose, Galaxy), для комментария — слово из текста.</div>` +
+      `<div class="rows"></div>` +
+      `<button class="add">+ Правило</button> <button class="save">Сохранить</button> ` +
+      `<button class="reset">Стандарт</button><div class="gkdp-msg"></div>`;
+    const rows = panel.querySelector('.rows');
+    const msg = panel.querySelector('.gkdp-msg');
+    const toggle = (force) => {
+      const show = force ?? !panel.classList.contains('show');
+      panel.classList.toggle('show', show);
+      gear.classList.toggle('on', show);
+    };
+    gear.addEventListener('click', () => toggle());
+    addEventListener('keydown', (e) => {
+      if (e.key === 'Tab' || e.key === 'd' || e.key === 'D' || e.key === 'в' || e.key === 'В') {
+        // The game page may bind Tab/D itself — devPanel only toggles when
+        // the event target isn't an input/select inside its own panel.
+        if (!panel.contains(e.target)) { e.preventDefault(); toggle(); }
+      }
+    });
+
+    function addRow(r = {}) {
+      const ev = r.event || 'gift';
+      const cond = r.match ? (r.match.names ? r.match.names.join(', ') : (r.match.contains || '')) : '';
+      const coins = r.match && r.match.min_coins ? String(r.match.min_coins) : '';
+      const type = (r.action && r.action.type) || (actions[0] && actions[0][0]) || '';
+      const row = el('div', 'gkdp-rule', rows);
+      row.innerHTML =
+        `<div class="row"><select class="ev">${events.map(([v, l]) =>
+          `<option value="${v}"${v === ev ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>` +
+        `<select class="act">${actions.map(([v, l]) =>
+          `<option value="${v}"${v === type ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>` +
+        `<button class="del" title="Удалить правило">✕</button></div>` +
+        `<div class="row"><input class="cond" placeholder="${esc(condPh(ev))}">` +
+        `<input class="coins" type="number" min="0" style="width:64px" ` +
+        `placeholder="монеты от" title="Мин. цена подарка в монетах"></div>`;
+      row.querySelector('.cond').value = cond;
+      row.querySelector('.coins').value = coins;
+      const sync = (v) => {
+        row.querySelector('.cond').placeholder = condPh(v);
+        row.querySelector('.cond').disabled = !hasCond(v);
+        row.querySelector('.coins').disabled = v !== 'gift';
+      };
+      row.querySelector('.ev').addEventListener('change', (e) => sync(e.target.value));
+      sync(ev);
+      row.querySelector('.del').addEventListener('click', () => row.remove());
+    }
+    const rowsToRules = () =>
+      [...rows.querySelectorAll('.gkdp-rule')].map((row) => {
+        const ev = row.querySelector('.ev').value;
+        const cond = row.querySelector('.cond').value.trim();
+        const coins = parseInt(row.querySelector('.coins').value, 10) || 0;
+        const match = {};
+        if (ev === 'gift') {
+          if (cond) match.names = cond.split(',').map((s) => s.trim()).filter(Boolean);
+          if (coins > 0) match.min_coins = coins;
+        } else if (ev === 'comment' && cond) match.contains = cond;
+        return { event: ev, match, action: { type: row.querySelector('.act').value } };
+      });
+    const rulesToRows = (rules) => {
+      rows.innerHTML = '';
+      (Array.isArray(rules) ? rules : []).forEach(addRow);
+      if (!rows.children.length) addRow();
+    };
+    const apply = (rules, isCustom) => {
+      if (o.engine) o.engine.rules = Array.isArray(rules) ? rules : [];
+      custom = !!isCustom;
+    };
+    const postAsset = (path, data_b64) =>
+      fetch(`/games/asset?w=${encodeURIComponent(WTOKEN)}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ dir: packDir, path, data_b64 }),
+      }).then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      });
+
+    panel.querySelector('.add').addEventListener('click', () => addRow());
+    panel.querySelector('.save').addEventListener('click', () => {
+      const rules = rowsToRules();
+      const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(rules))));
+      postAsset('custom_rules.json', b64)
+        .then(() => { msg.textContent = 'Правила сохранены'; apply(rules, true); })
+        .catch((e) => { msg.textContent = `Ошибка: ${e.message}`; });
+    });
+    panel.querySelector('.reset').addEventListener('click', () => {
+      postAsset('custom_rules.json', null)
+        .then(() => { msg.textContent = 'Стандартные правила'; apply(defaults, false); rulesToRows(defaults); })
+        .catch((e) => { msg.textContent = `Ошибка: ${e.message}`; });
+    });
+
+    let effective = defaults;
+    if (o.fetch !== false) {
+      const cust = await fetch(RULES_URL).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      if (Array.isArray(cust)) { effective = cust; custom = true; }
+    }
+    apply(effective, custom);
+    rulesToRows(effective);
+    return { rules: effective, custom };
+  }
+
   const api = {
     TOKEN, connect, Engine, Feed, Banners, leaderboard, fmtTime, fmtNum, esc,
     fetchCfg, fetchTop, report, unloadReport, sessionState, watchSession,
-    hud, loop, sfx, el,
+    hud, loop, sfx, el, devPanel,
   };
   if (typeof window !== 'undefined') window.GameKit = api;
   // Headless unit tests (node --test) exercise Engine + helpers only.

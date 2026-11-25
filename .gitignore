@@ -54,6 +54,8 @@ dist-test/
 tools/rvc-server/venv/
 tools/rvc-server/models/
 tools/rvc-server/*.log
+apps/launcher/tg-bot/bot.log*
+apps/launcher/tg-admin-bot/bot.log*
 tools/rvc-server/*-test*.wav
 # ����� �������� ����� � ���� � build.rs �������� ��� � �������.
 !tools/tiktok-sidecar/dist/

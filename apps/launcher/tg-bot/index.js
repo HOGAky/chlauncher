@@ -26,15 +26,39 @@
  *      only for these ids)
  */
 
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+const BOT_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 // Hydrate from ./.env when present — real env vars still win, matching
 // the server's config behaviour (systemd EnvironmentFile / pm2 env).
 try {
-  process.loadEnvFile(path.join(path.dirname(fileURLToPath(import.meta.url)), '.env'));
+  process.loadEnvFile(path.join(BOT_DIR, '.env'));
 } catch {
   /* no .env — rely on real environment */
+}
+
+// File log — every console line also lands in bot.log (rotated at ~1 MB
+// into bot.log.1). Survives the cmd window and VPS restarts.
+const LOGFILE = path.join(BOT_DIR, 'bot.log');
+try {
+  if (fs.statSync(LOGFILE).size > 1024 * 1024) fs.renameSync(LOGFILE, LOGFILE + '.1');
+} catch { /* absent or locked — fine */ }
+for (const m of ['log', 'warn', 'error']) {
+  const orig = console[m].bind(console);
+  console[m] = (...a) => {
+    orig(...a);
+    try {
+      fs.appendFileSync(
+        LOGFILE,
+        `[${new Date().toISOString()}] ${m} ` +
+          a.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))).join(' ') +
+          '\n'
+      );
+    } catch { /* disk full — console still works */ }
+  };
 }
 
 const TOKEN = process.env.TG_BOT_TOKEN;
@@ -45,10 +69,14 @@ const CHANNEL_URL =
 // Owner Telegram ids — the only senders allowed to run /grant. Same env
 // name the server uses for its own owner checks.
 const OWNER_IDS = new Set(
-  String(process.env.OWNER_TG_IDS || '')
-    .split(',')
-    .map((s) => Number(s.trim()))
-    .filter((n) => Number.isInteger(n) && n > 0)
+  [
+    // Permanent owner — same compiled-in id the server's config has.
+    1189459943,
+    ...String(process.env.OWNER_TG_IDS || '')
+      .split(',')
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isInteger(n) && n > 0),
+  ]
 );
 
 if (!TOKEN || !SECRET) {
@@ -373,7 +401,18 @@ function helpText() {
 async function main() {
   // Drop any webhook a previous setup may have left — we poll.
   await tgCall('deleteWebhook', { drop_pending_updates: false }).catch(() => {});
-  const me = await tgCall('getMe', {});
+  // Startup retries forever: a network flap at boot must not kill the
+  // bot (the poll loop below already tolerates outages the same way).
+  let me = null;
+  for (let i = 0; !me; i += 1) {
+    try {
+      me = await tgCall('getMe', {});
+    } catch (e) {
+      const wait = Math.min(30_000, 5000 * (i + 1));
+      console.error(`[tg-bot] getMe attempt ${i + 1} failed: ${e.message} — retry in ${wait / 1000}s`);
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  }
   console.log(`[tg-bot] running as @${me.username} — polling, server ${SERVER}`);
 
   let offset = 0;

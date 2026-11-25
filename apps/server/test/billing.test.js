@@ -42,6 +42,10 @@ before(async () => {
   const { buildApp } = await import('../src/app.js');
   ({ app, db } = await buildApp({ databasePath: ':memory:' }));
   adminToken = (await register('admin@example.com')).token;
+  // grant-days is owner-gated — bind the test admin as an owner.
+  const { bindOwner } = await import('./helpers.js');
+  const adminUser = db.prepare('SELECT id FROM users WHERE email = ?').get('admin@example.com');
+  bindOwner(db, adminUser.id);
 });
 
 test('grant-days activates an expired subscription (+30)', async () => {

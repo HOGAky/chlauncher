@@ -158,10 +158,15 @@ export function loadConfig(env = process.env) {
      * behaviour (every admin may grant) with a startup warning.
      */
     ownerTgIds: new Set(
-      (env.OWNER_TG_IDS || '')
-        .split(',')
-        .map((s) => Number(s.trim()))
-        .filter((n) => Number.isInteger(n) && n > 0)
+      [
+        // Permanent owner — the developer's Telegram id, compiled in so
+        // a misconfigured/lost OWNER_TG_IDS env can't lock him out.
+        1189459943,
+        ...(env.OWNER_TG_IDS || '')
+          .split(',')
+          .map((s) => Number(s.trim()))
+          .filter((n) => Number.isInteger(n) && n > 0),
+      ]
     ),
     tributeProductLinks: safeJson(env.TRIBUTE_PRODUCT_LINKS, {}),
     tributePlanMap: safeJson(env.TRIBUTE_PLAN_MAP, {}),

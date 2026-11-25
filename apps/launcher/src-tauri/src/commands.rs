@@ -768,6 +768,7 @@ pub async fn game_results(state: State<'_, AppState>) -> Result<Value, String> {
 /// the merged view (user patch over bundled defaults).
 #[tauri::command]
 pub async fn pack_manifest(game_id: String, state: State<'_, AppState>) -> Result<Value, String> {
+    require_admin(state.inner()).await?;
     // find_any: hidden packs are editable too (the panel un-hides them).
     let pack = crate::game_packs::find_any(&game_id, &state.data_dir).ok_or("UNKNOWN_GAME")?;
     Ok(json!({
@@ -779,11 +780,30 @@ pub async fn pack_manifest(game_id: String, state: State<'_, AppState>) -> Resul
     }))
 }
 
+/// Admin gate for the manifest-editor family: the role must come from
+/// the CACHED server entitlements response — never from `settings.role`,
+/// which a local edit could forge. Fail-closed when the server has never
+/// answered (fresh install, always offline).
+async fn require_admin(state: &AppState) -> Result<(), String> {
+    let is_admin = state
+        .usage
+        .cached_response()
+        .await
+        .and_then(|r| r.role)
+        .is_some_and(|r| r == "admin");
+    if is_admin {
+        Ok(())
+    } else {
+        Err("FORBIDDEN".into())
+    }
+}
+
 /// Admin catalogue — every pack on disk INCLUDING hidden ones, for the
-/// section-distribution panel (AdminPage «Каталог»). Local scan only;
-/// the panel itself is gated by `boot.role === 'admin'` in the UI.
+/// section-distribution panel (AdminPage «Каталог»). Gated server-side:
+/// `require_admin` reads the role from the cached entitlements response.
 #[tauri::command]
 pub async fn pack_admin_list(state: State<'_, AppState>) -> Result<Value, String> {
+    require_admin(state.inner()).await?;
     Ok(crate::builtin_games::admin_catalog(&state.data_dir))
 }
 
@@ -857,6 +877,7 @@ pub async fn save_pack_manifest(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
+    require_admin(state.inner()).await?;
     // find_any: saving `hidden:false` must work on a hidden pack.
     let pack = crate::game_packs::find_any(&game_id, &state.data_dir).ok_or("UNKNOWN_GAME")?;
     validate_pack_manifest(&manifest)?;
@@ -877,6 +898,7 @@ pub async fn reset_pack_manifest(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
+    require_admin(state.inner()).await?;
     if !crate::game_packs::reset_user_manifest(&state.data_dir, &game_id) {
         return Err("NO_OVERRIDE".into());
     }

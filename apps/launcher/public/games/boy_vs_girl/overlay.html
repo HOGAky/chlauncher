@@ -186,6 +186,10 @@ async function main() {
   HUD = GameKit.hud();
   const { cfg } = await GameKit.fetchCfg(GAME);
   S.cfg = cfg; S.eng = new GameKit.Engine(cfg);
+  await GameKit.devPanel({
+    packDir: 'boy_vs_girl', engine: S.eng, defaults: cfg.rules,
+    actions: [['add_score', '+Очки'], ['join_team', 'В команду'], ['attack', 'Атака']],
+  });
   S.roundLeft = cfg.round_sec || 300;
   GameKit.connect(['game'], (ev) => {
     if (ev.event_kind === 'gift') { S.stats.gifts++; S.stats.coins += ev.coins || 0; }

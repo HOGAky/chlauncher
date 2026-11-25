@@ -178,6 +178,10 @@ async function main() {
   const { cfg } = await GameKit.fetchCfg(GAME);
   S.cfg = cfg;
   S.eng = new GameKit.Engine(cfg);
+  await GameKit.devPanel({
+    packDir: 'flappy_gifts', engine: S.eng, defaults: cfg.rules,
+    actions: [['boost', 'Буст'], ['score', '+Очки'], ['shield', 'Щит'], ['storm', 'Шторм'], ['wide', 'Широкий проход']],
+  });
   S.bird.y = 0.5;
   spawnPipe(1.2); S.nextPipeX = 1.6;
   GameKit.connect(['game'], (ev) => {

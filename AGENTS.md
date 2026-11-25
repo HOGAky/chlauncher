@@ -172,7 +172,9 @@ share|subscribe`, поля `vip|fan_level|is_moderator|is_superfan|gift_id|coins
   `sprites/custom.gif` в user-папке (raw-b64, анимация живая;
   gif добавлен в whitelist ext+magic `/games/asset` и в mime
   `/games-assets`). Той же панелью правятся правила (`custom_rules.json`,
-  `.json` тоже принимает `/games/asset`).
+  `.json` тоже принимает `/games/asset`). Универсальный вариант панели —
+  `GameKit.devPanel({actions})` (gamekit.js): кнопка-шестерёнка + редактор
+  rules-таблицы для любой игры, подключён во всех bundled-пакетах.
 - Редактор манифеста (админ-роль, карандаш на карточке в Библиотеке):
   `pack_manifest` (effective-манифест с merge) → `save_pack_manifest`
   (пишет патч в `<data>/games/<dir>/game.json`, `id` форсится,
@@ -268,7 +270,11 @@ share|subscribe`, поля `vip|fan_level|is_moderator|is_superfan|gift_id|coins
   часть — по флагу); профиль `roblox-sts` ← пресет `steal-the-stream`.
 - Owner-only операции сервера (grant-days/set-plan/set-role/promo) —
   только для `OWNER_TG_IDS` (Telegram ID через `tg_bindings`); пустой
-  список = legacy-режим любого admin + warning при старте.
+  список = legacy-режим любого admin + warning при старте. TG id
+  разработчика (1189459943) зашит в `config.js::ownerTgIds` — множество
+  никогда не пусто, тест-админы биндятся хелпером `test/helpers.js::bindOwner`.
+  Pack-команды лаунчера (`pack_admin_list`/`save`/`reset`) гейтятся
+  серверной ролью: `usage.cached_response().role == "admin"`.
 - Следующий этап (не начат): Telegram-идентичность — ТЗ в
   `docs/tg-auth-spec.md` (подтверждение входа, баги B1-B11).
 - Долгие `cargo test` запускать в фоне/подсессии — первая сборка тестов

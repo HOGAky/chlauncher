@@ -225,6 +225,10 @@ async function main() {
   const { cfg } = await GameKit.fetchCfg(GAME);
   S.cfg = cfg;
   S.eng = new GameKit.Engine(cfg);
+  await GameKit.devPanel({
+    packDir: 'snake_gifts', engine: S.eng, defaults: cfg.rules,
+    actions: [['add_apple', 'Яблоко'], ['gold_apple', 'Золотое яблоко'], ['grow', 'Рост'], ['shrink', 'Ужать'], ['speed', 'Скорость'], ['storm', 'Шторм']],
+  });
   S.speed = cfg.speed || 7;
   reset();
   S.deaths = 0; S.score = 0; S.best = 0;

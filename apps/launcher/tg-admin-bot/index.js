@@ -43,6 +43,28 @@ try {
   /* no .env — rely on real environment */
 }
 
+// File log — every console line also lands in bot.log (rotated at ~1 MB
+// into bot.log.1). The cmd window dies with the terminal; the file is
+// what survives on the VPS and locally for post-mortem checks.
+const LOGFILE = path.join(BOT_DIR, 'bot.log');
+try {
+  if (fs.statSync(LOGFILE).size > 1024 * 1024) fs.renameSync(LOGFILE, LOGFILE + '.1');
+} catch { /* absent or locked — fine */ }
+for (const m of ['log', 'warn', 'error']) {
+  const orig = console[m].bind(console);
+  console[m] = (...a) => {
+    orig(...a);
+    try {
+      fs.appendFileSync(
+        LOGFILE,
+        `[${new Date().toISOString()}] ${m} ` +
+          a.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))).join(' ') +
+          '\n'
+      );
+    } catch { /* disk full — console still works */ }
+  };
+}
+
 const TOKEN = process.env.TG_ADMIN_BOT_TOKEN;
 const SECRET = process.env.TG_BIND_SECRET;
 const SERVER = (process.env.SERVER_URL || 'http://127.0.0.1:8787').replace(/\/+$/, '');
@@ -506,22 +528,18 @@ async function main() {
       { command: 'help', description: 'Справка по командам' },
     ],
   }).catch((e) => console.warn('[tg-admin] setMyCommands:', e.message));
-  // Startup is retried: Telegram rate-limits (429) and flaky networks
-  // must not kill the service — systemd/watchdog expect it to self-heal.
+  // Startup retries forever: Telegram rate-limits (429) and flaky
+  // networks must not kill the service — a long outage ends with the
+  // bot back online, not with a dead process.
   let me = null;
-  for (let i = 0; i < 12; i += 1) {
+  for (let i = 0; !me; i += 1) {
     try {
       me = await tgCall('getMe', {});
-      break;
     } catch (e) {
       const wait = Math.min(30_000, 5000 * (i + 1));
-      console.error(`[tg-admin] getMe attempt ${i + 1}/12 failed: ${e.message} — retry in ${wait / 1000}s`);
+      console.error(`[tg-admin] getMe attempt ${i + 1} failed: ${e.message} — retry in ${wait / 1000}s`);
       await sleep(wait);
     }
-  }
-  if (!me) {
-    console.error('[tg-admin] fatal: getMe never succeeded');
-    process.exit(1);
   }
   console.log(
     `[tg-admin] running as @${me.username} — admin ${ADMIN_ID}, server ${SERVER}`

@@ -63,6 +63,9 @@ before(async () => {
   ({ app, db } = await buildApp({ databasePath: ':memory:' }));
   const { body } = await register('root@example.com');
   adminToken = body.token;
+  // Owner-only routes (set-role and friends) need a tg binding.
+  const { bindOwner } = await import('./helpers.js');
+  bindOwner(db, db.prepare('SELECT id FROM users WHERE email = ?').get('root@example.com').id);
 });
 
 after(() => {

@@ -28,6 +28,9 @@ async function register(email) {
 async function makeAdmin(email) {
   await register(email);
   db.prepare(`UPDATE users SET role = 'admin' WHERE email = ?`).run(email);
+  // Promo routes are owner-gated — each admin gets a unique owner binding.
+  const { bindOwner } = await import('./helpers.js');
+  bindOwner(db, db.prepare('SELECT id FROM users WHERE email = ?').get(email).id);
   // Re-login so the role is fresh (authenticate re-reads it anyway).
   const res = await app.inject({
     method: 'POST',

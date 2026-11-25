@@ -49,6 +49,9 @@ before(async () => {
   const { buildApp } = await import('../src/app.js');
   ({ app, db } = await buildApp({ databasePath: ':memory:' }));
   adminToken = (await register('admin@example.com')).token;
+  // Plan/role routes are owner-gated — bind the test admin as an owner.
+  const { bindOwner } = await import('./helpers.js');
+  bindOwner(db, db.prepare('SELECT id FROM users WHERE email = ?').get('admin@example.com').id);
 });
 
 // ---------------------------------------------------------------- catalog

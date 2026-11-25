@@ -52,9 +52,12 @@ test('a minimal sane production env passes validation', () => {
   assert.doesNotThrow(() => validateProductionConfig(cfg));
 });
 
-test('production without OWNER_TG_IDS fails closed', () => {
+test('compiled-in owner keeps the production owner gate populated', () => {
+  // The developer's Telegram id is baked into loadConfig — an empty
+  // OWNER_TG_IDS env can no longer leave the owner set empty (P0.3).
   const cfg = loadConfig({ ...PROD_ENV, OWNER_TG_IDS: '' });
-  assert.throws(() => validateProductionConfig(cfg), /OWNER_TG_IDS/);
+  assert.ok(cfg.ownerTgIds.has(1189459943));
+  assert.doesNotThrow(() => validateProductionConfig(cfg));
 });
 
 test('production rejects BILLING_WEBHOOK_SKIP_IP_CHECK', () => {

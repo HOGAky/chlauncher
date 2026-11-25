@@ -217,6 +217,10 @@ async function main() {
   const { cfg } = await GameKit.fetchCfg(GAME);
   S.cfg = cfg;
   S.eng = new GameKit.Engine(cfg);
+  await GameKit.devPanel({
+    packDir: 'prism_break', engine: S.eng, defaults: cfg.rules,
+    actions: [['score', '+Очки'], ['add_ball', 'Мяч'], ['widen', 'Шире'], ['shrink_paddle', 'Уже'], ['speed', 'Скорость'], ['clear_row', 'Чистый ряд']],
+  });
   buildWall(1);
   spawnBall();
   GameKit.connect(['game'], (ev) => {
