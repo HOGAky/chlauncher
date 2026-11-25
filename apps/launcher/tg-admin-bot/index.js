@@ -67,11 +67,15 @@ const CMD_OUT_LIMIT = 3600;
 // pings the chat on transitions (something broke / recovered).
 const CHECK_INTERVAL_MS = Math.max(0, Number(process.env.CHECK_INTERVAL_MIN ?? 15)) * 60_000;
 
-async function tgCall(method, body) {
+async function tgCall(method, body, timeoutMs = 15_000) {
   const res = await fetch(`${API}/${method}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
+    // No default fetch timeout exists — a hung connection would freeze
+    // the poll loop silently ("bot went AFK"). getUpdates long-polls
+    // 25 s server-side, so callers pass a larger budget there.
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || !data.ok) {
@@ -534,7 +538,7 @@ async function main() {
   let offset = 0;
   for (;;) {
     try {
-      const updates = await tgCall('getUpdates', { offset, timeout: 25 });
+      const updates = await tgCall('getUpdates', { offset, timeout: 25 }, 40_000);
       for (const u of updates) {
         offset = Math.max(offset, u.update_id + 1);
         await handleMessage(u.message || {}).catch((e) =>
