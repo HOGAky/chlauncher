@@ -491,6 +491,21 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function main() {
   // Drop any webhook a previous setup may have left — we poll.
   await tgCall('deleteWebhook', { drop_pending_updates: false }).catch(() => {});
+  // Menu button ("/") — registered from code so it survives token
+  // changes and never drifts from the dispatcher.
+  await tgCall('setMyCommands', {
+    commands: [
+      { command: 'check', description: 'Чек здоровья: API, память, диск, bind-бот' },
+      { command: 'cmd', description: 'Shell на хосте: /cmd [-t сек] <команда>' },
+      { command: 'subs', description: 'Привязанные TG id — роль + подписка' },
+      { command: 'status', description: 'Карточка подписчика: /status <tg_id>' },
+      { command: 'grant', description: 'Дни подписки: /grant <tg_id> <дни> [план]' },
+      { command: 'revoke', description: 'Отключить подписку: /revoke <tg_id>' },
+      { command: 'role', description: 'Роль: /role <tg_id> <user|publisher|admin>' },
+      { command: 'whoami', description: 'Мой Telegram ID' },
+      { command: 'help', description: 'Справка по командам' },
+    ],
+  }).catch((e) => console.warn('[tg-admin] setMyCommands:', e.message));
   // Startup is retried: Telegram rate-limits (429) and flaky networks
   // must not kill the service — systemd/watchdog expect it to self-heal.
   let me = null;
