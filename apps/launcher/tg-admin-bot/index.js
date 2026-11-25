@@ -15,15 +15,21 @@
  *   /role <tg_id> <role>  — user | publisher | admin
  *   /cmd [-t sec] <shell> — run a shell command on the host, reply
  *                         with exit code + stdout/stderr tail
+ *   /check                — health check: API readiness, memory, disk,
+ *                         load, bind-bot process — warns land in the log
  *   /whoami               — your Telegram user id
  *
  * Env: TG_ADMIN_BOT_TOKEN, TG_BIND_SECRET (shared with the server),
  *      SERVER_URL (default http://127.0.0.1:8787), ADMIN_TG_ID (required),
  *      ADMIN_CMD_CWD (default: repo root), ADMIN_CMD_TIMEOUT_MS
- *      (default 60000, /cmd -t overrides per call, cap 600000).
+ *      (default 60000, /cmd -t overrides per call, cap 600000),
+ *      CHECK_INTERVAL_MIN (periodic silent /check — alerts the chat
+ *      only when a probe starts/stops failing; 0 = off, default 15).
  */
 
-import { exec } from 'node:child_process';
+import { exec, execSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -57,6 +63,9 @@ const CMD_TIMEOUT_MS = Number(process.env.ADMIN_CMD_TIMEOUT_MS) || 60_000;
 const CMD_MAX_TIMEOUT_MS = 600_000;
 // Telegram message cap is 4096; the wrapper eats a bit — keep the tail.
 const CMD_OUT_LIMIT = 3600;
+// Periodic health check — same probes as /check, silent while healthy,
+// pings the chat on transitions (something broke / recovered).
+const CHECK_INTERVAL_MS = Math.max(0, Number(process.env.CHECK_INTERVAL_MIN ?? 15)) * 60_000;
 
 async function tgCall(method, body) {
   const res = await fetch(`${API}/${method}`, {
@@ -108,6 +117,7 @@ const HELP =
   '/grant &lt;tg_id&gt; &lt;дни&gt; [план] — начислить подписку\n' +
   '/revoke &lt;tg_id&gt; — отключить подписку\n' +
   '/role &lt;tg_id&gt; &lt;user|publisher|admin&gt; — выдать роль\n' +
+  '/check — проверка здоровья (API, память, диск, bind-бот)\n' +
   '/cmd [-t сек] &lt;команда&gt; — выполнить shell-команду на хосте\n' +
   '    <i>вывод: exit-код + хвост stdout/stderr; ' +
   'длинное — через -t или nohup … &amp;</i>\n' +
@@ -284,6 +294,123 @@ function runCmd(chatId, raw) {
   );
 }
 
+// ---------------------------------------------------------------- health
+
+const GB = (b) => (b / 1073741824).toFixed(1);
+
+/** API server readiness — db + static dir probes live behind /api/ready. */
+async function probeApi() {
+  try {
+    const res = await fetch(`${SERVER}/api/ready`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status !== 200) {
+      return { ok: 'warn', line: `API: отвечает, но не ready (${res.status})` };
+    }
+    const bad = Object.entries(data.checks || {}).filter(([, v]) => v !== 'ok');
+    if (bad.length) {
+      return { ok: 'fail', line: `API: ready=200, но ${bad.map(([k]) => k).join('/')} в fail` };
+    }
+    return { ok: 'ok', line: `API: жив — ${Object.keys(data.checks || {}).join(', ')} ok` };
+  } catch (e) {
+    const why = e.cause?.code || e.message || 'unreachable';
+    return { ok: 'fail', line: `API: недоступен (${why})` };
+  }
+}
+
+function probeMem() {
+  const pctFree = (os.freemem() / os.totalmem()) * 100;
+  const line = `Память: ${GB(os.freemem())} ГБ свободно из ${GB(os.totalmem())} (${pctFree.toFixed(0)}%)`;
+  return { ok: pctFree < 10 ? 'warn' : 'ok', line };
+}
+
+function probeDisk() {
+  try {
+    const s = fs.statfsSync(CMD_CWD);
+    const total = s.blocks * s.bsize;
+    const free = s.bavail * s.bsize;
+    const pctFree = (free / total) * 100;
+    const line = `Диск ${CMD_CWD}: ${GB(free)} ГБ свободно из ${GB(total)} (${pctFree.toFixed(0)}%)`;
+    return { ok: pctFree < 10 ? 'warn' : 'ok', line };
+  } catch {
+    return { ok: 'warn', line: 'Диск: statfs недоступен на этой ОС — проверьте вручную' };
+  }
+}
+
+function probeLoad() {
+  const [l1] = os.loadavg();
+  if (l1 === 0 && os.platform() === 'win32') return null; // meaningless on Windows
+  const cores = os.cpus().length;
+  const line = `Load: ${os.loadavg().map((n) => n.toFixed(2)).join(' ')} (${cores} ядер)`;
+  return { ok: l1 > cores * 2 ? 'warn' : 'ok', line };
+}
+
+/** Is the bind-bot (tg-bot) process alive? Best-effort, cross-platform. */
+function probeBindBot() {
+  try {
+    if (process.platform === 'win32') {
+      const ps =
+        "Get-CimInstance Win32_Process -Filter \"name='node.exe'\" " +
+        "| Where-Object { $_.CommandLine -match 'tg-bot' } " +
+        '| Select-Object -First 1 -ExpandProperty ProcessId';
+      const b64 = Buffer.from(ps, 'utf16le').toString('base64');
+      const out = execSync(`powershell -NoProfile -EncodedCommand ${b64}`, {
+        timeout: 15_000,
+      })
+        .toString()
+        .trim();
+      if (out) return { ok: 'ok', line: `Bind-бот: жив (pid ${out})` };
+      return { ok: 'warn', line: 'Bind-бот: процесс node tg-bot не найден' };
+    }
+    const out = execSync('pgrep -f "tg-bot/index.js"', { timeout: 5000 })
+      .toString()
+      .trim();
+    if (out) return { ok: 'ok', line: `Bind-бот: жив (pid ${out.split('\n')[0]})` };
+    return { ok: 'warn', line: 'Bind-бот: процесс не найден' };
+  } catch {
+    return { ok: 'warn', line: 'Bind-бот: процесс не найден (или проверка недоступна)' };
+  }
+}
+
+function probeSelf() {
+  const up = Math.floor(process.uptime() / 60);
+  return {
+    ok: 'ok',
+    line: `Админ-бот: аптайм ${Math.floor(up / 60)}ч ${up % 60}мин`,
+  };
+}
+
+/** Runs every probe; non-ok lines are warned into the service log. */
+async function runHealth() {
+  const results = [
+    await probeApi(),
+    probeMem(),
+    probeDisk(),
+    probeLoad(),
+    probeBindBot(),
+    probeSelf(),
+  ].filter(Boolean);
+  for (const r of results) {
+    if (r.ok !== 'ok') console.warn(`[tg-admin] health: ${r.line}`);
+  }
+  return results;
+}
+
+const HEALTH_ICONS = { ok: '✓', warn: '⚠️', fail: '✗' };
+
+function healthText(results) {
+  const lines = results.map((r) => `${HEALTH_ICONS[r.ok]} ${r.line}`);
+  const warns = results.filter((r) => r.ok === 'warn').length;
+  const fails = results.filter((r) => r.ok === 'fail').length;
+  const verdict = fails
+    ? `✗ критических: ${fails}`
+    : warns
+      ? `⚠️ предупреждений: ${warns}`
+      : 'всё в порядке';
+  return `<b>Чек здоровья</b>\n\n${lines.join('\n')}\n\nИтог: ${verdict}`;
+}
+
 // ---------------------------------------------------------------- dispatch
 
 async function handleMessage(msg) {
@@ -342,6 +469,10 @@ async function handleMessage(msg) {
       }
       return setRole(chatId, tgId, role);
     }
+    case '/check': {
+      const results = await runHealth();
+      return send(chatId, healthText(results));
+    }
     case '/cmd': {
       // The shell line is the raw remainder — never tokenized.
       return runCmd(chatId, text.slice(cmd.length).trim());
@@ -376,6 +507,29 @@ async function main() {
   console.log(
     `[tg-admin] running as @${me.username} — admin ${ADMIN_ID}, server ${SERVER}`
   );
+
+  // Periodic health monitor: probes run silently; the chat is pinged
+  // only on transitions — something degraded, or it recovered.
+  if (CHECK_INTERVAL_MS > 0) {
+    let lastBad = '';
+    setInterval(() => {
+      runHealth()
+        .then((results) => {
+          const bad = results
+            .filter((r) => r.ok !== 'ok')
+            .map((r) => r.line)
+            .sort()
+            .join('\n');
+          if (bad && bad !== lastBad) {
+            send(ADMIN_ID, healthText(results));
+          } else if (!bad && lastBad) {
+            send(ADMIN_ID, '✓ Чек здоровья: всё восстановилось.');
+          }
+          lastBad = bad;
+        })
+        .catch((e) => console.warn('[tg-admin] health loop:', e.message));
+    }, CHECK_INTERVAL_MS).unref();
+  }
 
   let offset = 0;
   for (;;) {
