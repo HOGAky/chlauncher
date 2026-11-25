@@ -1818,8 +1818,17 @@ impl TtsEngine for SileroEngine {
             } else {
                 spec.voice.as_str()
             };
+            // Стиль и rate применяются сервером ресемплом WAV —
+            // сам Silero их не умеет: speed меняет темп и тон разом
+            // (громко = быстрее+выше+громче, шёпот = медленнее+ниже+тише).
+            let (sr, sv, sp) = edge_style_tweak(&spec.style);
+            let speed = (spec.rate * sr * sp).clamp(0.5, 2.0);
+            let vol = (spec.volume * sv).clamp(0.0, 2.0);
             let resp = reqwest::Client::new()
-                .post(format!("{}/tts?speaker={speaker}", rvc_url()))
+                .post(format!(
+                    "{}/tts?speaker={speaker}&speed={speed:.2}&vol={vol:.2}",
+                    rvc_url()
+                ))
                 .body(spec.text.clone())
                 .timeout(std::time::Duration::from_secs(120))
                 .send()
@@ -2260,6 +2269,34 @@ fn short_laugh(laugh: &str) -> &str {
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .unwrap_or(laugh)
+}
+
+/// Чат-команда интонации: «!громко привет» → style loud, текст без
+/// команды. Сама команда не озвучивается. Возвращает (style, текст
+/// после команды) — None если первого слова-команды нет.
+fn parse_style_command(text: &str) -> (Option<&'static str>, String) {
+    let t = text.trim_start();
+    let Some(rest) = t.strip_prefix('!') else {
+        return (None, text.to_string());
+    };
+    let word: String = rest
+        .chars()
+        .take_while(|c| c.is_alphanumeric())
+        .collect();
+    let style = match word.to_lowercase().as_str() {
+        "громко" | "крик" | "кричи" | "ор" | "loud" | "shout" | "scream" => "loud",
+        "шёпот" | "шепот" | "тихо" | "whisper" | "shh" | "quiet" => "whisper",
+        "весело" | "радость" | "happy" | "cheerful" | "fun" => "cheerful",
+        "грустно" | "печально" | "печаль" | "sad" => "sad",
+        "злой" | "зло" | "гнев" | "злись" | "angry" | "mad" => "angry",
+        "восторг" | "вау" | "wow" | "excited" => "excited",
+        _ => return (None, text.to_string()),
+    };
+    // Разделитель после команды («!громко, привет») в речь не идёт.
+    let rest = rest[word.len()..].trim_start_matches(|c: char| {
+        matches!(c, ',' | ':' | ';' | '-' | '—' | '.') || c.is_whitespace()
+    });
+    (Some(style), rest.to_string())
 }
 
 /// Эмодзи → вокальная реакция (что произнести) + интонация фразы.
@@ -2903,6 +2940,13 @@ impl Tts {
                 } else {
                     text
                 };
+                // «!громко …», «!шепот …» и т.д. — зритель сам выбирает
+                // интонацию. Сама команда в речь не идёт; пустой остаток
+                // пропускаем (нечего читать).
+                let (cmd_style, phrase) = parse_style_command(&phrase);
+                if phrase.trim().is_empty() {
+                    return;
+                }
                 // Ответ на комментарий: «{ник адресата}, {текст}» —
                 // чтобы было слышно, кому отвечают. Ник из CJK/эмодзи
                 // (напр. «❤햄스터❤») синтезатор не прочитает — оставляем
@@ -2925,7 +2969,7 @@ impl Tts {
                     unique_id: raw.unique_id.clone(),
                     text: phrase,
                     voice: wl_voice.or(rule_voice),
-                    style: None,
+                    style: cmd_style.map(str::to_string),
                     bypass_cooldown: prio,
                     priority: prio,
                     reply_to,
@@ -3567,6 +3611,31 @@ mod tests {
         let (t5, s5) = apply_emotions("просто текст", "ха-ха-ха!");
         assert_eq!(s5, None);
         assert_eq!(t5, "просто текст");
+    }
+
+    #[test]
+    fn style_commands_parse_and_strip() {
+        let (s, t) = parse_style_command("!Громко Династииииияяя");
+        assert_eq!(s, Some("loud"));
+        assert_eq!(t, "Династииииияяя");
+        let (s, t) = parse_style_command("!шепот иди сюда");
+        assert_eq!(s, Some("whisper"));
+        assert_eq!(t, "иди сюда");
+        // Без команды — текст как есть.
+        let (s, t) = parse_style_command("обычный коммент");
+        assert_eq!(s, None);
+        assert_eq!(t, "обычный коммент");
+        // Неизвестная команда — не трогаем.
+        let (s, t) = parse_style_command("!банан ешь");
+        assert_eq!(s, None);
+        assert_eq!(t, "!банан ешь");
+        // Английские алиасы тоже.
+        let (s, _) = parse_style_command("!scream test");
+        assert_eq!(s, Some("loud"));
+        // Разделители после команды не озвучиваются.
+        let (s, t) = parse_style_command("!громко, привет");
+        assert_eq!(s, Some("loud"));
+        assert_eq!(t, "привет");
     }
 
     #[test]

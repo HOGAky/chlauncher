@@ -304,9 +304,17 @@ def health():
 
 
 @app.post("/tts")
-async def tts(request: Request, speaker: str = Query(default="aidar")):
+async def tts(
+    request: Request,
+    speaker: str = Query(default="aidar"),
+    speed: float = Query(default=1.0),
+    vol: float = Query(default=1.0),
+):
     """Silero TTS: текст (UTF-8 body) -> WAV. Спикеры — SILERO_SPEAKERS.
-    Язык авто-детектится: кириллица → v3_1_ru, латиница → v3_en."""
+    Язык авто-детектится: кириллица → v3_1_ru, латиница → v3_en.
+    speed>1 — быстрее и выше тоном (ресемпл), <1 — медленнее и ниже;
+    vol — множитель громкости. Через них лаунчер передаёт rate и
+    интонации (шёпот/крик и т.д.) — Silero сам их не умеет."""
     if speaker not in SILERO_SPEAKERS:
         raise HTTPException(404, f"нет спикера '{speaker}'")
     text = (await request.body()).decode("utf-8", errors="replace").strip()
@@ -357,6 +365,21 @@ async def tts(request: Request, speaker: str = Query(default="aidar")):
                     put_yo=True,
                 )
         import soundfile as sf
+
+        audio = audio.reshape(-1)
+        # Темп+тон ресемплом: new_sr=sr/speed → speed>1 даёт меньше
+        # сэмплов → при записи с исходной частотой звучит быстрее и выше.
+        if abs(speed - 1.0) > 0.01 or abs(vol - 1.0) > 0.01:
+            import torch
+            import torchaudio
+
+            if abs(speed - 1.0) > 0.01:
+                k = max(0.4, min(2.5, speed))
+                audio = torchaudio.functional.resample(
+                    audio.unsqueeze(0), sample_rate, int(round(sample_rate / k))
+                ).squeeze(0)
+            if abs(vol - 1.0) > 0.01:
+                audio = torch.clamp(audio * max(0.0, min(2.5, vol)), -1.0, 1.0)
 
         buf = io.BytesIO()
         sf.write(buf, audio.numpy(), sample_rate, format="WAV", subtype="PCM_16")
