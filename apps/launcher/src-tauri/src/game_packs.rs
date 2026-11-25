@@ -55,9 +55,72 @@
 //! it: manifest fields it omits inherit the bundled values, and the
 //! bundled dir stays the page/asset fallback.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{OnceLock, RwLock};
 
 use serde::Deserialize;
+
+/// Host-level pack overrides fetched via `/api/account/entitlements` (or
+/// updated immediately when the owner saves in AdminPage «Каталог»).
+fn server_overrides_cell() -> &'static RwLock<HashMap<String, serde_json::Value>> {
+    static CELL: OnceLock<RwLock<HashMap<String, serde_json::Value>>> = OnceLock::new();
+    CELL.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+/// Replaces the in-memory host pack-override map.
+pub fn set_server_overrides(map: HashMap<String, serde_json::Value>) {
+    if let Ok(mut g) = server_overrides_cell().write() {
+        *g = map;
+    }
+}
+
+/// Snapshot of the current host pack-override map.
+pub fn server_overrides() -> HashMap<String, serde_json::Value> {
+    server_overrides_cell()
+        .read()
+        .map(|g| g.clone())
+        .unwrap_or_default()
+}
+
+/// Applies a host override JSON object onto a `PackManifest` — explicit
+/// `false` values override bundled `true` defaults.
+fn apply_patch_value(m: &mut PackManifest, patch: &serde_json::Value) {
+    let Some(o) = patch.as_object() else {
+        return;
+    };
+    if let Some(s) = o.get("title").and_then(|v| v.as_str()).map(str::trim) {
+        if !s.is_empty() {
+            m.title = Some(s.to_string());
+        }
+    }
+    if let Some(s) = o.get("desc").and_then(|v| v.as_str()).map(str::trim) {
+        if !s.is_empty() {
+            m.desc = Some(s.to_string());
+        }
+    }
+    if let Some(v) = o.get("section") {
+        m.section = v
+            .as_str()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+    }
+    if let Some(s) = o.get("icon").and_then(|v| v.as_str()).map(str::trim) {
+        if !s.is_empty() {
+            m.icon = Some(s.to_string());
+        }
+    }
+    if let Some(b) = o.get("afk").and_then(|v| v.as_bool()) {
+        m.afk = Some(b);
+    }
+    if let Some(b) = o.get("free").and_then(|v| v.as_bool()) {
+        m.free = Some(b);
+    }
+    if let Some(b) = o.get("hidden").and_then(|v| v.as_bool()) {
+        m.hidden = Some(b);
+    }
+}
 
 /// Parsed `game.json` — every field optional; `None` = use defaults.
 #[derive(Debug, Clone, Default)]
@@ -426,14 +489,15 @@ fn merged_over(mut user: GamePack, bundled: &GamePack) -> GamePack {
     if m.section.is_none() {
         m.section = b.section.clone();
     }
+    user.user = bundled.user;
     user.overridden = true;
     user.base_dir = Some(bundled.dir.clone());
     user
 }
 
-/// All packs: bundled first, user second — user entries PATCH bundled
-/// ones on `id` clashes (drop-in overrides shipped content; fields the
-/// user manifest omits inherit the bundled values).
+/// All packs: bundled first, host overrides second, user third — user
+/// entries PATCH bundled ones on `id` clashes (drop-in overrides shipped
+/// content; fields the user manifest omits inherit the bundled values).
 pub fn scan(data_dir: &Path) -> Vec<GamePack> {
     scan_inner(data_dir, false)
 }
@@ -445,15 +509,32 @@ pub fn scan_all(data_dir: &Path) -> Vec<GamePack> {
 }
 
 fn scan_inner(data_dir: &Path, include_hidden: bool) -> Vec<GamePack> {
+    // Always scan with include_hidden=true first so a host/user `hidden:true`
+    // patch merges onto a non-hidden bundled pack instead of being skipped
+    // before `merged_over`.
     let mut out: Vec<GamePack> = bundled_dir()
-        .map(|d| scan_root(&d, false, include_hidden))
+        .map(|d| scan_root(&d, false, true))
         .unwrap_or_default();
-    for pack in scan_root(&user_dir(data_dir), true, include_hidden) {
+    let srv = server_overrides();
+    for p in &mut out {
+        if let Some(patch) = srv.get(&p.id) {
+            apply_patch_value(&mut p.manifest, patch);
+            p.overridden = true;
+        }
+    }
+    for mut pack in scan_root(&user_dir(data_dir), true, true) {
         if let Some(pos) = out.iter().position(|p| p.id == pack.id) {
             out[pos] = merged_over(pack, &out[pos]);
         } else {
+            if let Some(patch) = srv.get(&pack.id) {
+                apply_patch_value(&mut pack.manifest, patch);
+                pack.overridden = true;
+            }
             out.push(pack);
         }
+    }
+    if !include_hidden {
+        out.retain(|p| !p.is_hidden());
     }
     out
 }
@@ -691,7 +772,7 @@ mod tests {
         )
         .unwrap();
         let pack = find("patrick_cabbage", &base).unwrap();
-        assert!(pack.user && pack.overridden);
+        assert!(!pack.user && pack.overridden);
         assert_eq!(pack.manifest.section.as_deref(), Some("Мои игры"));
         assert!(pack.is_afk());
         // Fields the user manifest omits inherit the bundled values.
@@ -699,6 +780,22 @@ mod tests {
         assert!(pack.manifest.rules.is_some());
         // The bundled page resolves through the fallback dir.
         assert!(pack.page_path().is_some());
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn hidden_patch_hides_bundled_from_public_scan() {
+        let base = tmp_root("hidepatch");
+        let udir = base.join("games").join("patrick");
+        std::fs::create_dir_all(&udir).unwrap();
+        std::fs::write(
+            udir.join("game.json"),
+            r#"{"id":"patrick_cabbage","hidden":true}"#,
+        )
+        .unwrap();
+        assert!(find("patrick_cabbage", &base).is_none());
+        let hidden = find_any("patrick_cabbage", &base).unwrap();
+        assert!(hidden.is_hidden() && hidden.overridden && !hidden.user);
         std::fs::remove_dir_all(&base).ok();
     }
 
@@ -711,7 +808,7 @@ mod tests {
         assert_eq!(j["title"], "Патрик, на капусту!");
         write_user_manifest(&base, &pack.dir_name, &j).unwrap();
         let p2 = find("patrick_cabbage", &base).unwrap();
-        assert!(p2.overridden && p2.user);
+        assert!(p2.overridden && !p2.user);
         assert!(reset_user_manifest(&base, "patrick_cabbage"));
         let p3 = find("patrick_cabbage", &base).unwrap();
         assert!(!p3.overridden && !p3.user);

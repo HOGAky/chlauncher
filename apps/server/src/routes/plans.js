@@ -16,6 +16,7 @@ import {
   usageForMonth,
   currentMonth,
   findUserById,
+  getPackOverridesMap,
 } from '../db.js';
 import { syncAdminRole } from '../auth.js';
 
@@ -54,6 +55,7 @@ export async function entitlementsRoutes(app, { db, authenticate }) {
           coins: usageForMonth(db, request.auth.userId, month),
         },
         role: user?.role,
+        pack_overrides: getPackOverridesMap(db),
       };
     }
   );

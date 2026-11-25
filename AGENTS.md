@@ -164,20 +164,18 @@ share|subscribe`, поля `vip|fan_level|is_moderator|is_superfan|gift_id|coins
   «Бесплатные»; без флага гейтится тарифом → «По тарифу»),
   `section` (имя своей вкладки-раздела в Библиотеке — каждое уникальное
   значение = новая вкладка после «АФК-стримы»).
-- Пакет `aquarium` — «GIF-конструктор»: своя гифка плавает по сцене,
-  подарки/события зрителей → реакции по rules-таблице.
-  Своя гифка: dev-панель (Tab/D) → `POST /games/asset` →
-  зрителей → корм/пузыри/разгон/корона/сердца (rules-таблица).
-  Своя гифка: dev-панель (Tab/D) → `POST /games/asset` →
-  `sprites/custom.gif` в user-папке (raw-b64, анимация живая;
-  gif добавлен в whitelist ext+magic `/games/asset` и в mime
-  `/games-assets`). Той же панелью правятся правила (`custom_rules.json`,
-  `.json` тоже принимает `/games/asset`). Универсальный вариант панели —
-  `GameKit.devPanel({actions})` (gamekit.js): кнопка-шестерёнка + редактор
-  rules-таблицы для любой игры, вызывается из overlay.html пакета.
-  Каталог bundled-пакетов сокращён до трёх: `aquarium`, `patrick`,
-  `roblox_sts` — прототипы (boy_vs_girl, flappy_gifts, gift_tower,
-  prism_break, snake_gifts, survive_horde) удалены, в git-истории живы.
+- Пакет `aquarium` — «GIF-конструктор»: своя гифка/картинка (`sprites/pet.<gif|webp|png|jpg>`),
+  свой фон (`sprites/bg.<ext>`), свой звук (`sfx/custom.<mp3|wav|ogg>`), настройки движения/размера
+  (`scene.json`) и конструктор правил (`POST/DELETE /games/cfg/aquarium?w=`).
+  Выбор файлов в оверлей-окнах идёт через `POST /games/pick-file?w=` (`GameKit.pickFile`,
+  временно снимает `always_on_top` и привязывает системный диалог к окну) + HTML5 Drag & Drop
+  (`.disable_drag_drop_handler()` на `WebviewWindowBuilder`), лимит ассетов — 20 MiB.
+  Каталог bundled-пакетов: `aquarium` (`free: true`), `patrick`, `roblox_sts`.
+- Синхронизация разделов каталога через хост: таблица `pack_overrides` на сервере
+  (`PUT/DELETE /api/admin/packs/:id` под `ownerOnly` — TG id владельца), раздаётся
+  всем клиентам в `GET /api/account/entitlements` (`pack_overrides`), кэшируется в
+  `settings.pack_overrides` и `game_packs::set_server_overrides`. Переключение `free: true`
+  на `roblox_sts` также разблокирует `/api/stream/ticket` на сервере для free-аккаунтов.
 - Редактор манифеста (админ-роль, карандаш на карточке в Библиотеке):
   `pack_manifest` (effective-манифест с merge) → `save_pack_manifest`
   (пишет патч в `<data>/games/<dir>/game.json`, `id` форсится,
@@ -303,3 +301,10 @@ share|subscribe`, поля `vip|fan_level|is_moderator|is_superfan|gift_id|coins
   делает снапшот `settings.json.bak` перед перезаписью.
 - НЕ редактировать settings.json через PowerShell `Set-Content -Encoding UTF8`
   (PS5.1 пишет BOM). Править через python `encoding='utf-8'` или [IO.File]::WriteAllText.
+
+## Git и процесс разработки
+
+- НИКОГДА не добавлять `Co-Authored-By`, `Generated with [Devin]` и любые
+  трейлеры соавторства в сообщения коммитов.
+- Проверять изменения на микростадиях (синтаксис JS/HTML, `tsc --noEmit`,
+  `cargo check`, профильные тесты) сразу после каждого смыслового блока.

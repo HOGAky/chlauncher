@@ -326,3 +326,95 @@ test('admin user list carries plan + usage', async () => {
   assert.equal(u.plan_code, 'free');
   assert.equal(u.usage.coins, 100);
 });
+
+test('pack overrides: owner distributes sections on host, all users receive them', async () => {
+  const { token: userTok } = await register('packuser@example.com');
+
+  // Non-admin rejected with 403.
+  const denied = await app.inject({
+    method: 'PUT',
+    url: '/api/admin/packs/aquarium',
+    headers: auth(userTok),
+    payload: { free: true },
+  });
+  assert.equal(denied.statusCode, 403);
+
+  // Staff admin WITHOUT owner TG binding is also rejected (OWNER_ONLY).
+  const { user: staffUser } = await register('staffnopack@example.com');
+  db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(staffUser.id);
+  const staffLogin = await app.inject({
+    method: 'POST',
+    url: '/api/auth/login',
+    payload: { email: 'staffnopack@example.com', password: 'secret123', hwid: 'HW-staffnopack@example.com' },
+  });
+  const staffDenied = await app.inject({
+    method: 'PUT',
+    url: '/api/admin/packs/aquarium',
+    headers: auth(staffLogin.json().token),
+    payload: { section: 'Хиты', afk: false, free: false },
+  });
+  assert.equal(staffDenied.statusCode, 403);
+  assert.equal(staffDenied.json().error, 'OWNER_ONLY');
+
+  // Owner saves explicit false flags + custom section.
+  const setRes = await app.inject({
+    method: 'PUT',
+    url: '/api/admin/packs/aquarium',
+    headers: auth(adminToken),
+    payload: { section: 'Мемы', afk: false, free: false, hidden: false },
+  });
+  assert.equal(setRes.statusCode, 200);
+  assert.deepEqual(setRes.json().overrides.aquarium, {
+    section: 'Мемы',
+    afk: false,
+    free: false,
+    hidden: false,
+  });
+
+  // Regular user gets host overrides in GET /api/account/entitlements.
+  const ent = await entitlements(userTok);
+  assert.deepEqual(ent.body.pack_overrides.aquarium, {
+    section: 'Мемы',
+    afk: false,
+    free: false,
+    hidden: false,
+  });
+
+  // Flipping roblox_sts free:true unlocks /api/stream/ticket for free users;
+  // resetting locks it back to 402.
+  const lockedTicket = await app.inject({
+    method: 'POST',
+    url: '/api/stream/ticket',
+    headers: auth(userTok),
+  });
+  assert.equal(lockedTicket.statusCode, 402);
+
+  await app.inject({
+    method: 'PUT',
+    url: '/api/admin/packs/roblox_sts',
+    headers: auth(adminToken),
+    payload: { free: true },
+  });
+  const freeTicket = await app.inject({
+    method: 'POST',
+    url: '/api/stream/ticket',
+    headers: auth(userTok),
+  });
+  assert.equal(freeTicket.statusCode, 200);
+  assert.ok(freeTicket.json().ticket);
+
+  const delRes = await app.inject({
+    method: 'DELETE',
+    url: '/api/admin/packs/roblox_sts',
+    headers: auth(adminToken),
+  });
+  assert.equal(delRes.statusCode, 200);
+  assert.equal(delRes.json().deleted, true);
+
+  const lockedAgain = await app.inject({
+    method: 'POST',
+    url: '/api/stream/ticket',
+    headers: auth(userTok),
+  });
+  assert.equal(lockedAgain.statusCode, 402);
+});

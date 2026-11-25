@@ -11,13 +11,13 @@
  * (`roblox_bridge.rs`, localhost:8790) — «Играть (Studio)» goes through
  * `roblox_dev_play` and Studio polls the local bridge.
  */
-import React, { useState } from 'react';
-import { Copy, HelpCircle, Play, RefreshCw, Square } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Copy, HelpCircle, KeyRound, Lock, Pencil, Play, RefreshCw, Square } from 'lucide-react';
 import * as api from '../api';
 import { useApp } from '../App';
 import { maskSecret, useVisibleInterval } from '../lib/utils';
 import { humanError } from '../errorMessages';
-import type { RobloxBridgeStatus, RobloxStreamStatus } from '../types';
+import type { BuiltinGameMeta, RobloxBridgeStatus, RobloxStreamStatus } from '../types';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from './ui/card';
@@ -34,9 +34,18 @@ const KEY_HINT =
   'одноразовый пропуск сам. Ручной ввод (!key в чате) — запасной способ. ' +
   '«Новый ключ» — если ключ утёк: старый перестанет работать.';
 
-export default function RobloxCard() {
+interface RobloxCardProps {
+  pack?: BuiltinGameMeta;
+  iconUrl?: string | null;
+  onEdit?: () => void;
+}
+
+export default function RobloxCard({ pack, iconUrl, onEdit }: RobloxCardProps = {}) {
   const { boot, streamerMode, refreshBoot } = useApp();
   const dev = !!boot?.dev_mode;
+  const allowed = pack ? pack.allowed : true;
+  const title = pack?.title || 'Steal the Stream';
+  const desc = pack?.desc || 'Roblox · подарки и лайки зрителей саботируют стримера';
   const [st, setSt] = useState<RobloxStreamStatus | null>(null);
   const [bridge, setBridge] = useState<RobloxBridgeStatus | null>(null);
   const [placeId, setPlaceId] = useState(boot?.forward?.roblox_place_id ?? '');
@@ -44,6 +53,10 @@ export default function RobloxCard() {
   const [err, setErr] = useState('');
   const [copied, setCopied] = useState('');
   const [key, setKey] = useState(boot?.forward?.stream_key ?? '');
+
+  useEffect(() => {
+    if (boot?.forward?.stream_key) setKey(boot.forward.stream_key);
+  }, [boot?.forward?.stream_key]);
 
   useVisibleInterval(() => {
     if (boot?.authed) {
@@ -84,13 +97,15 @@ export default function RobloxCard() {
 
   return (
     <Card className="overflow-hidden border-amber-500/40">
-      <div className="h-24 bg-gradient-to-br from-red-500/30 to-amber-500/30 flex items-end p-3">
-        <span className="text-2xl font-black opacity-70">Steal the Stream</span>
+      <div className="h-24 bg-gradient-to-br from-red-500/30 to-amber-500/30 flex items-end justify-between p-3">
+        <span className="text-2xl font-black opacity-70 truncate">{title}</span>
+        {iconUrl && <img src={iconUrl} alt="" className="h-16 w-16 object-contain drop-shadow" />}
       </div>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle>Steal the Stream</CardTitle>
-          <div className="flex gap-1.5">
+          <CardTitle>{title}</CardTitle>
+          <div className="flex items-center gap-1.5">
+            {pack?.overridden && <Badge variant="warning">Изменено</Badge>}
             {dev && <Badge variant="warning">DEV</Badge>}
             {roomOnline ? (
               <Badge variant="success">Рума на связи</Badge>
@@ -99,11 +114,20 @@ export default function RobloxCard() {
             ) : (
               <Badge variant="outline">Румы нет</Badge>
             )}
+            {onEdit && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 w-6 p-0"
+                title="Редактировать манифест (game.json)"
+                onClick={onEdit}
+              >
+                <Pencil size={12} />
+              </Button>
+            )}
           </div>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Roblox · подарки и лайки зрителей саботируют стримера
-        </p>
+        <p className="text-xs text-muted-foreground line-clamp-2">{desc}</p>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
         <div className="text-[11px] text-muted-foreground flex flex-col gap-1">
@@ -128,6 +152,18 @@ export default function RobloxCard() {
               onClick={run(() => api.robloxStreamKeySync().then(setKey))}
             >
               <RefreshCw size={12} />
+            </button>
+            <button
+              className="hover:text-foreground disabled:opacity-40"
+              disabled={!boot?.authed || busy}
+              title="Новый ключ (если старый утёк — сбросит привязку и руму)"
+              onClick={() => {
+                if (window.confirm('Выпустить новый ключ стримера? Старый ключ и активная рума перестанут работать.')) {
+                  void run(() => api.robloxStreamKeyRotate().then(setKey))();
+                }
+              }}
+            >
+              <KeyRound size={12} />
             </button>
           </div>
           {st && (
@@ -198,14 +234,21 @@ export default function RobloxCard() {
       <CardFooter className="gap-2">
         <Button
           size="sm"
-          disabled={busy || !boot?.authed}
-          title={boot?.authed ? 'Профиль в эфир + тикет + запуск Roblox' : 'Сначала войдите'}
+          disabled={busy || !boot?.authed || !allowed}
+          title={
+            !boot?.authed
+              ? 'Сначала войдите'
+              : !allowed
+                ? 'Игра по тарифу — активируйте подписку'
+                : 'Профиль в эфир + тикет + запуск Roblox'
+          }
           onClick={run(async () => {
             await api.setRobloxPlaceId(placeId.trim());
             return api.robloxPlay();
           })}
         >
-          <Play size={14} /> {busy ? 'Запуск…' : 'Играть'}
+          {allowed ? <Play size={14} /> : <Lock size={14} />}{' '}
+          {busy ? 'Запуск…' : 'Играть'}
         </Button>
         {dev && (
           <>

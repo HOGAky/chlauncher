@@ -264,9 +264,126 @@
   // ---- data ---------------------------------------------------------------
 
   async function fetchCfg(gameId) {
-    const r = await fetch(`/games/cfg/${gameId}?t=${encodeURIComponent(TOKEN)}`);
+    const r = await fetch(`/games/cfg/${encodeURIComponent(gameId)}?t=${encodeURIComponent(TOKEN)}`);
     if (!r.ok) throw new Error('cfg ' + r.status);
     return r.json();
+  }
+  async function saveCfg(gameId, patch) {
+    const r = await fetch(
+      `/games/cfg/${encodeURIComponent(gameId)}?t=${encodeURIComponent(TOKEN)}&w=${encodeURIComponent(WTOKEN)}`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(patch),
+      }
+    );
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  }
+  async function resetCfg(gameId) {
+    const r = await fetch(
+      `/games/cfg/${encodeURIComponent(gameId)}?t=${encodeURIComponent(TOKEN)}&w=${encodeURIComponent(WTOKEN)}`,
+      { method: 'DELETE' }
+    );
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return r.json();
+  }
+  async function postAsset(dir, path, data_b64) {
+    const r = await fetch(`/games/asset?w=${encodeURIComponent(WTOKEN)}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ dir, path, data_b64 }),
+    });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '');
+      throw new Error(txt ? `${r.status}: ${txt}` : `HTTP ${r.status}`);
+    }
+    return r.json();
+  }
+  /**
+   * Opens a file picker: in launcher capture windows (`WTOKEN` present) uses
+   * `POST /games/pick-file?w=` so the OS dialog is parented to the window and
+   * never hides behind `always_on_top`; in a plain browser falls back to
+   * `<input type="file">`. Resolves `{name, b64}` or `null` on cancel.
+   */
+  async function pickFile(filterName, filterExts) {
+    const exts = (filterExts || []).map((e) => String(e).replace(/^\./, '').toLowerCase());
+    if (WTOKEN) {
+      const r = await fetch(`/games/pick-file?w=${encodeURIComponent(WTOKEN)}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          filter_name: filterName || 'Files',
+          filter_exts: exts,
+          page: location.pathname.replace(/^\//, ''),
+        }),
+      });
+      if (r.ok) {
+        const j = await r.json();
+        return j && j.picked ? { name: j.name, b64: j.data_b64 } : null;
+      }
+      if (r.status === 413) throw new Error('Файл слишком большой (макс. 20 МБ)');
+      throw new Error(`HTTP ${r.status}`);
+    }
+    return new Promise((resolve) => {
+      const inp = document.createElement('input');
+      inp.type = 'file';
+      if (exts.length) inp.accept = exts.map((e) => '.' + e).join(',');
+      inp.onchange = () => {
+        const f = inp.files && inp.files[0];
+        if (!f) { resolve(null); return; }
+        const rd = new FileReader();
+        rd.onload = () => resolve({ name: f.name, b64: String(rd.result || '').split(',')[1] || '' });
+        rd.onerror = () => resolve(null);
+        rd.readAsDataURL(f);
+      };
+      inp.click();
+    });
+  }
+  /**
+   * Binds HTML5 file drag-and-drop onto `target` (capture windows disable
+   * Tauri's internal drop intercept so `dataTransfer.files` reaches the DOM).
+   */
+  function bindDrop(target, filterExts, onFile, onErr) {
+    const exts = (filterExts || []).map((e) => String(e).replace(/^\./, '').toLowerCase());
+    let depth = 0;
+    target.addEventListener('dragenter', (e) => {
+      if (!e.dataTransfer || ![...e.dataTransfer.types].includes('Files')) return;
+      e.preventDefault();
+      depth++;
+      target.classList.add('gk-drop-over');
+    });
+    target.addEventListener('dragover', (e) => {
+      if (!e.dataTransfer || ![...e.dataTransfer.types].includes('Files')) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    });
+    target.addEventListener('dragleave', () => {
+      if (--depth <= 0) { depth = 0; target.classList.remove('gk-drop-over'); }
+    });
+    target.addEventListener('drop', (e) => {
+      depth = 0;
+      target.classList.remove('gk-drop-over');
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!f) return;
+      e.preventDefault();
+      const ext = (f.name.split('.').pop() || '').toLowerCase();
+      if (exts.length && !exts.includes(ext)) {
+        onErr && onErr(`Нужен формат: ${exts.join(', ')}`);
+        return;
+      }
+      if (f.size > 20 * 1024 * 1024) {
+        onErr && onErr('Файл слишком большой (макс. 20 МБ)');
+        return;
+      }
+      const rd = new FileReader();
+      rd.onload = () => onFile({ name: f.name, ext, b64: String(rd.result || '').split(',')[1] || '' });
+      rd.onerror = () => onErr && onErr('Не удалось прочитать файл');
+      rd.readAsDataURL(f);
+    });
+  }
+  function isTypingTarget(t) {
+    return !!(t && t.closest && t.closest('input, textarea, select, [contenteditable="true"]'));
   }
   async function fetchTop(n = 5) {
     const r = await fetch(`/top.json?t=${encodeURIComponent(TOKEN)}&n=${n}`);
@@ -360,10 +477,44 @@
     });
   }
 
-  /** Standard page chrome: connection dot, feed, banners, watermark. */
+  /** Standard page chrome: connection dot, window controls (capture only), feed, banners, watermark. */
   function hud() {
-    const wrap = el('div', 'hud', document.body);
+    if (!document.getElementById('gk-hud-style')) {
+      const st = document.createElement('style');
+      st.id = 'gk-hud-style';
+      st.textContent =
+        `.gk-winbar{position:fixed;top:8px;right:8px;z-index:45;display:flex;align-items:center;gap:6px}` +
+        `.gk-wbtn{width:26px;height:26px;border-radius:7px;border:1px solid rgba(140,180,255,.35);` +
+        `background:rgba(12,18,34,.75);color:#cfe0ff;font:600 13px system-ui;cursor:pointer;` +
+        `opacity:.28;transition:opacity .18s,background .18s;display:grid;place-items:center;padding:0}` +
+        `.gk-winbar:hover .gk-wbtn,.gk-wbtn:hover{opacity:.95;background:rgba(24,36,64,.92)}` +
+        `.gk-wbtn.drag{cursor:grab}` +
+        `.gk-drop-over{outline:2px dashed #5ec2ff !important;outline-offset:-4px}`;
+      document.head.appendChild(st);
+    }
+    const wrap = el('div', 'hud gk-winbar', document.body);
     const dot = el('div', 'dot', wrap);
+    if (WTOKEN) {
+      const page = encodeURIComponent(location.pathname.replace(/^\//, ''));
+      const wq = encodeURIComponent(WTOKEN);
+      const dragBtn = el('button', 'gk-wbtn drag', wrap);
+      dragBtn.type = 'button';
+      dragBtn.title = 'Перетащить окно';
+      dragBtn.textContent = '⠿';
+      dragBtn.addEventListener('mousedown', (e) => {
+        if (e.button === 0) {
+          e.preventDefault();
+          fetch(`/overlay-drag?page=${page}&w=${wq}`, { method: 'POST' }).catch(() => {});
+        }
+      });
+      const closeBtn = el('button', 'gk-wbtn', wrap);
+      closeBtn.type = 'button';
+      closeBtn.title = 'Закрыть окно (Esc)';
+      closeBtn.textContent = '✕';
+      closeBtn.addEventListener('click', () => {
+        fetch(`/overlay-close?page=${page}&w=${wq}`).catch(() => {});
+      });
+    }
     const feedRoot = el('div', 'feed', document.body);
     const bannerRoot = el('div', 'banners', document.body);
     // §12.1 — free tier keeps a watermark on captured game windows.
@@ -413,13 +564,14 @@
   ];
 
   const DEVPANEL_CSS = `
-  .gkdp-gear{position:absolute;top:8px;left:8px;z-index:30;width:30px;height:30px;
+  .gkdp-gear{position:fixed;top:8px;left:8px;z-index:45;width:30px;height:30px;
     border-radius:8px;border:1px solid #3a4a6a;background:#16223cd9;color:#cfe0ff;
-    font-size:16px;cursor:pointer;opacity:0;transition:opacity .2s}
-  .gkdp-gear:hover,.gkdp-gear.on{opacity:.95}
-  .gkdp-panel{position:absolute;top:8px;right:8px;width:330px;max-height:94%;
-    overflow-y:auto;display:none;background:rgba(10,15,30,.94);border:1px solid #3a4a6a;
-    border-radius:10px;padding:10px;color:#cfe0ff;font:12px 'Segoe UI',system-ui,sans-serif;z-index:29}
+    font-size:16px;cursor:pointer;opacity:.45;transition:opacity .2s}
+  .gkdp-gear:hover,.gkdp-gear.on{opacity:.98}
+  .gkdp-panel{position:fixed;top:44px;right:8px;width:340px;max-height:calc(100vh - 54px);
+    overflow-y:auto;display:none;background:rgba(10,15,30,.95);border:1px solid #3a4a6a;
+    border-radius:10px;padding:10px;color:#cfe0ff;font:12px 'Segoe UI',system-ui,sans-serif;z-index:44}` +
+  `
   .gkdp-panel.show{display:block}
   .gkdp-panel .t{font-weight:700;margin-bottom:6px}
   .gkdp-panel button{background:#22314e;color:#cfe0ff;border:1px solid #3a4a6a;
@@ -489,11 +641,12 @@
       gear.classList.toggle('on', show);
     };
     gear.addEventListener('click', () => toggle());
+    if (!WTOKEN) gear.style.display = 'none';
     addEventListener('keydown', (e) => {
+      if (isTypingTarget(e.target)) return;
       if (e.key === 'Tab' || e.key === 'd' || e.key === 'D' || e.key === 'в' || e.key === 'В') {
-        // The game page may bind Tab/D itself — devPanel only toggles when
-        // the event target isn't an input/select inside its own panel.
-        if (!panel.contains(e.target)) { e.preventDefault(); toggle(); }
+        e.preventDefault();
+        toggle();
       }
     });
 
@@ -543,44 +696,47 @@
     const apply = (rules, isCustom) => {
       if (o.engine) o.engine.rules = Array.isArray(rules) ? rules : [];
       custom = !!isCustom;
+      o.onRules && o.onRules(rules, custom);
     };
-    const postAsset = (path, data_b64) =>
-      fetch(`/games/asset?w=${encodeURIComponent(WTOKEN)}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ dir: packDir, path, data_b64 }),
-      }).then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      });
 
     panel.querySelector('.add').addEventListener('click', () => addRow());
     panel.querySelector('.save').addEventListener('click', () => {
       const rules = rowsToRules();
-      const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(rules))));
-      postAsset('custom_rules.json', b64)
+      const job = o.gameId
+        ? saveCfg(o.gameId, { rules })
+        : postAsset(packDir, 'custom_rules.json', btoa(unescape(encodeURIComponent(JSON.stringify(rules)))));
+      job
         .then(() => { msg.textContent = 'Правила сохранены'; apply(rules, true); })
         .catch((e) => { msg.textContent = `Ошибка: ${e.message}`; });
     });
     panel.querySelector('.reset').addEventListener('click', () => {
-      postAsset('custom_rules.json', null)
-        .then(() => { msg.textContent = 'Стандартные правила'; apply(defaults, false); rulesToRows(defaults); })
+      const job = o.gameId ? resetCfg(o.gameId) : postAsset(packDir, 'custom_rules.json', null);
+      job
+        .then((res) => {
+          const base = (res && res.cfg && Array.isArray(res.cfg.rules)) ? res.cfg.rules : defaults;
+          msg.textContent = 'Стандартные правила';
+          apply(base, false);
+          rulesToRows(base);
+        })
         .catch((e) => { msg.textContent = `Ошибка: ${e.message}`; });
     });
 
     let effective = defaults;
-    if (o.fetch !== false) {
+    if (o.fetch !== false && !o.gameId) {
       const cust = await fetch(RULES_URL).then((r) => (r.ok ? r.json() : null)).catch(() => null);
       if (Array.isArray(cust)) { effective = cust; custom = true; }
+    } else if (o.custom) {
+      custom = true;
     }
     apply(effective, custom);
     rulesToRows(effective);
-    return { rules: effective, custom };
+    return { rules: effective, custom, panel, gear, toggle };
   }
 
   const api = {
-    TOKEN, connect, Engine, Feed, Banners, leaderboard, fmtTime, fmtNum, esc,
-    fetchCfg, fetchTop, report, unloadReport, sessionState, watchSession,
+    TOKEN, WTOKEN, connect, Engine, Feed, Banners, leaderboard, fmtTime, fmtNum, esc,
+    fetchCfg, saveCfg, resetCfg, postAsset, pickFile, bindDrop, isTypingTarget,
+    fetchTop, report, unloadReport, sessionState, watchSession,
     hud, loop, sfx, el, devPanel,
   };
   if (typeof window !== 'undefined') window.GameKit = api;

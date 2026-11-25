@@ -1639,6 +1639,10 @@ pub struct EntitlementsResponse {
     /// demotion) reach the client without a re-login.
     #[serde(default)]
     pub role: Option<String>,
+    /// Host-level game-pack section overrides (free / afk / section / hidden)
+    /// set by the owner in AdminPage «Каталог» and broadcast to all clients.
+    #[serde(default)]
+    pub pack_overrides: std::collections::HashMap<String, serde_json::Value>,
 }
 
 /// `usage_monthly` view for the UI progress bar.

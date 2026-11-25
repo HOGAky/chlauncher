@@ -26,6 +26,11 @@ import {
   findMcPlugin,
   listAllMcPlugins,
   validateEntitlements,
+  isValidPackId,
+  validatePackOverride,
+  getPackOverridesMap,
+  setPackOverride,
+  deletePackOverride,
 } from '../db.js';
 import { subscriptionView, recordPayment, refreshSubscription } from '../subscriptions.js';
 import { ipHash } from '../hwid.js';
@@ -821,6 +826,42 @@ export default async function adminRoutes(app, { db, requireAdmin }) {
     if (info.changes === 0) return reply.code(404).send({ error: 'NOT_FOUND' });
     audit(request.auth.userId, 'support_status', `ticket:${request.params.id}`, { status });
     return { ok: true };
+  });
+
+  // ---------------------------------------------------------------
+  // Pack catalog overrides — owner-gated host distribution of
+  // bundled/remote games across library sections (free/afk/paid/hidden).
+  // ---------------------------------------------------------------
+
+  /** GET /api/admin/packs — current host-level pack overrides. */
+  app.get('/packs', ownerOnly, async () => ({
+    overrides: getPackOverridesMap(db),
+  }));
+
+  /** PUT /api/admin/packs/:id — upsert override patch for `id`. */
+  app.put('/packs/:id', ownerOnly, async (request, reply) => {
+    const id = String(request.params.id || '');
+    if (!isValidPackId(id)) {
+      return reply.code(400).send({ error: 'INVALID_PACK_ID' });
+    }
+    const check = validatePackOverride(request.body || {});
+    if (!check.ok) {
+      return reply.code(400).send({ error: 'INVALID_PACK_OVERRIDE', detail: check.error });
+    }
+    setPackOverride(db, id, check.cleaned);
+    audit(request.auth.userId, 'pack_override_set', id, check.cleaned);
+    return { ok: true, overrides: getPackOverridesMap(db) };
+  });
+
+  /** DELETE /api/admin/packs/:id — revert `id` to shipped defaults. */
+  app.delete('/packs/:id', ownerOnly, async (request, reply) => {
+    const id = String(request.params.id || '');
+    if (!isValidPackId(id)) {
+      return reply.code(400).send({ error: 'INVALID_PACK_ID' });
+    }
+    const deleted = deletePackOverride(db, id);
+    audit(request.auth.userId, 'pack_override_reset', id, { deleted });
+    return { ok: true, deleted, overrides: getPackOverridesMap(db) };
   });
 
   // ---------------------------------------------------------------

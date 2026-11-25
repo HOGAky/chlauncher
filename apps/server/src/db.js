@@ -651,6 +651,20 @@ const MIGRATIONS = [
       "UPDATE plans SET active = 0 WHERE code = 'expert' AND price_minor = 59900"
     ).run();
   },
+  // v18 → v19: host-authoritative game-pack section overrides. Lets the
+  // owner (TG id in OWNER_TG_IDS) distribute bundled/remote packs across
+  // library sections (free / afk / paid / custom section / hidden) once on
+  // the server and have every connected launcher adopt the layout via
+  // GET /api/account/entitlements.
+  (db) => {
+    db.exec(`
+      CREATE TABLE pack_overrides (
+        game_id    TEXT PRIMARY KEY,
+        patch_json TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+  },
 ];
 
 const TX_DEPTH = Symbol('txDepth');
@@ -1086,4 +1100,101 @@ export function listAllMcPlugins(db) {
 /** One plugin row by slug (raw — includes file_name/active). */
 export function findMcPlugin(db, slug) {
   return db.prepare('SELECT * FROM mc_plugins WHERE slug = ?').get(slug);
+}
+
+// ---------------------------------------------------------------------------
+// Game-pack section overrides (owner-controlled catalog distribution)
+// ---------------------------------------------------------------------------
+
+const PACK_ID_RE = /^[a-zA-Z0-9._-]{1,64}$/;
+
+export function isValidPackId(id) {
+  return typeof id === 'string' && !id.startsWith('.') && PACK_ID_RE.test(id);
+}
+
+/**
+ * Validates and normalizes a pack-manifest override patch before saving.
+ * Null/empty string clears a string key; explicit booleans (`true`/`false`)
+ * are preserved so the owner can turn a bundled `true` flag OFF.
+ * @returns {{ok: true, cleaned: object} | {ok: false, error: string}}
+ */
+export function validatePackOverride(patch) {
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+    return { ok: false, error: 'patch must be a JSON object' };
+  }
+  const strLimits = { title: 120, desc: 500, section: 64, icon: 128 };
+  const boolKeys = new Set(['afk', 'free', 'hidden']);
+  const cleaned = {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (k === 'id') continue;
+    if (k in strLimits) {
+      if (v === null || v === undefined || v === '') continue;
+      if (typeof v !== 'string' || [...v].length > strLimits[k]) {
+        return { ok: false, error: `${k}: string <= ${strLimits[k]} chars` };
+      }
+      const trimmed = v.trim();
+      if (trimmed) cleaned[k] = trimmed;
+      continue;
+    }
+    if (boolKeys.has(k)) {
+      if (v === null || v === undefined) continue;
+      if (typeof v !== 'boolean') {
+        return { ok: false, error: `${k}: boolean` };
+      }
+      cleaned[k] = v;
+      continue;
+    }
+    return { ok: false, error: `unknown pack override key: ${k}` };
+  }
+  return { ok: true, cleaned };
+}
+
+/** Map of `{ [game_id]: patchObj }` shipped with entitlements. */
+export function getPackOverridesMap(db) {
+  const out = {};
+  const rows = db.prepare('SELECT game_id, patch_json FROM pack_overrides ORDER BY game_id').all();
+  for (const r of rows) {
+    try {
+      const parsed = JSON.parse(r.patch_json);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        out[r.game_id] = parsed;
+      }
+    } catch {
+      /* ignore corrupt row */
+    }
+  }
+  return out;
+}
+
+/** Upserts (or deletes when empty) a host-level pack override. */
+export function setPackOverride(db, gameId, cleaned) {
+  if (!cleaned || Object.keys(cleaned).length === 0) {
+    db.prepare('DELETE FROM pack_overrides WHERE game_id = ?').run(gameId);
+    return;
+  }
+  db.prepare(
+    `INSERT INTO pack_overrides (game_id, patch_json, updated_at)
+     VALUES (?, ?, ?)
+     ON CONFLICT(game_id)
+     DO UPDATE SET patch_json = excluded.patch_json, updated_at = excluded.updated_at`
+  ).run(gameId, JSON.stringify(cleaned), nowIso());
+}
+
+/** Removes a host-level pack override; returns true when a row existed. */
+export function deletePackOverride(db, gameId) {
+  const info = db.prepare('DELETE FROM pack_overrides WHERE game_id = ?').run(gameId);
+  return info.changes > 0;
+}
+
+/** True when the owner explicitly marked `gameId` as free (`free: true`). */
+export function isPackFree(db, gameId) {
+  const row = db
+    .prepare('SELECT patch_json FROM pack_overrides WHERE game_id = ?')
+    .get(gameId);
+  if (!row) return false;
+  try {
+    return JSON.parse(row.patch_json)?.free === true;
+  } catch {
+    return false;
+  }
 }

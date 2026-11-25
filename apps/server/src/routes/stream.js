@@ -34,12 +34,16 @@
 import crypto from 'node:crypto';
 import rateLimit from '@fastify/rate-limit';
 import { config } from '../config.js';
-import { nowIso } from '../db.js';
+import { nowIso, isPackFree } from '../db.js';
 import {
   hasActiveSubscription,
   refreshSubscription,
   subscriptionView,
 } from '../subscriptions.js';
+
+/** Active subscription OR owner explicitly flipped roblox_sts to free. */
+const canUseRobloxStream = (db, userId) =>
+  hasActiveSubscription(db, userId) || isPackFree(db, 'roblox_sts');
 
 /** How long queued events stay deliverable (same as the standalone relay). */
 const EVENT_TTL_MS = 60_000;
@@ -124,7 +128,7 @@ function authKey(db, request) {
     )
     .get(hash, hash);
   if (!row) return { status: 401, error: 'invalid_key' };
-  if (!hasActiveSubscription(db, row.user_id)) {
+  if (!canUseRobloxStream(db, row.user_id)) {
     return { status: 402, error: 'subscription_expired' };
   }
   return { status: 200, row };
@@ -226,7 +230,7 @@ export default async function streamRoutes(app, { db, authenticate }) {
    * ticket is the bridge between launcher auth and Roblox identity.
    */
   app.post('/ticket', authed, async (request, reply) => {
-    if (!hasActiveSubscription(db, request.auth.userId)) {
+    if (!canUseRobloxStream(db, request.auth.userId)) {
       return reply.code(402).send({ error: 'SUBSCRIPTION_EXPIRED' });
     }
     // The key row must exist so redeem has something to bind.
@@ -279,6 +283,7 @@ export default async function streamRoutes(app, { db, authenticate }) {
         : null,
       queued_events: queued,
       place_id: config.robloxPlaceId || null,
+      free_override: isPackFree(db, 'roblox_sts'),
       subscription: subscriptionView(
         refreshSubscription(db, request.auth.userId)
       ),
@@ -300,7 +305,7 @@ export default async function streamRoutes(app, { db, authenticate }) {
         await authenticate(request, reply);
         if (reply.sent) return;
         ({ row } = ensureKey(db, request.auth.userId));
-        if (!hasActiveSubscription(db, row.user_id)) {
+        if (!canUseRobloxStream(db, row.user_id)) {
           return reply.code(402).send({ error: 'SUBSCRIPTION_EXPIRED' });
         }
       } else {
@@ -361,7 +366,7 @@ export default async function streamRoutes(app, { db, authenticate }) {
         .prepare('SELECT * FROM stream_keys WHERE user_id = ?')
         .get(ticketRow.user_id);
       if (!keyRow) return reply.code(401).send({ error: 'invalid_ticket' });
-      if (!hasActiveSubscription(db, keyRow.user_id)) {
+      if (!canUseRobloxStream(db, keyRow.user_id)) {
         return reply.code(402).send({ error: 'subscription_expired' });
       }
       if (

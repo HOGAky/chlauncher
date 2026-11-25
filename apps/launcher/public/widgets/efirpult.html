@@ -149,9 +149,20 @@
   }
 
   // ---- controls ----
-  el('btnStart').onclick = ()=>cmd('start',{durS:(cfg&&cfg.initialTime)||300});
-  el('btnPause').onclick = ()=>cmd('pause');
-  el('btnStop').onclick  = ()=>cmd('stop');
+  el('btnStart').onclick = ()=>{
+    if (state && (state.timeLeft||0) > 0 && !state.isVictory) {
+      if (!confirm('Перезапустить таймер с нуля? Текущий остаток времени сбросится.')) return;
+    }
+    cmd('start',{durS:(cfg&&cfg.initialTime)||300});
+  };
+  el('btnPause').onclick = ()=>{
+    const pausedWithTime = state && !state.isRunning && (state.timeLeft||0) > 0 && !state.isVictory;
+    cmd(pausedWithTime ? 'resume' : 'pause');
+  };
+  el('btnStop').onclick  = ()=>{
+    if (state && state.isRunning && !confirm('Остановить и сбросить таймер?')) return;
+    cmd('stop');
+  };
   [[1,'+1'],[5,'+5'],[10,'+10'],[30,'+30']].forEach(([m,t])=>{
     const b=document.createElement('button');b.className='act plus';b.textContent=t;
     b.onclick=()=>manual('add',m*60);el('quick').appendChild(b);});
@@ -172,8 +183,13 @@
     const s = state||{};
     el('clock').textContent = fmtT(s.timeLeft||0);
     el('clock').style.color = s.isFrozen ? '#67e8f9' : s.isReversed ? '#f0abfc' : 'var(--lime)';
+    const pausedWithTime = !s.isRunning && (s.timeLeft||0) > 0 && !s.isVictory;
+    el('btnPause').textContent = pausedWithTime ? '▶' : '⏸';
+    el('btnPause').title = pausedWithTime ? 'Продолжить с текущего времени' : 'Пауза';
     const b=[];
-    if(s.isRunning) b.push(['ON AIR',true]); else b.push(['СТОП',false]);
+    if(s.isRunning) b.push(['ON AIR',true]);
+    else if(pausedWithTime) b.push(['ПАУЗА',true]);
+    else b.push(['СТОП',false]);
     if(s.isFrozen) b.push(['ЩИТ '+fmtT(s.freezeTimeLeft||0),true]);
     if(s.isReversed) b.push(['РЕВЕРС',true]);
     if(s.multiplier&&s.multiplier.active) b.push([s.multiplier.type+' x'+s.multiplier.value,true]);

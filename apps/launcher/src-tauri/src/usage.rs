@@ -207,6 +207,25 @@ impl UsageMeter {
                 }
             }
         }
+        // Host-authoritative pack section overrides — apply in-memory and
+        // persist so cold starts keep the owner's layout.
+        let packs_changed = {
+            let mut s = self.settings.lock().await;
+            if s.data.pack_overrides != res.pack_overrides {
+                s.data.pack_overrides = res.pack_overrides.clone();
+                let _ = s.save();
+                true
+            } else {
+                false
+            }
+        };
+        crate::game_packs::set_server_overrides(res.pack_overrides.clone());
+        if packs_changed {
+            if let Some(app) = &self.app {
+                use tauri::Emitter;
+                let _ = app.emit("catalog-changed", ());
+            }
+        }
         let mut f = self.inner.lock().await;
         if f.month == res.usage.month {
             f.server_coins = res.usage.coins;

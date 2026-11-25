@@ -32,8 +32,13 @@ export default function GamesPage() {
       .gameResults()
       .then((r) => setResults(r.results))
       .catch(() => {});
+    let un: (() => void) | undefined;
+    api.onCatalogChanged(() => void refresh()).then((u) => (un = u));
     const id = setInterval(refresh, 10_000);
-    return () => clearInterval(id);
+    return () => {
+      un?.();
+      clearInterval(id);
+    };
   }, []);
 
   const act = async (fn: () => Promise<unknown>) => {
@@ -154,6 +159,15 @@ function GameCard({
   const [rulesText, setRulesText] = useState(() => JSON.stringify(g.cfg.rules, null, 2));
   const [edit, setEdit] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Sync live changes saved from the in-window ⚙️ constructor panel while
+  // the inline JSON editor isn't actively open.
+  useEffect(() => {
+    if (!edit) {
+      setCfg(g.cfg);
+      setRulesText(JSON.stringify(g.cfg.rules, null, 2));
+    }
+  }, [g.cfg, edit]);
 
   const save = async () => {
     setSaving(true);

@@ -35,7 +35,7 @@ use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tokio::net::TcpListener;
 use tokio::sync::broadcast;
 
@@ -490,10 +490,17 @@ pub async fn start_overlay_server(
         .route("/games-assets/{*path}", get(serve_game_asset))
         .route("/tts/say", post(tts_say))
         .route("/gamekit.js", get(serve_gamekit))
-        .route("/games/cfg/{id}", get(serve_game_cfg))
+        .route(
+            "/games/cfg/{id}",
+            get(serve_game_cfg).post(save_game_cfg).delete(reset_game_cfg),
+        )
         .route("/games/state.json", get(serve_game_state))
         .route("/games/report", post(serve_game_report))
-        .route("/games/asset", post(save_game_asset))
+        .route(
+            "/games/asset",
+            post(save_game_asset).layer(axum::extract::DefaultBodyLimit::max(32 * 1024 * 1024)),
+        )
+        .route("/games/pick-file", post(pick_game_file))
         .route("/top.json", get(serve_top))
         .route("/goals.json", get(serve_goals))
         .route("/poll.json", get(serve_poll))
@@ -505,6 +512,7 @@ pub async fn start_overlay_server(
         .route("/media/{id}", get(serve_media))
         .route("/tts/{file}", get(serve_tts))
         .route("/overlay-close", get(overlay_close))
+        .route("/overlay-drag", post(overlay_drag))
         .route("/timer/cmd", post(timer_cmd))
         .route("/anim/cfg", get(serve_anim_cfg))
         .route("/health", get(|| async { "ok" }))
@@ -760,6 +768,13 @@ async fn serve_pack_game(
     let Some(pack) = crate::game_packs::find(&id, &st.data_dir) else {
         return StatusCode::NOT_FOUND.into_response();
     };
+    if let Some(app_state) = st.app_handle.try_state::<crate::AppState>() {
+        let ent = app_state.usage.entitlements().await;
+        let allowed = crate::builtin_games::allowed_games(&ent, &st.data_dir);
+        if !allowed.iter().any(|g| g == &id) {
+            return (StatusCode::FORBIDDEN, "subscription required").into_response();
+        }
+    }
     let Some(page) = pack.page_path() else {
         return StatusCode::NOT_FOUND.into_response();
     };
@@ -773,23 +788,30 @@ async fn serve_pack_game(
 /// Served from disk like `/widgets/` so a new skin drops in without a
 /// rebuild. Assets carry no secrets → no token gate (same as widget
 /// sub-resources); `..` and exotic chars are rejected char-wise.
-async fn serve_game_asset(Path(path): Path<String>, State(st): State<OverlayState>) -> Response {
+async fn serve_game_asset(
+    Path(path): Path<String>,
+    State(st): State<OverlayState>,
+    req: axum::extract::Request,
+) -> Response {
     if !crate::game_packs::safe_relpath(&path) {
         return StatusCode::NOT_FOUND.into_response();
     }
-    let mime = match std::path::Path::new(&path)
+    let ext = std::path::Path::new(&path)
         .extension()
         .and_then(|e| e.to_str())
-        .unwrap_or("")
-    {
+        .unwrap_or("");
+    let mime = match ext {
         "json" => "application/json",
         "png" => "image/png",
         "jpg" | "jpeg" => "image/jpeg",
         "webp" => "image/webp",
         "gif" => "image/gif",
         "svg" => "image/svg+xml",
-        "mp3" | "wav" | "ogg" => "audio/mpeg",
-        "mp4" | "webm" => "video/mp4",
+        "mp3" => "audio/mpeg",
+        "wav" => "audio/wav",
+        "ogg" => "audio/ogg",
+        "mp4" => "video/mp4",
+        "webm" => "video/webm",
         _ => return StatusCode::NOT_FOUND.into_response(),
     };
     // User packs override bundled ones — same precedence as the registry.
@@ -798,8 +820,20 @@ async fn serve_game_asset(Path(path): Path<String>, State(st): State<OverlayStat
         roots.push(d.clone());
     }
     for root in roots {
-        if let Ok(bytes) = tokio::fs::read(root.join(&path)).await {
-            return ([("content-type", mime)], bytes).into_response();
+        let candidate = root.join(&path);
+        if candidate.is_file() {
+            // Video/audio need HTTP Range (206 Partial Content) so looping
+            // `<video>` backgrounds in WebView2 never stall on seek/loop.
+            if matches!(ext, "mp4" | "webm" | "mp3" | "wav" | "ogg") {
+                use tower::Service;
+                return match tower_http::services::ServeFile::new(&candidate).call(req).await {
+                    Ok(res) => res.into_response(),
+                    Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+                };
+            }
+            if let Ok(bytes) = tokio::fs::read(&candidate).await {
+                return ([("content-type", mime)], bytes).into_response();
+            }
         }
     }
     StatusCode::NOT_FOUND.into_response()
@@ -852,14 +886,14 @@ async fn save_game_asset(
         _ => {}
     }
     let b64 = body["data_b64"].as_str().unwrap_or("");
-    if b64.len() > 6_000_000 {
+    if b64.len() > 28_000_000 {
         return (StatusCode::PAYLOAD_TOO_LARGE, "asset too large").into_response();
     }
     let Ok(bytes) = B64.decode(b64.trim()) else {
         return (StatusCode::BAD_REQUEST, "invalid base64").into_response();
     };
-    if bytes.len() > 4 * 1024 * 1024 {
-        return (StatusCode::PAYLOAD_TOO_LARGE, "asset >4MiB").into_response();
+    if bytes.len() > 20 * 1024 * 1024 {
+        return (StatusCode::PAYLOAD_TOO_LARGE, "asset >20MiB").into_response();
     }
     // Magic-byte sniff — the extension claim isn't proof of content.
     let sig_ok = bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47])      // PNG
@@ -887,6 +921,97 @@ async fn save_game_asset(
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
     axum::Json(serde_json::json!({ "ok": true })).into_response()
+}
+
+/// `POST /games/pick-file?w=` — opens a native OS file-open dialog for an
+/// overlay constructor page. Overlay capture windows run external HTTP URLs
+/// (no Tauri IPC) and sit `always_on_top`, which hides WebView2's built-in
+/// `<input type=file>` behind the capture window on Windows. Temporarily
+/// drops `always_on_top`, parents the native dialog to the capture window,
+/// then restores `always_on_top` and focus.
+async fn pick_game_file(
+    headers: axum::http::HeaderMap,
+    Query(q): Query<HashMap<String, String>>,
+    State(st): State<OverlayState>,
+    Json(body): Json<serde_json::Value>,
+) -> Response {
+    use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
+    use tauri_plugin_dialog::DialogExt;
+
+    if !write_ok(&headers, &q, &st) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let filter_name = body
+        .get("filter_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Files")
+        .to_string();
+    let exts: Vec<String> = body
+        .get("filter_exts")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|x| x.as_str())
+                .map(|s| s.trim_start_matches('.').to_lowercase())
+                .filter(|s| !s.is_empty() && s.len() <= 10 && s.chars().all(|c| c.is_ascii_alphanumeric()))
+                .collect()
+        })
+        .unwrap_or_default();
+    let win = body
+        .get("page")
+        .and_then(|v| v.as_str())
+        .map(|p| format!("overlay-{}", p.trim_start_matches('/').replace('/', "-")))
+        .and_then(|label| st.app_handle.get_webview_window(&label));
+
+    if let Some(w) = &win {
+        let _ = w.set_always_on_top(false);
+    }
+
+    let app = st.app_handle.clone();
+    let win_for_dlg = win.clone();
+    let picked = tokio::task::spawn_blocking(move || {
+        let ext_refs: Vec<&str> = exts.iter().map(|s| s.as_str()).collect();
+        let mut dlg = app.dialog().file();
+        if !ext_refs.is_empty() {
+            dlg = dlg.add_filter(&filter_name, &ext_refs);
+        }
+        if let Some(w) = &win_for_dlg {
+            dlg = dlg.set_parent(w);
+        }
+        dlg.blocking_pick_file()
+    })
+    .await
+    .ok()
+    .flatten();
+
+    if let Some(w) = &win {
+        let _ = w.set_always_on_top(true);
+        let _ = w.set_focus();
+    }
+
+    let Some(file_path) = picked else {
+        return axum::Json(serde_json::json!({ "picked": false })).into_response();
+    };
+    let Some(path) = file_path.as_path() else {
+        return (StatusCode::BAD_REQUEST, "not a local path").into_response();
+    };
+    let Ok(bytes) = tokio::fs::read(path).await else {
+        return (StatusCode::INTERNAL_SERVER_ERROR, "read failed").into_response();
+    };
+    if bytes.len() > 20 * 1024 * 1024 {
+        return (StatusCode::PAYLOAD_TOO_LARGE, "file >20MiB").into_response();
+    }
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("file")
+        .to_string();
+    axum::Json(serde_json::json!({
+        "picked": true,
+        "name": name,
+        "data_b64": B64.encode(&bytes),
+    }))
+    .into_response()
 }
 
 /// `POST /tts/say?w=` — game pages voice a donor nickname through the
@@ -1020,7 +1145,10 @@ async fn serve_gamekit(
 }
 
 /// `/games/cfg/:id` — per-game cfg (seeded on first read) + session
-/// status so a freshly opened page lands mid-round correctly.
+/// status so a freshly opened page lands mid-round correctly. Also
+/// migrates any legacy `<user_games>/<dir>/custom_rules.json` into
+/// `settings.builtin_games` so the in-game constructor and GamesPage
+/// share a single source of truth.
 async fn serve_game_cfg(
     Path(id): Path<String>,
     Query(q): Query<HashMap<String, String>>,
@@ -1029,19 +1157,103 @@ async fn serve_game_cfg(
     if !token_ok(q.get("t").map(String::as_str), &st.token) {
         return StatusCode::FORBIDDEN.into_response();
     }
-    if !crate::builtin_games::exists(&id, &st.data_dir) {
+    let Some(pack) = crate::game_packs::find(&id, &st.data_dir) else {
         return StatusCode::NOT_FOUND.into_response();
-    }
+    };
+    let def_cfg = crate::builtin_games::default_cfg(&id, &st.data_dir);
+    let legacy_rules_path = st.user_games_dir.join(&pack.dir_name).join("custom_rules.json");
     let cfg = {
         let mut s = st.settings.lock().await;
-        crate::builtin_games::cfg_for(&mut s, &id, &st.data_dir)
+        let mut cur = crate::builtin_games::cfg_for(&mut s, &id, &st.data_dir);
+        if legacy_rules_path.is_file() {
+            if let Ok(txt) = std::fs::read_to_string(&legacy_rules_path) {
+                if let Ok(rules) = serde_json::from_str::<serde_json::Value>(&txt) {
+                    if crate::builtin_games::validate_cfg(&serde_json::json!({ "rules": &rules })).is_ok() {
+                        cur.rules = rules;
+                        s.data.builtin_games.insert(id.clone(), cur.clone());
+                        let _ = s.save();
+                    }
+                }
+            }
+            let _ = std::fs::remove_file(&legacy_rules_path);
+        }
+        cur
     };
+    let custom = cfg.rules != def_cfg.rules
+        || (cfg.volume - def_cfg.volume).abs() > 0.001
+        || cfg.round_sec != def_cfg.round_sec;
     Json(serde_json::json!({
         "game_id": id,
         "cfg": cfg,
+        "defaults": def_cfg,
+        "custom": custom,
         "session": st.games.status().active,
     }))
     .into_response()
+}
+
+/// `POST /games/cfg/:id?w=` — updates per-game rules/volume/round from
+/// an in-window constructor panel (same store as GamesPage).
+async fn save_game_cfg(
+    headers: axum::http::HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<HashMap<String, String>>,
+    State(st): State<OverlayState>,
+    Json(body): Json<serde_json::Value>,
+) -> Response {
+    if !write_ok(&headers, &q, &st) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let Some(pack) = crate::game_packs::find(&id, &st.data_dir) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    if let Err(e) = crate::builtin_games::validate_cfg(&body) {
+        return (StatusCode::BAD_REQUEST, e).into_response();
+    }
+    let next = {
+        let mut s = st.settings.lock().await;
+        let cur = crate::builtin_games::cfg_for(&mut s, &id, &st.data_dir);
+        let mut merged = serde_json::to_value(&cur).unwrap_or_else(|_| serde_json::json!({}));
+        if let (Some(dst), Some(src)) = (merged.as_object_mut(), body.as_object()) {
+            for (k, v) in src {
+                dst.insert(k.clone(), v.clone());
+            }
+        }
+        let Ok(parsed) = serde_json::from_value::<crate::types::BuiltinGameCfg>(merged) else {
+            return (StatusCode::BAD_REQUEST, "invalid cfg").into_response();
+        };
+        s.data.builtin_games.insert(id.clone(), parsed.clone());
+        let _ = s.save();
+        parsed
+    };
+    let _ = std::fs::remove_file(st.user_games_dir.join(&pack.dir_name).join("custom_rules.json"));
+    let _ = st.app_handle.emit("catalog-changed", ());
+    Json(serde_json::json!({ "ok": true, "cfg": next })).into_response()
+}
+
+/// `DELETE /games/cfg/:id?w=` — resets a game's cfg back to its pack
+/// `game.json` defaults.
+async fn reset_game_cfg(
+    headers: axum::http::HeaderMap,
+    Path(id): Path<String>,
+    Query(q): Query<HashMap<String, String>>,
+    State(st): State<OverlayState>,
+) -> Response {
+    if !write_ok(&headers, &q, &st) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let Some(pack) = crate::game_packs::find(&id, &st.data_dir) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let def = crate::builtin_games::default_cfg(&id, &st.data_dir);
+    {
+        let mut s = st.settings.lock().await;
+        s.data.builtin_games.insert(id.clone(), def.clone());
+        let _ = s.save();
+    }
+    let _ = std::fs::remove_file(st.user_games_dir.join(&pack.dir_name).join("custom_rules.json"));
+    let _ = st.app_handle.emit("catalog-changed", ());
+    Json(serde_json::json!({ "ok": true, "cfg": def })).into_response()
 }
 
 /// POST `/games/report` — the page reports a finished round; appended
@@ -1084,6 +1296,26 @@ async fn overlay_close(
     let label = format!("overlay-{}", page.replace('/', "-"));
     if let Some(w) = st.app_handle.get_webview_window(&label) {
         let _ = w.close();
+    }
+    "ok".into_response()
+}
+
+/// Starts OS window dragging for a frameless `overlay-<page>` capture
+/// window on mouse-down of its hover grip (`?w=` write-token guarded).
+async fn overlay_drag(
+    headers: axum::http::HeaderMap,
+    Query(q): Query<HashMap<String, String>>,
+    State(st): State<OverlayState>,
+) -> Response {
+    if !write_ok(&headers, &q, &st) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let Some(page) = q.get("page") else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+    let label = format!("overlay-{}", page.trim_start_matches('/').replace('/', "-"));
+    if let Some(w) = st.app_handle.get_webview_window(&label) {
+        let _ = w.start_dragging();
     }
     "ok".into_response()
 }

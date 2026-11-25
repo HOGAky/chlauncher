@@ -59,51 +59,125 @@
   @keyframes pop{from{transform:translateX(-50%) scale(.4);opacity:0}to{transform:translateX(-50%) scale(1);opacity:1}}
 
   /* дебаг-панель */
-  #debug{position:absolute;top:10px;left:10px;display:none;background:rgba(0,0,0,.72);
-    border:1px solid #444;border-radius:10px;padding:10px 12px;font:13px/1.55 monospace;color:#9fe;
-    pointer-events:auto;white-space:pre}
+  #debug{position:fixed;bottom:8px;left:8px;z-index:42;display:none;background:rgba(0,0,0,.76);
+    border:1px solid #444;border-radius:8px;padding:6px 9px;font:11px/1.45 monospace;color:#9fe;
+    pointer-events:none;white-space:pre}
   #debug.show{display:block}
-  /* dev-панель: аватарка персонажа (Tab/D) */
-  #devpanel{position:absolute;top:10px;right:10px;display:none;background:rgba(0,0,0,.78);
-    border:1px solid #555;border-radius:10px;padding:10px 12px;font:13px/1.5 system-ui;color:#cfd;
-    pointer-events:auto;width:210px}
-  #devpanel.show{display:block}
-  #devpanel .t{font-weight:700;color:#ffcf5a;margin-bottom:6px}
-  #devpanel input[type=file]{width:100%;font-size:11px;color:#9ab;margin:4px 0}
-  #devpanel button{background:#333;border:1px solid #666;border-radius:6px;color:#eee;
-    padding:3px 10px;font:12px system-ui;cursor:pointer}
-  #devpanel button:hover{background:#444}
-  #devpanel .msg{font-size:11px;color:#8f8;min-height:14px;margin-top:4px}
-  #devpanel img{max-width:64px;max-height:64px;border-radius:8px;margin-top:4px;display:none}
   #pause{position:absolute;inset:0;display:none;place-items:center;font:800 80px system-ui;
     background:rgba(0,0,0,.5);text-shadow:0 4px 18px #000}
-  /* видео-фон: комната из исходного видео мема */
-  #bgv{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:-1}
+  /* видео/картинка фона (вне #stage, чтобы покрывать окно) */
+  #bgv,#bgCustom{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:-1;pointer-events:none}
+  #bgCustom{display:none}
+  /* живой GIF-аватар поверх позиции Патрика внутри #stage */
+  #gifAvatar{position:absolute;left:540px;top:1160px;width:440px;height:440px;object-fit:contain;
+    transform:translate(-50%,-50%);display:none;pointer-events:none;filter:drop-shadow(0 8px 18px rgba(0,0,0,.45))}
+
+  /* ══ Конструктор в экранных координатах окна (не сжимается scale сцены) ══ */
+  #gearBtn{position:fixed;top:8px;left:8px;z-index:46;width:32px;height:32px;border-radius:8px;
+    border:1px solid rgba(255,207,90,.45);background:rgba(16,14,36,.84);color:#ffcf5a;font-size:16px;
+    cursor:pointer;opacity:.52;transition:opacity .2s,background .2s}
+  #gearBtn:hover,#gearBtn.on{opacity:.98;background:rgba(28,24,58,.96)}
+  #devpanel{position:fixed;top:44px;left:8px;right:8px;max-width:360px;max-height:calc(100vh - 54px);
+    overflow-y:auto;display:none;background:rgba(12,11,28,.96);border:1px solid #493f78;
+    border-radius:12px;padding:11px;font:12px/1.4 'Segoe UI',system-ui,sans-serif;color:#e6e1ff;
+    z-index:45;box-shadow:0 12px 34px rgba(0,0,0,.6)}
+  #devpanel.show{display:block}
+  .psec{padding:8px;border:1px solid #2f2852;border-radius:9px;background:rgba(255,255,255,.03);margin-bottom:8px}
+  .psec .t{font-weight:700;color:#ffcf5a;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center}
+  #devpanel button{background:#28214a;border:1px solid #524688;border-radius:6px;color:#eee;
+    padding:4px 9px;font:12px system-ui;cursor:pointer}
+  #devpanel button:hover{background:#362d63}
+  #devpanel select,#devpanel input[type=text],#devpanel input[type=number]{
+    background:#191533;color:#f0ecff;border:1px solid #4c417d;border-radius:5px;padding:3px 6px;font-size:12px}
+  #devpanel .msg{font-size:11px;color:#9ef0b8;min-height:14px;margin-top:4px}
+  #devpanel .prev{max-width:96px;max-height:68px;border-radius:8px;margin-top:5px;display:none;border:1px solid #493f78}
+  .ctrl-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:5px}
+  .ctrl-row input[type=range]{flex:1;accent-color:#ffcf5a}
+  .prule{display:grid;grid-template-columns:1fr;gap:4px;padding:6px;background:rgba(255,255,255,.04);
+    border:1px solid #383062;border-radius:8px;margin-bottom:6px}
+  .prule .row{display:flex;gap:4px;align-items:center}
+  .prule input.cond{flex:1;min-width:0}
+  .prule .del{margin-left:auto;padding:2px 8px}
+  .test-bar{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+  .test-bar button{padding:3px 7px;font-size:11px}
 </style></head><body>
+<img id="bgCustom" alt="">
 <video id="bgv" muted loop playsinline></video>
 <canvas id="cv"></canvas>
 <div id="stage">
+  <img id="gifAvatar" alt="">
   <div id="cards"></div>
   <div id="hints"></div>
   <div id="goal"><div class="row"><span id="goalT">ЦЕЛЬ</span><span class="v" id="goalV">0/5</span><span class="d" id="goalD"></span></div><div class="bar"><i id="goalB"></i></div></div>
   <div id="hero"><div class="t" id="heroT"></div><div class="u" id="heroU"></div><img class="av" id="heroA" alt=""></div>
-  <div id="debug"></div>
-  <div id="devpanel">
-    <div class="t">DEV · Аватар Патрика</div>
-    <input type="file" id="devAvatarFile" accept="image/png,image/jpeg,image/webp">
+  <div id="pause">ПАУЗА</div>
+</div>
+<button id="gearBtn" type="button" title="Конструктор (Tab/D)">⚙️</button>
+<div id="debug"></div>
+<div id="devpanel">
+  <div class="psec" id="avaDrop">
+    <div class="t"><span>🐰 Персонаж (вместо Патрика)</span></div>
     <div>
-      <button id="devAvatarReset">Сбросить</button>
-      <img id="devAvatarPrev" alt="">
+      <button id="devAvatarPick" type="button">Выбрать файл…</button>
+      <button id="devAvatarReset" type="button">Стандартный</button>
     </div>
-    <div class="msg" id="devAvatarMsg">sprites/custom.png заменяет персонажа</div>
-    <div class="t" style="margin-top:8px">DEV · Цель (накормить)</div>
+    <div class="msg" id="devAvatarMsg">PNG / JPG / WebP / GIF (можно перетащить сюда)</div>
+    <img id="devAvatarPrev" class="prev" alt="">
+  </div>
+
+  <div class="psec" id="bgDrop">
+    <div class="t"><span>🖼 Свой фон комнаты</span></div>
     <div>
-      <input type="number" id="devGoal" min="0" placeholder="N" style="width:70px">
-      <button id="devGoalSet">OK</button>
-      <button id="devGoalClr">✕</button>
+      <button id="bgPick" type="button">Выбрать фон…</button>
+      <button id="bgReset" type="button">Стандартный</button>
+    </div>
+    <div class="msg" id="bgMsg">PNG / JPG / WebP / GIF</div>
+    <img id="bgPrev" class="prev" alt="">
+  </div>
+
+  <div class="psec">
+    <div class="t"><span>🎯 Цель, звук и голос</span></div>
+    <div class="ctrl-row">
+      <span>Цель покормок (0 = без цели)</span>
+      <span>
+        <input type="number" id="devGoal" min="0" max="9999" placeholder="0" style="width:62px">
+        <button id="devGoalSet" type="button">OK</button>
+      </span>
+    </div>
+    <div class="ctrl-row">
+      <span>Громкость <b id="volVal">70%</b></span>
+      <input id="volRange" type="range" min="0" max="100" step="5" value="70">
+    </div>
+    <div class="ctrl-row">
+      <label><input type="checkbox" id="optCallLoop" checked> Зов «Патрик» в простое</label>
+    </div>
+    <div class="ctrl-row">
+      <label><input type="checkbox" id="optTtsNames"> Озвучивать ники донатеров (TTS)</label>
+    </div>
+    <div class="ctrl-row">
+      <button id="roundResetBtn" type="button">↺ Обнулить счёт раунда</button>
+      <label style="font-size:11px;color:#9ab"><input type="checkbox" id="optShowDbg"> FPS/отладка</label>
     </div>
   </div>
-  <div id="pause">ПАУЗА</div>
+
+  <div class="psec">
+    <div class="t"><span>⚙️ Правила подарков и чата</span></div>
+    <div id="pRuleRows"></div>
+    <div>
+      <button id="pRuleAdd" type="button">+ Правило</button>
+      <button id="pRuleSave" type="button">Сохранить</button>
+      <button id="pRuleReset" type="button">Стандарт</button>
+    </div>
+    <div class="msg" id="pRuleMsg"></div>
+    <div class="test-bar">
+      <button type="button" data-pact="small">1 +6°</button>
+      <button type="button" data-pact="mid">2 +18°</button>
+      <button type="button" data-pact="pet">3 Щит</button>
+      <button type="button" data-pact="rotten">4 -35°</button>
+      <button type="button" data-pact="vacuum">5 Пылесос</button>
+      <button type="button" data-pact="mega">6 Кочан!</button>
+    </div>
+  </div>
 </div>
 <script>
 'use strict';
@@ -131,7 +205,7 @@ let HUD = null;
 /* ══ CONFIG — cfg лаунчера + skin.json + каталог подарков ═════════════ */
 
 const S = {
-  cfg: null, skin: null, eng: null, running: true,
+  cfg: null, defaults: null, skin: null, eng: null, running: true, startedAt: Date.now(),
   angle: 0, state: 'back',
   eatUntil: 0, angryUntil: 0, shieldUntil: 0,
   fed: 0, hero: null, megaOwner: null, lastDonor: null,
@@ -139,6 +213,7 @@ const S = {
   particles: [], donors: {}, avatars: {}, dropped: 0,
   giftIcons: {},     // giftName(lower) → url
   callNext: 0, callCount: 0, kapustAt: 0, debug: false,
+  customBg: false, gifAvatar: false,
 };
 
 const DEF_SKIN = {   // дефолты, если skin.json недоступен
@@ -159,14 +234,17 @@ const DEF_SKIN = {   // дефолты, если skin.json недоступен
 };
 
 async function loadConfig() {
-  const [cfgRes, skinRes, giftRes] = await Promise.all([
+  const [cfgRes, skinRes, giftRes, optsRes] = await Promise.all([
     GameKit.fetchCfg(GAME),
     fetch(`${DEF_SKIN.assetBase}/skin.json?t=${encodeURIComponent(TOKEN)}`)
       .then((r) => (r.ok ? r.json() : null)).catch(() => null),
     fetch(`/gifts/gifts.json?t=${encodeURIComponent(TOKEN)}`)
       .then((r) => (r.ok ? r.json() : [])).catch(() => []),
+    fetch(`${DEF_SKIN.assetBase}/patrick_opts.json?t=${encodeURIComponent(TOKEN)}&v=${Date.now()}`)
+      .then((r) => (r.ok ? r.json() : null)).catch(() => null),
   ]);
   S.cfg = cfgRes.cfg;
+  S.defaults = cfgRes.defaults || cfgRes.cfg;
   S.skin = Object.assign({}, DEF_SKIN, skinRes || {});
   S.skin.theme = Object.assign({}, DEF_SKIN.theme, (skinRes || {}).theme || {});
   S.skin.texts = Object.assign({}, DEF_SKIN.texts, (skinRes || {}).texts || {});
@@ -176,6 +254,11 @@ async function loadConfig() {
   }
   S.eng = new GameKit.Engine(S.cfg);
   S.goal = (S.skin.goal | 0) || 0;
+  if (optsRes && typeof optsRes === 'object') {
+    if (typeof optsRes.goal === 'number') S.goal = Math.max(0, optsRes.goal | 0);
+    if (typeof optsRes.callLoop === 'boolean') S.skin.callLoop.enabled = optsRes.callLoop;
+    if (typeof optsRes.ttsDonorNames === 'boolean') S.skin.ttsDonorNames = optsRes.ttsDonorNames;
+  }
   // Видео-фон — исходное видео мема. В chroma-режиме (?bg=) видео не
   // подключаем: фон должен остаться чистым для keying.
   if (!BG) {
@@ -184,6 +267,8 @@ async function loadConfig() {
     bgv.addEventListener('error', () => bgv.remove());
     bgv.src = `${S.skin.assetBase}/bg.mp4`;
     bgv.play().catch(() => bgv.remove());
+  } else {
+    document.getElementById('bgv').remove();
   }
 }
 
@@ -344,8 +429,13 @@ function angry(ms = 1500) {
 
 /** Единая точка входа действия (живое событие или дебаг-клавиша). */
 function act(a) {
+  const streak = Math.min(20, Math.max(1, Number(a._count) || 1));
   if (a.per) a = { ...a, value: (a.value || 1) * (a._count || 1) / a.per };
-  if (a.per_coin) a = { ...a, value: (a.value || 1) * (a._coins || 1) * a.per_coin };
+  else if (a.per_coin) a = { ...a, value: (a.value || 1) * (a._coins || 1) * a.per_coin };
+  else if (streak > 1 && ['small', 'mid', 'pet', 'rotten'].includes(a.type)) {
+    const base = a.value || ({ small: 6, mid: 18, pet: 22, rotten: 35 }[a.type] || 6);
+    a = { ...a, value: base * streak };
+  }
   const u = a._user || null;
   const icon = a._ev === 'gift' ? giftIcon(a._gift) : null;
   S.bounce = 1; S.handPulse = 1;
@@ -519,7 +609,7 @@ function draw() {
   const shx = (Math.random() - 0.5) * S.shake, shy = (Math.random() - 0.5) * S.shake;
   ctx.translate(-W / 2 + shx + tremble, -H / 2 + shy);
 
-  if (!S.videoBg) drawRoom();   // видео-фон играет — комнату не рисуем
+  if (!BG && !S.videoBg && !S.customBg) drawRoom();   // chroma / видео / свой фон — комнату не рисуем
   sweat();
   drawHand();
   drawPatrick();
@@ -638,6 +728,22 @@ function drawRabbitProc(pose, r, t) {
 
 function drawPatrick() {
   const now = performance.now() / 1000;
+  const gifEl = document.getElementById('gifAvatar');
+  if (S.gifAvatar && gifEl) {
+    const bobY = Math.abs(S.bounce) * 46;
+    gifEl.style.top = `${1160 - bobY}px`;
+    gifEl.style.transform = `translate(-50%,-50%) scale(${1 + S.bounce * 0.1}, ${1 - S.bounce * 0.1})`;
+    if (S.state === 'eat' && SPR.cabbage && SPR.cabbage.img) {
+      ctx.save();
+      ctx.translate(540, 1210 - bobY);
+      const r = 300, leaf = SPR.cabbage.img;
+      const munch = Math.sin(now * 14) * r * 0.05;
+      const lw = r * 0.6, lar = leaf.width / leaf.height;
+      ctx.drawImage(leaf, -r * 0.9, r * 0.12 + munch, lw, lw / lar);
+      ctx.restore();
+    }
+    return;
+  }
   // squash & stretch при подарках (bounce затухает)
   const sq = 1 + S.bounce * 0.12;
   ctx.save();
@@ -947,89 +1053,328 @@ const DEBUG_ACT = {
   '6': { type: 'mega', _user: 'debug', _ev: 'gift', _gift: 'Galaxy' },
 };
 
-/* dev-панель: установка аватарки персонажа → /games/asset → user-pack */
+/* ══ КОНСТРУКТОР ПАТРИКА: аватар, фон, настройки и правила ═══════════ */
 const devPanel = document.getElementById('devpanel');
-const devFile = document.getElementById('devAvatarFile');
+const gearBtn = document.getElementById('gearBtn');
 const devMsg = document.getElementById('devAvatarMsg');
 const devPrev = document.getElementById('devAvatarPrev');
+const bgMsg = document.getElementById('bgMsg');
+const bgPrev = document.getElementById('bgPrev');
+const bgCustomEl = document.getElementById('bgCustom');
+const gifAvatarEl = document.getElementById('gifAvatar');
 const packDir = (DEF_SKIN.assetBase || '/games-assets/patrick').split('/').pop();
+const IMG_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
 
-function refreshDevAvatar() {
-  if (SPR.custom && SPR.custom.img) {
-    devPrev.src = `${S.skin.assetBase}/sprites/custom.png?t=${encodeURIComponent(TOKEN)}&v=${Date.now()}`;
+if (!WTOKEN) gearBtn.style.display = 'none';
+
+function toggleDevPanel(force) {
+  const show = force ?? !devPanel.classList.contains('show');
+  devPanel.classList.toggle('show', show);
+  gearBtn.classList.toggle('on', show);
+}
+gearBtn.addEventListener('click', () => toggleDevPanel());
+
+function probeCustomAvatar() {
+  const gifUrl = `${S.skin.assetBase}/sprites/custom.gif?t=${encodeURIComponent(TOKEN)}&v=${Date.now()}`;
+  const gIm = new Image();
+  gIm.onload = () => {
+    S.gifAvatar = true;
+    gifAvatarEl.src = gifUrl;
+    gifAvatarEl.style.display = 'block';
+    devPrev.src = gifUrl;
     devPrev.style.display = 'block';
-  } else {
-    devPrev.style.display = 'none';
-  }
-}
-
-async function postAsset(path, data_b64) {
-  const r = await fetch(`/games/asset?w=${encodeURIComponent(WTOKEN)}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ dir: packDir, path, data_b64 }),
-  });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
-}
-
-function reloadCustomSprite() {
-  const img = new Image();
-  img.onload = () => { SPR.custom = { img, failed: false }; refreshDevAvatar(); };
-  img.onerror = () => { SPR.custom = { img: null, failed: true }; refreshDevAvatar(); };
-  img.src = `${S.skin.assetBase}/sprites/custom.png?t=${encodeURIComponent(TOKEN)}&v=${Date.now()}`;
-}
-
-devFile && devFile.addEventListener('change', () => {
-  const f = devFile.files && devFile.files[0];
-  if (!f) return;
-  const img = new Image();
-  img.onload = () => {
-    // Даунскейл до ≤512px по большей стороне — файл маленький, на канвасе всё равно ~600px.
-    const k = Math.min(1, 512 / Math.max(img.width, img.height));
-    const c = document.createElement('canvas');
-    c.width = Math.max(1, Math.round(img.width * k));
-    c.height = Math.max(1, Math.round(img.height * k));
-    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-    URL.revokeObjectURL(img.src);
-    const b64 = c.toDataURL('image/png').split(',')[1];
-    postAsset('sprites/custom.png', b64)
-      .then(() => { devMsg.textContent = 'Аватарка сохранена'; reloadCustomSprite(); })
-      .catch((e) => { devMsg.textContent = `Ошибка: ${e.message}`; });
   };
-  img.onerror = () => { devMsg.textContent = 'Не картинка'; URL.revokeObjectURL(img.src); };
-  img.src = URL.createObjectURL(f);
-  devFile.value = '';
+  gIm.onerror = () => {
+    S.gifAvatar = false;
+    gifAvatarEl.style.display = 'none';
+    const pUrl = `${S.skin.assetBase}/sprites/custom.png?t=${encodeURIComponent(TOKEN)}&v=${Date.now()}`;
+    const pIm = new Image();
+    pIm.onload = () => {
+      SPR.custom = { img: pIm, failed: false };
+      devPrev.src = pUrl;
+      devPrev.style.display = 'block';
+    };
+    pIm.onerror = () => {
+      SPR.custom = { img: null, failed: true };
+      devPrev.style.display = 'none';
+    };
+    pIm.src = pUrl;
+  };
+  gIm.src = gifUrl;
+}
+
+async function saveAvatarFile(f) {
+  const m = /\.(png|jpe?g|webp|gif)$/i.exec(f.name || '');
+  if (!m) { devMsg.textContent = 'Нужен PNG / JPG / WebP / GIF'; return; }
+  const ext = m[1].toLowerCase();
+  devMsg.textContent = 'Сохранение…';
+  if (ext === 'gif') {
+    await GameKit.postAsset(packDir, 'sprites/custom.png', null).catch(() => {});
+    await GameKit.postAsset(packDir, 'sprites/custom.gif', f.b64);
+    devMsg.textContent = `GIF-аватар сохранён: ${f.name}`;
+    probeCustomAvatar();
+    return;
+  }
+  await GameKit.postAsset(packDir, 'sprites/custom.gif', null).catch(() => {});
+  await new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 512 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.width * k));
+      c.height = Math.max(1, Math.round(img.height * k));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      const b64 = c.toDataURL('image/png').split(',')[1];
+      GameKit.postAsset(packDir, 'sprites/custom.png', b64).then(resolve, reject);
+    };
+    img.onerror = () => reject(new Error('Не удалось прочитать картинку'));
+    img.src = `data:image/${ext === 'jpg' ? 'jpeg' : ext};base64,${f.b64}`;
+  });
+  devMsg.textContent = `Аватар сохранён: ${f.name}`;
+  probeCustomAvatar();
+}
+
+document.getElementById('devAvatarPick').addEventListener('click', () => {
+  GameKit.pickFile('Персонаж Патрика', IMG_EXTS)
+    .then((f) => f && saveAvatarFile(f))
+    .catch((e) => { devMsg.textContent = `Ошибка: ${e.message || e}`; });
 });
+document.getElementById('devAvatarReset').addEventListener('click', () => {
+  Promise.all([
+    GameKit.postAsset(packDir, 'sprites/custom.png', null).catch(() => {}),
+    GameKit.postAsset(packDir, 'sprites/custom.gif', null).catch(() => {}),
+  ]).then(() => {
+    devMsg.textContent = 'Стандартный Патрик';
+    probeCustomAvatar();
+  }).catch((e) => { devMsg.textContent = `Ошибка: ${e.message}`; });
+});
+
+function probeCustomBg(i = 0) {
+  if (BG) return;
+  const bgv = document.getElementById('bgv');
+  if (i >= IMG_EXTS.length) {
+    S.customBg = false;
+    bgCustomEl.style.display = 'none';
+    bgPrev.style.display = 'none';
+    if (bgv) bgv.style.display = '';
+    return;
+  }
+  const url = `${S.skin.assetBase}/sprites/bg.${IMG_EXTS[i]}?t=${encodeURIComponent(TOKEN)}&v=${Date.now()}`;
+  const im = new Image();
+  im.onload = () => {
+    S.customBg = true;
+    bgCustomEl.src = url;
+    bgCustomEl.style.display = 'block';
+    bgPrev.src = url;
+    bgPrev.style.display = 'block';
+    if (bgv) bgv.style.display = 'none';
+  };
+  im.onerror = () => probeCustomBg(i + 1);
+  im.src = url;
+}
+
+async function saveBgFile(f) {
+  const m = /\.(png|jpe?g|webp|gif)$/i.exec(f.name || '');
+  if (!m) { bgMsg.textContent = 'Нужен PNG / JPG / WebP / GIF'; return; }
+  const ext = m[1].toLowerCase().replace('jpeg', 'jpg');
+  bgMsg.textContent = 'Сохранение…';
+  await Promise.all(
+    IMG_EXTS.filter((e) => e !== ext).map((e) => GameKit.postAsset(packDir, `sprites/bg.${e}`, null).catch(() => {}))
+  );
+  await GameKit.postAsset(packDir, `sprites/bg.${ext}`, f.b64);
+  bgMsg.textContent = `Фон сохранён: ${f.name}`;
+  probeCustomBg();
+}
+
+document.getElementById('bgPick').addEventListener('click', () => {
+  GameKit.pickFile('Фон комнаты', IMG_EXTS)
+    .then((f) => f && saveBgFile(f))
+    .catch((e) => { bgMsg.textContent = `Ошибка: ${e.message || e}`; });
+});
+document.getElementById('bgReset').addEventListener('click', () => {
+  Promise.all(IMG_EXTS.map((e) => GameKit.postAsset(packDir, `sprites/bg.${e}`, null).catch(() => {})))
+    .then(() => { bgMsg.textContent = 'Стандартная комната'; probeCustomBg(); })
+    .catch((e) => { bgMsg.textContent = `Ошибка: ${e.message}`; });
+});
+
+function savePatrickOpts() {
+  if (!WTOKEN) return;
+  const payload = {
+    goal: S.goal | 0,
+    callLoop: !!S.skin.callLoop.enabled,
+    ttsDonorNames: !!S.skin.ttsDonorNames,
+  };
+  const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+  GameKit.postAsset(packDir, 'patrick_opts.json', b64).catch(() => {});
+}
 
 document.getElementById('devGoalSet').addEventListener('click', () => {
   S.goal = Math.max(0, parseInt(document.getElementById('devGoal').value, 10) || 0);
   refreshGoal();
+  savePatrickOpts();
 });
-document.getElementById('devGoalClr').addEventListener('click', () => {
-  S.goal = 0; document.getElementById('devGoal').value = ''; refreshGoal();
+document.getElementById('optCallLoop').addEventListener('change', (e) => {
+  S.skin.callLoop.enabled = e.target.checked;
+  savePatrickOpts();
+});
+document.getElementById('optTtsNames').addEventListener('change', (e) => {
+  S.skin.ttsDonorNames = e.target.checked;
+  savePatrickOpts();
+});
+document.getElementById('optShowDbg').addEventListener('change', (e) => {
+  S.debug = e.target.checked;
+  dbg.classList.toggle('show', S.debug);
+  drawDebug();
 });
 
-document.getElementById('devAvatarReset').addEventListener('click', () => {
-  postAsset('sprites/custom.png', null)
-    .then(() => { devMsg.textContent = 'Сброшено на спрайты/процедурного'; reloadCustomSprite(); })
-    .catch((e) => { devMsg.textContent = `Ошибка: ${e.message}`; });
+let volSaveTimer = null;
+document.getElementById('volRange').addEventListener('input', (e) => {
+  const pct = Number(e.target.value) || 0;
+  document.getElementById('volVal').textContent = `${pct}%`;
+  if (S.cfg) S.cfg.volume = pct / 100;
+  clearTimeout(volSaveTimer);
+  volSaveTimer = setTimeout(() => {
+    if (WTOKEN) GameKit.saveCfg(GAME, { volume: pct / 100 }).catch(() => {});
+  }, 350);
 });
+
+function resetRoundProgress() {
+  S.angle = 0; S.fed = 0; S.donors = {}; S.particles = []; S.megaOwner = null;
+  S.eatUntil = 0; S.angryUntil = 0; S.shieldUntil = 0;
+  refreshGoal();
+}
+document.getElementById('roundResetBtn').addEventListener('click', resetRoundProgress);
+
+/* ── Редактор правил в панели Патрика ──────────────────────────────── */
+const P_EVENTS = [
+  ['gift', 'Подарок'], ['like', 'Лайк'], ['comment', 'Комментарий'],
+  ['subscribe', 'Подписка'], ['share', 'Репост'], ['follow', 'Фоллоу'],
+];
+const P_ACTIONS = [
+  ['nudge', 'Подтолкнуть (+°)'],
+  ['small', 'Капусточка (+°)'],
+  ['mid', 'Морковка (+° + TTS)'],
+  ['pet', 'Погладить (+° + щит)'],
+  ['rotten', 'Гнилая капуста (−°)'],
+  ['vacuum', 'Пылесос (в 0°!)'],
+  ['mega', 'Золотой кочан (180°!)'],
+];
+const P_DEF_VAL = { nudge: 0.5, small: 6, mid: 18, pet: 22, rotten: 35, vacuum: 0, mega: 180 };
+const pRuleRows = document.getElementById('pRuleRows');
+const pRuleMsg = document.getElementById('pRuleMsg');
+
+function addPRuleRow(r = {}) {
+  const esc = GameKit.esc;
+  const ev = r.event || 'gift';
+  const m = r.match || {};
+  const cond = m.names ? m.names.join(', ')
+    : m.commands ? m.commands.join(', ')
+    : Array.isArray(m.contains) ? m.contains.join(', ')
+    : (m.contains || '');
+  const coins = m.min_coins ? String(m.min_coins) : '';
+  const type = (r.action && r.action.type) || 'small';
+  const val = r.action && typeof r.action.value === 'number' ? String(r.action.value) : '';
+  const row = GameKit.el('div', 'prule', pRuleRows);
+  row.innerHTML =
+    `<div class="row"><select class="ev">${P_EVENTS.map(([v, l]) =>
+      `<option value="${esc(v)}"${v === ev ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>` +
+    `<select class="act">${P_ACTIONS.map(([v, l]) =>
+      `<option value="${esc(v)}"${v === type ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>` +
+    `<button class="del" type="button" title="Удалить">✕</button></div>` +
+    `<div class="row"><input type="text" class="cond" placeholder="Подарки (Rose, Chili) или слово">` +
+    `<input type="number" class="val" step="0.5" style="width:54px" placeholder="°" title="Сила в градусах">` +
+    `<input type="number" class="coins" min="0" style="width:58px" placeholder="монет" title="Мин. монет"></div>`;
+  row.querySelector('.cond').value = cond;
+  row.querySelector('.val').value = val;
+  row.querySelector('.coins').value = coins;
+  const sync = () => {
+    const evNow = row.querySelector('.ev').value;
+    const actNow = row.querySelector('.act').value;
+    row.querySelector('.cond').disabled = !(evNow === 'gift' || evNow === 'comment');
+    row.querySelector('.coins').disabled = evNow !== 'gift';
+    row.querySelector('.val').disabled = actNow === 'vacuum' || actNow === 'mega';
+    row.querySelector('.val').placeholder = String(P_DEF_VAL[actNow] || '°');
+  };
+  row.querySelector('.ev').addEventListener('change', sync);
+  row.querySelector('.act').addEventListener('change', sync);
+  sync();
+  row.querySelector('.del').addEventListener('click', () => row.remove());
+}
+
+function collectPRules() {
+  const out = [];
+  for (const row of pRuleRows.querySelectorAll('.prule')) {
+    const ev = row.querySelector('.ev').value;
+    const type = row.querySelector('.act').value;
+    const cond = row.querySelector('.cond').value.trim();
+    const val = parseFloat(row.querySelector('.val').value);
+    const coins = parseInt(row.querySelector('.coins').value, 10) || 0;
+    const match = {};
+    if (ev === 'gift') {
+      if (cond) match.names = cond.split(',').map((s) => s.trim()).filter(Boolean);
+      if (coins > 0) match.min_coins = coins;
+    } else if (ev === 'comment' && cond) {
+      const parts = cond.split(',').map((s) => s.trim()).filter(Boolean);
+      if (parts.length && parts.every((p) => p.startsWith('!'))) match.commands = parts;
+      else match.contains = parts.length > 1 ? parts : parts[0];
+    }
+    const action = { type };
+    if (!Number.isNaN(val) && val > 0 && type !== 'vacuum' && type !== 'mega') action.value = val;
+    if (ev === 'like' && type === 'nudge') action.per = 1;
+    if (type === 'pet') action.sec = 5;
+    out.push({ event: ev, match, action });
+  }
+  return out;
+}
+
+function renderPRules(rules) {
+  pRuleRows.innerHTML = '';
+  (Array.isArray(rules) ? rules : []).forEach(addPRuleRow);
+  if (!pRuleRows.children.length) addPRuleRow();
+}
+
+document.getElementById('pRuleAdd').addEventListener('click', () => addPRuleRow());
+document.getElementById('pRuleSave').addEventListener('click', () => {
+  const rules = collectPRules();
+  GameKit.saveCfg(GAME, { rules })
+    .then(() => {
+      S.cfg.rules = rules;
+      if (S.eng) S.eng.rules = rules;
+      buildHints();
+      pRuleMsg.textContent = 'Правила и подсказки обновлены';
+    })
+    .catch((e) => { pRuleMsg.textContent = `Ошибка: ${e.message}`; });
+});
+document.getElementById('pRuleReset').addEventListener('click', () => {
+  GameKit.resetCfg(GAME)
+    .then((res) => {
+      const def = (res && res.cfg && res.cfg.rules) || (S.defaults && S.defaults.rules) || [];
+      S.cfg.rules = def;
+      if (S.eng) S.eng.rules = def;
+      renderPRules(def);
+      buildHints();
+      pRuleMsg.textContent = 'Стандартные правила возвращены';
+    })
+    .catch((e) => { pRuleMsg.textContent = `Ошибка: ${e.message}`; });
+});
+
+for (const btn of document.querySelectorAll('[data-pact]')) {
+  btn.addEventListener('click', () => {
+    const map = { 'small': '1', 'mid': '2', 'pet': '3', 'rotten': '4', 'vacuum': '5', 'mega': '6' };
+    const a = DEBUG_ACT[map[btn.dataset.pact]];
+    if (a) act({ ...a });
+  });
+}
 
 addEventListener('keydown', (e) => {
+  if (window.GameKit && GameKit.isTypingTarget(e.target)) return;
   if (e.key === 'Tab' || e.key === 'd' || e.key === 'D' || e.key === 'в' || e.key === 'В') {
     e.preventDefault();
-    S.debug = !S.debug;
-    dbg.classList.toggle('show', S.debug);
-    devPanel.classList.toggle('show', S.debug);
-    drawDebug();
-    if (S.debug) refreshDevAvatar();
+    toggleDevPanel();
     return;
   }
   if (e.key === 'r' || e.key === 'R' || e.key === 'к' || e.key === 'К') {
-    S.angle = 0; S.fed = 0; S.donors = {}; S.particles = []; S.megaOwner = null;
-    S.eatUntil = 0; S.angryUntil = 0; S.shieldUntil = 0;
-    refreshGoal();
+    resetRoundProgress();
     return;
   }
   const a = DEBUG_ACT[e.key];
@@ -1040,7 +1385,23 @@ async function main() {
   HUD = GameKit.hud();
   await loadConfig();
   loadSprites();
+  probeCustomAvatar();
+  probeCustomBg();
   await Audio2.probe();
+
+  if (WTOKEN) {
+    GameKit.bindDrop(document.getElementById('avaDrop'), IMG_EXTS, saveAvatarFile, (m) => { devMsg.textContent = m; });
+    GameKit.bindDrop(document.getElementById('bgDrop'), IMG_EXTS, saveBgFile, (m) => { bgMsg.textContent = m; });
+  }
+
+  document.getElementById('devGoal').value = S.goal ? String(S.goal) : '';
+  document.getElementById('optCallLoop').checked = !!S.skin.callLoop.enabled;
+  document.getElementById('optTtsNames').checked = !!S.skin.ttsDonorNames;
+  const volPct = Math.round(Math.max(0, Math.min(1, Number(S.cfg.volume ?? 0.7))) * 100);
+  document.getElementById('volRange').value = String(volPct);
+  document.getElementById('volVal').textContent = `${volPct}%`;
+  renderPRules(S.cfg.rules);
+
   buildHints();
   refreshGoal();
   S.callNext = Date.now() + 1500;
@@ -1053,12 +1414,12 @@ async function main() {
 
   GameKit.watchSession(GAME, (status) => {
     document.getElementById('pause').style.display = status === 'paused' ? 'grid' : 'none';
-    S.running = status === 'running';
+    S.running = status !== 'paused';
   });
   GameKit.unloadReport(GAME, () => {
-    if (!S.cfg) return null;
+    if (!S.cfg || (!S.fed && !Object.keys(S.donors).length)) return null;
     return {
-      duration_s: 0,
+      duration_s: Math.max(1, Math.round((Date.now() - S.startedAt) / 1000)),
       winner: S.lastDonor || '—',
       score: S.fed,
       top: GameKit.leaderboard(S.donors, 5),

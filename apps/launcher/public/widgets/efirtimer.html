@@ -102,6 +102,8 @@
   const Q = new URLSearchParams(location.search);
   const token = Q.get('t') || '';
   const demo = Q.get('demo') === '1';
+  const bg = Q.get('bg') || '';
+  if (bg && /^[0-9a-f]{6}$/i.test(bg)) document.body.style.background = '#' + bg;
 
   const stage = document.getElementById('stage');
   function fit(){

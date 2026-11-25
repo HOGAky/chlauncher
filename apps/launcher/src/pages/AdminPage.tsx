@@ -387,8 +387,8 @@ function PacksTab() {
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <span className="text-sm text-muted-foreground">
-          {packs.length} пакетов · раздел = вкладка в Библиотеке; «Без тарифа» — игра доступна
-          на free-плане, иначе попадает в «По тарифу»
+          {packs.length} пакетов · синхронизируется с хостом для всех пользователей (раздел, АФК,
+          Бесплатные ↔ По тарифу, скрытие)
         </span>
         <Button size="sm" variant="outline" onClick={refresh}>
           <RefreshCw size={14} className="mr-1" /> Обновить
@@ -404,10 +404,15 @@ function PacksTab() {
       <Card>
         <CardContent className="flex flex-col gap-0 pt-3 text-sm">
           <div className="grid grid-cols-[auto_1fr_minmax(140px,220px)_auto] items-center gap-x-4 border-b border-border pb-2 text-xs text-muted-foreground">
-            <span />
+            <span className="w-8" />
             <span>Игра</span>
-            <span>Раздел</span>
-            <span className="flex gap-4">АФК · Free · Скрыта</span>
+            <span>Свой раздел (вкладка)</span>
+            <div className="flex items-center gap-4">
+              <span className="w-11 text-center">АФК</span>
+              <span className="w-11 text-center">Free</span>
+              <span className="w-11 text-center">Скрыта</span>
+              <span className="w-7" />
+            </div>
           </div>
           {packs.map((p) => (
             <div
@@ -425,16 +430,22 @@ function PacksTab() {
                 )}
               </span>
               <div className="min-w-0">
-                <div className="flex items-center gap-2 truncate">
+                <div className="flex flex-wrap items-center gap-1.5">
                   <span className="truncate font-medium">{p.title}</span>
-                  {p.hidden && <Badge variant="outline">Скрыта</Badge>}
+                  {p.free ? (
+                    <Badge variant="success">Бесплатная</Badge>
+                  ) : (
+                    <Badge variant="outline">По тарифу</Badge>
+                  )}
+                  {p.afk && <Badge variant="outline">АФК</Badge>}
+                  {p.hidden && <Badge variant="destructive">Скрыта</Badge>}
                   {p.remote && <Badge variant="outline">Серверная</Badge>}
                   {p.user_pack && !p.overridden && <Badge variant="outline">Своя папка</Badge>}
                   {p.overridden && <Badge variant="warning">Изменено</Badge>}
                 </div>
                 <div className="truncate text-xs text-muted-foreground">
                   {p.id}
-                  {p.section ? ` · ${p.section}` : ''}
+                  {p.section ? ` · вкладка «${p.section}»` : ''}
                 </div>
               </div>
               <Input
@@ -449,39 +460,45 @@ function PacksTab() {
                   if (v !== (p.section ?? '')) void patch(p.id, { section: v || undefined });
                 }}
               />
-              <div className="flex items-center gap-3">
-                <span title="АФК-стримы" className="inline-flex">
+              <div className="flex items-center gap-4">
+                <span title="Показывать во вкладке «АФК-стримы»" className="inline-flex w-11 justify-center">
                   <Switch
                     disabled={!!busy[p.id]}
                     checked={p.afk === true}
                     onCheckedChange={(v) => void patch(p.id, { afk: v })}
                   />
                 </span>
-                <span title="Без тарифа (бесплатная)" className="inline-flex">
+                <span
+                  title="ВКЛ = раздел «Бесплатные» (доступно всем); ВЫКЛ = раздел «По тарифу»"
+                  className="inline-flex w-11 justify-center"
+                >
                   <Switch
                     disabled={!!busy[p.id]}
                     checked={p.free === true}
                     onCheckedChange={(v) => void patch(p.id, { free: v })}
                   />
                 </span>
-                <span title="Скрыть из каталога" className="inline-flex">
+                <span title="Скрыть из каталога для пользователей" className="inline-flex w-11 justify-center">
                   <Switch
                     disabled={!!busy[p.id]}
                     checked={p.hidden === true}
                     onCheckedChange={(v) => void patch(p.id, { hidden: v })}
                   />
                 </span>
-                {p.overridden && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    title="Вернуть стандартный манифест"
-                    disabled={!!busy[p.id]}
-                    onClick={() => void reset(p.id, p.title)}
-                  >
-                    <RotateCcw size={13} />
-                  </Button>
-                )}
+                <span className="inline-flex w-7 justify-center">
+                  {p.overridden && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 w-7 p-0"
+                      title="Вернуть стандартный манифест"
+                      disabled={!!busy[p.id]}
+                      onClick={() => void reset(p.id, p.title)}
+                    >
+                      <RotateCcw size={13} />
+                    </Button>
+                  )}
+                </span>
               </div>
             </div>
           ))}

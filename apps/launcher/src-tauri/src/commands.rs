@@ -867,9 +867,12 @@ fn validate_pack_manifest(v: &Value) -> Result<(), String> {
     Ok(())
 }
 
-/// Saves an edited manifest as a user-side patch: `game.json` lands in
-/// `<data>/games/<dir_name>` — fields left out inherit bundled values
-/// (see `game_packs::merged_over`). Emits `catalog-changed`.
+/// Saves an edited manifest. For shipped packs (`!pack.user`), catalog
+/// section fields (`title`, `desc`, `section`, `afk`, `free`, `hidden`,
+/// `icon`) are pushed to `/api/admin/packs/:id` on the host (owner-gated
+/// by TG id) so every launcher user receives the updated section layout;
+/// local dev-only fields (`rules`, `window`, `page`, …) or user drop-in
+/// folders fall back to `<data>/games/<dir_name>/game.json`.
 #[tauri::command]
 pub async fn save_pack_manifest(
     game_id: String,
@@ -881,17 +884,93 @@ pub async fn save_pack_manifest(
     // find_any: saving `hidden:false` must work on a hidden pack.
     let pack = crate::game_packs::find_any(&game_id, &state.data_dir).ok_or("UNKNOWN_GAME")?;
     validate_pack_manifest(&manifest)?;
-    let mut m = manifest;
-    // The id binds the patch to this pack — it is not user-editable.
-    m["id"] = json!(pack.id);
-    let path = crate::game_packs::write_user_manifest(&state.data_dir, &pack.dir_name, &m)
-        .map_err(|e| e.to_string())?;
+
+    let auth_tok = {
+        let s = state.settings.lock().await;
+        s.data.auth_token.clone().filter(|t| !t.is_empty())
+    };
+
+    const HOST_KEYS: &[&str] = &["title", "desc", "section", "afk", "free", "hidden", "icon"];
+    const LOCAL_KEYS: &[&str] = &["type", "page", "window", "round_sec", "volume", "tts", "launch", "rules"];
+
+    let mut synced_host = false;
+    if !pack.user {
+        if let Some(tok) = &auth_tok {
+            let mut host_patch = serde_json::Map::new();
+            if let Some(obj) = manifest.as_object() {
+                for k in HOST_KEYS {
+                    if let Some(v) = obj.get(*k) {
+                        host_patch.insert((*k).to_string(), v.clone());
+                    }
+                }
+            }
+            match state
+                .api
+                .admin_json(
+                    reqwest::Method::PUT,
+                    &format!("/api/admin/packs/{}", pack.id),
+                    tok,
+                    Some(Value::Object(host_patch)),
+                )
+                .await
+            {
+                Ok(res) => {
+                    if let Some(ov) = res.get("overrides").and_then(|v| v.as_object()) {
+                        let map: std::collections::HashMap<String, Value> =
+                            ov.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                        crate::game_packs::set_server_overrides(map.clone());
+                        let mut s = state.settings.lock().await;
+                        s.data.pack_overrides = map;
+                        let _ = s.save();
+                    }
+                    synced_host = true;
+                }
+                Err(crate::api::ApiError::Server { code, .. })
+                    if code == "FORBIDDEN" || code == "OWNER_ONLY" =>
+                {
+                    return Err(code);
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, id = %pack.id, "host pack override failed, saving local fallback");
+                }
+            }
+        }
+    }
+
+    // Check whether local dev fields differ from the bundled base; if all
+    // changes live on the host, clean up any stale local game.json so it
+    // doesn't shadow future host updates.
+    let bundled_base = crate::game_packs::bundled_dir()
+        .and_then(|d| {
+            let p = d.join(&pack.dir_name).join("game.json");
+            std::fs::read_to_string(p).ok()
+        })
+        .and_then(|t| serde_json::from_str::<Value>(&t).ok());
+    let has_local_diff = pack.user
+        || !synced_host
+        || manifest.as_object().is_some_and(|obj| {
+            LOCAL_KEYS.iter().any(|k| {
+                obj.get(*k) != bundled_base.as_ref().and_then(|b| b.get(*k))
+            })
+        });
+
+    let mut local_path = String::new();
+    if has_local_diff {
+        let mut m = manifest;
+        m["id"] = json!(pack.id);
+        let path = crate::game_packs::write_user_manifest(&state.data_dir, &pack.dir_name, &m)
+            .map_err(|e| e.to_string())?;
+        local_path = path.to_string_lossy().into_owned();
+    } else {
+        let _ = crate::game_packs::reset_user_manifest(&state.data_dir, &pack.id);
+    }
+
     let _ = app.emit("catalog-changed", ());
-    Ok(json!({ "ok": true, "path": path.to_string_lossy() }))
+    Ok(json!({ "ok": true, "synced_host": synced_host, "path": local_path }))
 }
 
-/// Deletes the user manifest patching `game_id` — the bundled defaults
-/// are restored. `NO_OVERRIDE` when nothing user-side exists.
+/// Deletes host + local manifest overrides patching `game_id` — shipped
+/// defaults are restored across all clients.
 #[tauri::command]
 pub async fn reset_pack_manifest(
     game_id: String,
@@ -899,11 +978,49 @@ pub async fn reset_pack_manifest(
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
     require_admin(state.inner()).await?;
-    if !crate::game_packs::reset_user_manifest(&state.data_dir, &game_id) {
+    let auth_tok = {
+        let s = state.settings.lock().await;
+        s.data.auth_token.clone().filter(|t| !t.is_empty())
+    };
+    let mut host_deleted = false;
+    if let Some(tok) = &auth_tok {
+        match state
+            .api
+            .admin_json(
+                reqwest::Method::DELETE,
+                &format!("/api/admin/packs/{game_id}"),
+                tok,
+                None,
+            )
+            .await
+        {
+            Ok(res) => {
+                host_deleted = res.get("deleted").and_then(|v| v.as_bool()).unwrap_or(false);
+                if let Some(ov) = res.get("overrides").and_then(|v| v.as_object()) {
+                    let map: std::collections::HashMap<String, Value> =
+                        ov.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                    crate::game_packs::set_server_overrides(map.clone());
+                    let mut s = state.settings.lock().await;
+                    s.data.pack_overrides = map;
+                    let _ = s.save();
+                }
+            }
+            Err(crate::api::ApiError::Server { code, .. })
+                if code == "FORBIDDEN" || code == "OWNER_ONLY" =>
+            {
+                return Err(code);
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, id = %game_id, "host pack reset failed");
+            }
+        }
+    }
+    let local_deleted = crate::game_packs::reset_user_manifest(&state.data_dir, &game_id);
+    if !host_deleted && !local_deleted {
         return Err("NO_OVERRIDE".into());
     }
     let _ = app.emit("catalog-changed", ());
-    Ok(json!({ "ok": true }))
+    Ok(json!({ "ok": true, "synced_host": host_deleted }))
 }
 
 /// TEST billing: grants/extends one billing period of `plan_code`.
@@ -2460,11 +2577,13 @@ pub async fn open_overlay_window(
     // §12.1 free-tier watermark: enforced server-side so the flag can't
     // be stripped by hand-editing the capture URL. A plan that gates
     // games (allow-list smaller than the catalogue) gets `wm=1`.
-    if page.starts_with("overlay/game/") {
+    if let Some(id) = page.strip_prefix("overlay/game/") {
         let ent = state.usage.entitlements().await;
-        if crate::builtin_games::allowed_games(&ent, &state.data_dir).len()
-            < crate::builtin_games::registry(&state.data_dir).len()
-        {
+        let allowed = crate::builtin_games::allowed_games(&ent, &state.data_dir);
+        if !allowed.iter().any(|g| g == id) {
+            return Err("SUBSCRIPTION_REQUIRED".into());
+        }
+        if allowed.len() < crate::builtin_games::registry(&state.data_dir).len() {
             url.push_str("&wm=1");
         }
     }
@@ -2505,44 +2624,11 @@ pub async fn open_overlay_window(
         .transparent(!chroma)
         .always_on_top(true)
         .skip_taskbar(true)
+        .disable_drag_drop_handler()
         .visible(true)
         .build()
         .map_err(|e| e.to_string())?;
     Ok(())
-}
-
-/// Native file picker for pack constructor pages. The overlay windows
-/// are always-on-top and borderless, which makes WebView2's own
-/// `<input type=file>` dialog unreliable (it can open behind the
-/// window) — the gamekit dev panel calls this via `__TAURI__` instead.
-/// Returns `{name, data_b64}` or `null` on cancel; the caller uploads
-/// through the existing write-token `/games/asset` route.
-#[tauri::command]
-pub async fn pick_file_base64(
-    filter_name: String,
-    filter_exts: Vec<String>,
-    app: AppHandle,
-) -> Result<Option<serde_json::Value>, String> {
-    use tauri_plugin_dialog::DialogExt;
-    let exts: Vec<&str> = filter_exts.iter().map(|s| s.as_str()).collect();
-    let Some(picked) = app
-        .dialog()
-        .file()
-        .add_filter(&filter_name, &exts)
-        .blocking_pick_file()
-    else {
-        return Ok(None);
-    };
-    let path = picked.as_path().ok_or("picked file is not a local path")?;
-    let data = std::fs::read(path).map_err(|e| e.to_string())?;
-    if data.len() > 64 * 1024 * 1024 {
-        return Err("FILE_TOO_LARGE".into());
-    }
-    use base64::Engine;
-    Ok(Some(serde_json::json!({
-        "name": path.file_name().and_then(|n| n.to_str()).unwrap_or("file"),
-        "data_b64": base64::engine::general_purpose::STANDARD.encode(&data),
-    })))
 }
 
 /// Closes a capture window previously opened by `open_overlay_window`.
@@ -2815,9 +2901,11 @@ pub async fn efirtimer_manual(
 #[tauri::command]
 pub async fn open_timer_window(
     kind: String,
+    chroma: Option<bool>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
+    let use_chroma = chroma.unwrap_or(false);
     // Все окна — с системной рамкой: перетаскивание и сворачивание работают
     // штатно (на внешних URL __TAURI__ не инжектится — своего драга нет).
     let (label, file, title, w, h, transparent) = match kind.as_str() {
@@ -2827,7 +2915,7 @@ pub async fn open_timer_window(
             "EFIR — Таймер",
             1000.0,
             560.0,
-            true,
+            !use_chroma,
         ),
         "roll" => (
             "efir-roll",
@@ -2855,10 +2943,6 @@ pub async fn open_timer_window(
         ),
         _ => return Err(format!("unknown timer window: {kind}")),
     };
-    if let Some(win) = app.get_webview_window(label) {
-        let _ = win.set_focus();
-        return Ok(());
-    }
     let port = state
         .overlay_port
         .lock()
@@ -2880,9 +2964,18 @@ pub async fn open_timer_window(
             .clone();
         qs.push_str(&format!("&w={w}"));
     }
+    if use_chroma {
+        qs.push_str("&bg=ff00ff");
+    }
     let url: tauri::Url = format!("http://127.0.0.1:{port}/widgets/{file}?{qs}")
         .parse()
         .map_err(|_| "bad widget url".to_string())?;
+    if let Some(win) = app.get_webview_window(label) {
+        let js = format!("location.href = {}", serde_json::json!(url.as_str()));
+        let _ = win.eval(&js);
+        let _ = win.set_focus();
+        return Ok(());
+    }
     tauri::WebviewWindowBuilder::new(&app, label, tauri::WebviewUrl::External(url))
         .title(title)
         .inner_size(w, h)
@@ -3290,8 +3383,16 @@ pub async fn roblox_launch(
             .map(String::from)
             .filter(|s| !s.is_empty());
     }
+    let pack_place = crate::game_packs::find("roblox_sts", &state.data_dir)
+        .and_then(|p| p.manifest.launch)
+        .and_then(|l| match l.get("place_id") {
+            Some(Value::String(s)) if !s.trim().is_empty() => Some(s.trim().to_string()),
+            Some(Value::Number(n)) => Some(n.to_string()),
+            _ => None,
+        });
     let place_id = custom_place
         .or(server_place)
+        .or(pack_place)
         .or_else(official_place_id)
         .ok_or("Place ID игры не задан — впишите свой или обновите лаунчер")?;
     url = format!("roblox://experiences/start?placeId={place_id}{url}");
@@ -3383,6 +3484,36 @@ pub async fn roblox_stream_key_sync(state: State<'_, AppState>) -> Result<String
     Ok(key)
 }
 
+/// Rotates the streamer's Roblox key (invalidating any leaked credential
+/// and unbinding the previous Roblox user id / room).
+#[tauri::command]
+pub async fn roblox_stream_key_rotate(state: State<'_, AppState>) -> Result<String, String> {
+    let token = state
+        .settings
+        .lock()
+        .await
+        .data
+        .auth_token
+        .clone()
+        .ok_or("NOT_AUTHENTICATED")?;
+    let r = state
+        .api
+        .stream_key_rotate(&token)
+        .await
+        .map_err(|e| e.to_client_string())?;
+    let key = r["stream_key"]
+        .as_str()
+        .ok_or("сервер не вернул ключ")?
+        .to_string();
+    {
+        let mut s = state.settings.lock().await;
+        s.data.forward.stream_key = Some(key.clone());
+        let _ = s.save();
+    }
+    state.roblox.reset_room();
+    Ok(key)
+}
+
 /// Production «Играть» on the Steal the Stream card: the
 /// `steal-the-stream` profile goes on air, HTTP-forward turns on pointed
 /// at the licensing server (JWT ingest — no admin secret), a one-time
@@ -3416,9 +3547,9 @@ pub async fn roblox_play(
     roblox_stream_status(state).await
 }
 
-/// Errors unless the launcher runs in developer mode (dev build / admin).
+/// Errors unless the launcher runs in developer mode (dev build / server-verified admin).
 async fn require_dev_mode(state: &AppState) -> Result<(), String> {
-    let role = state.settings.lock().await.data.role.clone();
+    let role = state.usage.cached_response().await.and_then(|r| r.role);
     if crate::roblox_bridge::dev_mode(role.as_deref()) {
         Ok(())
     } else {

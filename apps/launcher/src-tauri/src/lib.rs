@@ -123,6 +123,9 @@ pub fn run() {
             // picked up by the registry without a rebuild.
             let user_games = game_packs::user_dir(&data_dir);
             std::fs::create_dir_all(&user_games).ok();
+            if let Ok(s) = settings.try_lock() {
+                game_packs::set_server_overrides(s.data.pack_overrides.clone());
+            }
             {
                 let packs = game_packs::scan(&data_dir);
                 let user = packs.iter().filter(|p| p.user).count();
@@ -762,6 +765,7 @@ pub fn run() {
             commands::roblox_play,
             commands::roblox_stream_status,
             commands::roblox_stream_key_sync,
+            commands::roblox_stream_key_rotate,
             commands::roblox_bridge_status,
             commands::roblox_bridge_set,
             commands::roblox_dev_play,
@@ -809,7 +813,6 @@ pub fn run() {
             commands::regenerate_adapter_key,
             commands::open_overlay_window,
             commands::close_overlay_window,
-            commands::pick_file_base64,
             commands::get_goals,
             commands::save_goals,
             commands::reset_goals,

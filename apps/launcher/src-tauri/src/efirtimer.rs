@@ -455,11 +455,44 @@ impl EfirTimer {
             self.send_tick(&i);
         }
         if let Some((user, amount)) = spawn_bonus {
+            let who = if user.is_empty() { "Зритель".to_string() } else { user };
             self.send(json!({
                 "type": "bonus_roll",
-                "username": if user.is_empty() { "Зритель".into() } else { user },
+                "username": who,
                 "amount": amount,
             }));
+            // Complete the bonus phase after the 3 s banner animation so
+            // `rolling_bonus` never wedges the timer forever at 00:00:00.
+            let this = self.clone();
+            let want_gen = gen;
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(Duration::from_millis(3000)).await;
+                let mut resume_gen = None;
+                let mut final_t = 0;
+                {
+                    let mut i = this.inner.lock().await;
+                    if i.gen != want_gen || !i.st.rolling_bonus {
+                        return;
+                    }
+                    i.st.rolling_bonus = false;
+                    if amount > 0 {
+                        i.st.time_left += amount;
+                        i.st.running = true;
+                        i.gen += 1;
+                        resume_gen = Some(i.gen);
+                        final_t = i.st.time_left;
+                    } else {
+                        i.st.victory = true;
+                        i.st.running = false;
+                    }
+                    this.send_tick(&i);
+                }
+                if let Some(g) = resume_gen {
+                    this.alert(&who, "", "Бонус", "", amount, "bonus", amount, true, final_t);
+                    this.spawn_tick(g);
+                    this.poke_queues();
+                }
+            });
         }
         if spawn_ruiner_roulette {
             self.ruiner_timeout_roulette().await;
@@ -1410,8 +1443,9 @@ impl EfirTimer {
                 i.st.time_left = target;
                 if i.st.time_left > 0 {
                     i.st.victory = false;
-                    if !i.st.bonus_phase && !i.st.rolling_bonus {
+                    if !i.st.bonus_phase && !i.st.rolling_bonus && !i.st.running {
                         i.st.running = true;
+                        i.gen += 1;
                         let gen = i.gen;
                         drop(i);
                         self.spawn_tick(gen);
@@ -1457,6 +1491,13 @@ impl EfirTimer {
                                 i.st.time_left = r.value.max(0);
                                 if i.st.time_left > 0 {
                                     i.st.victory = false;
+                                    if !i.st.running && !i.st.rolling_bonus {
+                                        i.st.running = true;
+                                        i.gen += 1;
+                                        let gen = i.gen;
+                                        drop(i);
+                                        self.spawn_tick(gen);
+                                    }
                                 }
                             }
                             "reset" => {
@@ -2065,9 +2106,11 @@ impl EfirTimer {
     pub async fn manual_add(self: &Arc<Self>, secs: i64) {
         let mut i = self.inner.lock().await;
         i.st.time_left += secs;
-        if i.st.time_left > 0 && !i.st.victory && !i.st.rolling_bonus {
+        if i.st.time_left > 0 && !i.st.victory && !i.st.rolling_bonus && !i.st.running {
             i.st.running = true;
+            i.gen += 1;
             let gen = i.gen;
+            self.send_tick(&i);
             drop(i);
             self.spawn_tick(gen);
         } else {
@@ -2085,11 +2128,20 @@ impl EfirTimer {
         self.send_tick(&i);
     }
 
-    pub async fn manual_set(&self, secs: i64) {
+    pub async fn manual_set(self: &Arc<Self>, secs: i64) {
         let mut i = self.inner.lock().await;
         i.st.time_left = secs.max(0);
         if i.st.time_left > 0 {
             i.st.victory = false;
+            if !i.st.running && !i.st.rolling_bonus {
+                i.st.running = true;
+                i.gen += 1;
+                let gen = i.gen;
+                self.send_tick(&i);
+                drop(i);
+                self.spawn_tick(gen);
+                return;
+            }
         }
         self.send_tick(&i);
     }
@@ -2840,5 +2892,29 @@ mod tests {
         let cfg = import_efir_export(&json).expect("parse export");
         println!("IMPORTED_CFG:{}", serde_json::to_string(&cfg).unwrap());
         assert!(!cfg.roulettes.is_empty());
+    }
+
+    #[tokio::test]
+    async fn manual_add_does_not_multiply_tick_tasks() {
+        let dir = std::env::temp_dir().join(format!("chlg-efir-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let settings = Arc::new(Mutex::new(SettingsStore::load(&dir)));
+        let (tx, _) = broadcast::channel(64);
+        let timer = EfirTimer::new(settings, tx);
+
+        timer.start(100).await;
+        let gen_after_start = timer.inner.lock().await.gen;
+        // Repeated manual_add while already running must NOT spawn duplicate
+        // tick tasks or leave stale generations alive.
+        for _ in 0..5 {
+            timer.manual_add(60).await;
+        }
+        assert_eq!(timer.inner.lock().await.gen, gen_after_start);
+        assert_eq!(timer.inner.lock().await.st.time_left, 400);
+        tokio::time::sleep(Duration::from_millis(1250)).await;
+        let left = timer.inner.lock().await.st.time_left;
+        assert!((398..=399).contains(&left), "expected ~1s tick, got time_left={left}");
+        timer.stop().await;
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -285,6 +285,10 @@ fn router(sh: Arc<Shared>) -> Router {
             "/health",
             get(|| async { Json(json!({"ok": true, "bridge": "chlauncher"})) }),
         )
+        .route(
+            "/api/stream/health",
+            get(|| async { Json(json!({"ok": true, "bridge": "chlauncher"})) }),
+        )
         .route("/api/stream/events", get(events))
         .route("/api/stream/ingest", post(ingest))
         .route("/api/stream/claim", post(claim))

@@ -43,12 +43,10 @@ export default function LibraryPage() {
   const [tab, setTab] = useState<string>('all');
   const [editing, setEditing] = useState<string | null>(null);
 
-  /** Card icon URL — pack icon file via /games-assets on the local overlay server. */
+  /** Card icon URL — `p.icon` from Rust already carries `/games-assets/<dir>/...`. */
   const iconUrl = (p: BuiltinGameMeta) => {
     const origin = overlayUrl.match(/^(https?:\/\/[^/]+)/)?.[1];
-    return p.icon && p.assets_base && origin
-      ? `${origin}/games-assets/${p.assets_base}/${p.icon}`
-      : null;
+    return p.icon && origin ? `${origin}${p.icon}` : null;
   };
 
   const refresh = useCallback(() => {
@@ -73,13 +71,17 @@ export default function LibraryPage() {
     ...new Set(packs.map((p) => p.section).filter((s): s is string => !!s)),
   ].sort((a, b) => a.localeCompare(b));
 
+  /** Бесплатный пакет (`free:true` или своя локальная папка) vs «По тарифу». */
+  const isFreePack = (p: BuiltinGameMeta) =>
+    p.free === true || (!!p.user_pack && !p.overridden);
+
   /** Фильтр пакета под активную вкладку. */
   const packVisible = (p: BuiltinGameMeta) =>
     tab === 'all' ||
     (tab === 'free'
-      ? p.allowed
+      ? isFreePack(p)
       : tab === 'paid'
-        ? !p.allowed
+        ? !isFreePack(p)
         : tab === 'afk'
           ? p.afk
           : p.section === tab);
@@ -208,32 +210,42 @@ export default function LibraryPage() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground line-clamp-2">
-              Обратный отсчёт на экране: зрители продлевают эфир подарками,
-              лайками, подписками и репостами. Правила и темы — на странице «Таймер».
+              EFIR-таймер со щитом, руинером, бустами, рулетками и кошельками зрителей.
+              Настройка триггеров и тем — на странице «Таймер».
             </p>
           </CardContent>
-          <CardFooter>
+          <CardFooter className="flex-wrap gap-2">
             <Button
               size="sm"
               disabled={!!busy.__timer}
-              onClick={act('__timer', 'open', () => api.openOverlayWindow('overlay/timer', false))}
+              onClick={act('__timer', 'open', () => api.openTimerWindow('timer', false))}
             >
               <Play size={14} /> Открыть окно
             </Button>
             <Button
               size="sm"
               variant="secondary"
+              disabled={!!busy.__timer}
               title="Пурпурный фон — для chroma-key в LIVE Studio"
-              onClick={act('__timer', 'open', () => api.openOverlayWindow('overlay/timer', true))}
+              onClick={act('__timer', 'open', () => api.openTimerWindow('timer', true))}
             >
               Chroma
             </Button>
             <Button
               size="sm"
+              variant="outline"
+              disabled={!!busy.__timer}
+              title="Открыть пульт управления таймером"
+              onClick={act('__timer', 'pult', () => api.openTimerWindow('pult', false))}
+            >
+              Пульт
+            </Button>
+            <Button
+              size="sm"
               variant="ghost"
               disabled={!!busy.__timer}
-              title="Закрыть окно захвата таймера"
-              onClick={act('__timer', 'close', () => api.closeOverlayWindow('overlay/timer'))}
+              title="Закрыть окно таймера"
+              onClick={act('__timer', 'close', () => api.closeTimerWindow('timer'))}
             >
               <Square size={14} /> Закрыть
             </Button>
@@ -248,7 +260,12 @@ export default function LibraryPage() {
           .map((p) =>
           p.remote ? (
             p.launch?.kind === 'roblox' ? (
-              <RobloxCard key={p.id} />
+              <RobloxCard
+                key={p.id}
+                pack={p}
+                iconUrl={iconUrl(p)}
+                onEdit={isAdmin ? () => setEditing(p.id) : undefined}
+              />
             ) : (
               <Card key={p.id} className="overflow-hidden">
                 <div className="h-24 bg-gradient-to-br from-sky-500/30 to-indigo-500/30 flex items-end justify-center p-2">
@@ -327,6 +344,7 @@ export default function LibraryPage() {
                 <Button
                   size="sm"
                   disabled={!!busy[p.id] || !p.allowed}
+                  title={p.allowed ? '' : 'Игра по тарифу — активируйте подписку'}
                   onClick={act(p.id, 'open', async () => {
                     await api.gameStart(p.id);
                     await api.openOverlayWindow((p.overlay_path ?? '').replace(/^\//, ''), false);
@@ -338,7 +356,11 @@ export default function LibraryPage() {
                   size="sm"
                   variant="secondary"
                   disabled={!!busy[p.id] || !p.allowed}
-                  title="Пурпурный фон — для chroma-key в LIVE Studio"
+                  title={
+                    p.allowed
+                      ? 'Пурпурный фон — для chroma-key в LIVE Studio'
+                      : 'Игра по тарифу — активируйте подписку'
+                  }
                   onClick={act(p.id, 'open', async () => {
                     await api.gameStart(p.id);
                     await api.openOverlayWindow((p.overlay_path ?? '').replace(/^\//, ''), true);

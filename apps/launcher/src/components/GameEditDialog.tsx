@@ -101,8 +101,9 @@ export default function GameEditDialog({ gameId, sections, onClose }: Props) {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Сохраняется как свой манифест в <code>games/{meta?.dir_name ?? gameId}/game.json</code> —
-            поля, которые не трогаешь, наследуют стандартные значения.
+            Для встроенных игр разделы и флаги синхронизируются на хост для всех
+            пользователей; локальные поля сохраняются в{' '}
+            <code>games/{meta?.dir_name ?? gameId}/game.json</code>.
           </p>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 text-sm">
@@ -176,7 +177,7 @@ export default function GameEditDialog({ gameId, sections, onClose }: Props) {
                       АФК-стрим
                       <Switch
                         checked={manifest.afk === true}
-                        onCheckedChange={(v) => set('afk', v || undefined)}
+                        onCheckedChange={(v) => set('afk', v)}
                       />
                     </label>
                     <label
@@ -186,14 +187,14 @@ export default function GameEditDialog({ gameId, sections, onClose }: Props) {
                       Без тарифа
                       <Switch
                         checked={manifest.free === true}
-                        onCheckedChange={(v) => set('free', v || undefined)}
+                        onCheckedChange={(v) => set('free', v)}
                       />
                     </label>
                     <label className="flex items-center gap-2 text-muted-foreground">
                       Скрытая
                       <Switch
                         checked={manifest.hidden === true}
-                        onCheckedChange={(v) => set('hidden', v || undefined)}
+                        onCheckedChange={(v) => set('hidden', v)}
                       />
                     </label>
                   </div>

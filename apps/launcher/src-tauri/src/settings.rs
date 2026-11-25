@@ -123,6 +123,10 @@ pub struct Settings {
     /// config, applied by the overlay game pages via gamekit.js.
     #[serde(default)]
     pub builtin_games: HashMap<String, crate::types::BuiltinGameCfg>,
+    /// Cached host-level pack overrides from `/api/account/entitlements` so
+    /// section distribution works immediately on cold/offline startup.
+    #[serde(default)]
+    pub pack_overrides: HashMap<String, serde_json::Value>,
 }
 
 /// Managed Minecraft server configuration (parity spec §9.2–§9.3).

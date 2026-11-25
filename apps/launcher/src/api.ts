@@ -584,6 +584,9 @@ export const robloxStreamStatus = () => cmd<RobloxStreamStatus>('roblox_stream_s
 /** Syncs the local stream-key copy with the server (manual `!key` fallback). */
 export const robloxStreamKeySync = () => cmd<string>('roblox_stream_key_sync');
 
+/** Rotates the stream key — kills leaked keys and resets room/Roblox binding. */
+export const robloxStreamKeyRotate = () => cmd<string>('roblox_stream_key_rotate');
+
 /** Sanitized diagnostics report text (no secrets) — for bug reports. */
 export const getDiagnostics = () => cmd<string>('get_diagnostics');
 
@@ -851,7 +854,7 @@ export const efirtimerImport = (json: string) =>
   cmd<import('./types').EfirTimerCfg>('efirtimer_import', { json });
 export const efirtimerCardPick = (index: number) =>
   cmd<boolean>('efirtimer_card_pick', { index });
-export const openTimerWindow = (kind: 'timer' | 'roll' | 'stats' | 'pult') =>
-  cmd<void>('open_timer_window', { kind });
+export const openTimerWindow = (kind: 'timer' | 'roll' | 'stats' | 'pult', chroma = false) =>
+  cmd<void>('open_timer_window', { kind, chroma });
 export const closeTimerWindow = (kind: 'timer' | 'roll' | 'stats' | 'pult') =>
   cmd<void>('close_timer_window', { kind });

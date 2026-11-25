@@ -47,9 +47,11 @@ pub struct GameEntry {
     pub icon: Option<String>,
     /// `afk: true` in the manifest — idle/viewer-driven («АФК-стримы»).
     pub afk: bool,
-    /// `free: true` in the manifest — bundled pack exempt from the plan
-    /// allow-list («Бесплатные» vs «По тарифу» distribution).
+    /// Effective `free` flag for UI tabs («Бесплатные» vs «По тарифу»).
     pub free: bool,
+    /// Raw manifest `free` (`Some(true)` = exempt from plan gate,
+    /// `Some(false)` = requires paid plan, `None` = defer to plan list).
+    pub free_explicit: Option<bool>,
     /// `section` in the manifest — custom library tab name.
     pub section: Option<String>,
     /// `true` — user `game.json` patches a bundled pack (editable entry).
@@ -92,6 +94,7 @@ fn registry_from(packs: Vec<crate::game_packs::GamePack>) -> Vec<GameEntry> {
                 icon: p.manifest.icon.clone(),
                 afk: p.is_afk(),
                 free: p.is_free(),
+                free_explicit: p.manifest.free,
                 id: p.id,
             }
         })
@@ -116,13 +119,23 @@ pub fn allowed_games(ent: &Entitlements, data_dir: &Path) -> Vec<String> {
     registry(data_dir)
         .into_iter()
         .filter(|e| {
-            e.user
-                || e.remote
-                || e.free
-                || match &ent.interactive_games {
-                    Some(list) => list.iter().any(|x| x == &e.id),
-                    None => true,
+            if e.user {
+                return true;
+            }
+            match e.free_explicit {
+                Some(true) => true,
+                Some(false) => ent.paid_games,
+                None => {
+                    if e.remote {
+                        ent.paid_games
+                    } else {
+                        match &ent.interactive_games {
+                            Some(list) => list.iter().any(|x| x == &e.id),
+                            None => true,
+                        }
+                    }
                 }
+            }
         })
         .map(|e| e.id)
         .collect()
@@ -279,8 +292,8 @@ pub fn validate_cfg(v: &serde_json::Value) -> Result<(), String> {
     }
     if let Some(rules) = obj.get("rules") {
         let arr = rules.as_array().ok_or("rules must be an array")?;
-        if arr.len() > 64 {
-            return Err("rules: max 64 entries".into());
+        if arr.len() > 128 {
+            return Err("rules: max 128 entries".into());
         }
         for (i, r) in arr.iter().enumerate() {
             if r.get("event").and_then(|e| e.as_str()).is_none()
@@ -312,7 +325,7 @@ pub fn catalog_view(
                 "id": g.id,
                 "title": g.title,
                 "desc": g.desc,
-                "allowed": g.remote || allowed.iter().any(|a| a == &g.id),
+                "allowed": allowed.iter().any(|a| a == &g.id),
                 "pack": !g.remote,
                 "remote": g.remote,
                 "user_pack": g.user,
@@ -395,24 +408,34 @@ mod tests {
             .filter(|e| !e.user && !e.remote)
             .map(|e| e.id)
             .collect();
-        // Prototype packs are `hidden: true` — the only live bundled
-        // pack today is patrick_cabbage.
         assert!(bundled.contains(&"patrick_cabbage".to_string()));
+        assert!(bundled.contains(&"aquarium".to_string()));
         let mut ent = Entitlements {
+            paid_games: false,
             interactive_games: Some(vec!["patrick_cabbage".into()]),
             ..Default::default()
         };
         let allowed = allowed_games(&ent, &empty);
         assert!(allowed.contains(&"patrick_cabbage".to_string()));
+        // aquarium ships with `free: true` → allowed even when omitted from list.
+        assert!(allowed.contains(&"aquarium".to_string()));
+        // roblox_sts is remote without `free: true` → gated by `paid_games`.
+        assert!(!allowed.contains(&"roblox_sts".to_string()));
+        ent.paid_games = true;
         ent.interactive_games = None;
-        // None = «all bundled» + user/remote extras.
+        // None + paid_games = «all bundled + remote».
         assert!(bundled
             .iter()
             .all(|id| allowed_games(&ent, &empty).contains(id)));
+        assert!(allowed_games(&ent, &empty).contains(&"roblox_sts".to_string()));
+        ent.paid_games = false;
         ent.interactive_games = Some(vec![]);
-        // Empty list still exempts remote/user entries; bundled vanish.
+        // Empty list on free plan: `free:true` (aquarium) stays, plan-gated
+        // bundled (patrick_cabbage) and paid remote (roblox_sts) vanish.
         let allowed = allowed_games(&ent, &empty);
-        assert!(!allowed.iter().any(|i| bundled.contains(i)));
+        assert!(allowed.contains(&"aquarium".to_string()));
+        assert!(!allowed.contains(&"patrick_cabbage".to_string()));
+        assert!(!allowed.contains(&"roblox_sts".to_string()));
         let _ = std::fs::remove_dir_all(&empty);
     }
 
