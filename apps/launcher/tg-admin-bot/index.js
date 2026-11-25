@@ -374,6 +374,25 @@ function probeLoad() {
 
 /** Is the bind-bot (tg-bot) process alive? Best-effort, cross-platform. */
 function probeBindBot() {
+  // Primary: bot.pid written by tg-bot on start — reliable regardless of
+  // how the process was launched (cwd-relative `node index.js` command
+  // lines don't contain the path we'd grep for).
+  try {
+    const pidFile = path.resolve(BOT_DIR, '..', 'tg-bot', 'bot.pid');
+    const pid = Number(fs.readFileSync(pidFile, 'utf8').trim());
+    if (pid > 0) {
+      process.kill(pid, 0); // throws ESRCH when dead, EPERM means alive
+      return { ok: 'ok', line: `Bind-бот: жив (pid ${pid})` };
+    }
+  } catch (e) {
+    if (e && e.code === 'ESRCH') {
+      return { ok: 'warn', line: 'Bind-бот: процесс мёртв (устаревший bot.pid)' };
+    }
+    if (e && e.code === 'EPERM') {
+      return { ok: 'ok', line: 'Bind-бот: жив (pid файл, EPERM)' };
+    }
+    // ENOENT etc. — fall through to the command-line search.
+  }
   try {
     if (process.platform === 'win32') {
       const ps =

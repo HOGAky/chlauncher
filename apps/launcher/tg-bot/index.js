@@ -61,6 +61,13 @@ for (const m of ['log', 'warn', 'error']) {
   };
 }
 
+// Liveness marker for the admin-bot health probe: pid file lets /check
+// verify the process is alive regardless of how it was launched
+// (`node index.js` cwd-relative command lines are indistinguishable).
+try {
+  fs.writeFileSync(path.join(BOT_DIR, 'bot.pid'), String(process.pid));
+} catch { /* read-only dir — probe falls back to command-line search */ }
+
 const TOKEN = process.env.TG_BOT_TOKEN;
 const SECRET = process.env.TG_BIND_SECRET;
 const SERVER = (process.env.SERVER_URL || 'http://127.0.0.1:8787').replace(/\/+$/, '');
