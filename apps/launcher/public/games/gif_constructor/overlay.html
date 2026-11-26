@@ -6,59 +6,45 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; overflow: hidden; background: transparent; }
-  body { font-family: 'Segoe UI', system-ui, sans-serif; user-select: none; color: #dff1ff; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; user-select: none; color: #e6e9ff; }
 
-  /* ══ Сцена ══ */
-  #tank { position: absolute; inset: 0; overflow: hidden;
-    background: linear-gradient(180deg, #0e3a5e 0%, #0a2c4a 45%, #071e33 100%); }
+  /* ══ Сцена — нейтральная студия: тёмный градиент + мягкое пятно света ══ */
+  #stage { position: absolute; inset: 0; overflow: hidden;
+    background:
+      radial-gradient(ellipse 90% 55% at 50% 30%, rgba(90,110,220,.22), transparent 70%),
+      linear-gradient(180deg, #14172e 0%, #0e1022 55%, #0a0c1a 100%); }
+  #stage::after { content: ''; position: absolute; left: 8%; right: 8%; bottom: 7%; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(150,160,255,.35), transparent); }
   #bgImg { position: absolute; inset: 0; width: 100%; height: 100%;
     object-fit: cover; display: none; pointer-events: none; }
-  /* Свой фон или Chroma-режим скрывают дефолтный подводный декор. */
-  #tank.custombg .ray, #tank.custombg #sand, #tank.custombg .weed,
-  #tank.chroma .ray, #tank.chroma #sand, #tank.chroma .weed, #tank.chroma #ambients { display: none; }
-  .ray { position: absolute; top: -20%; width: 90px; height: 130%; pointer-events: none;
-    background: linear-gradient(180deg, rgba(140,200,255,.14), transparent 75%);
-    transform: skewX(-14deg); animation: ray-sway 9s ease-in-out infinite alternate; }
-  @keyframes ray-sway { to { transform: skewX(-10deg) translateX(30px); opacity: .6; } }
-  #sand { position: absolute; left: 0; right: 0; bottom: 0; height: 11%; pointer-events: none;
-    background: linear-gradient(180deg, #c9a86b 0%, #a8854e 60%, #7d6138 100%);
-    border-top: 3px solid rgba(255,235,190,.35); }
-  .weed { position: absolute; bottom: 8%; width: 14px; border-radius: 8px 8px 0 0; pointer-events: none;
-    background: linear-gradient(180deg, #2fae7a, #1c7a52);
-    transform-origin: bottom center; animation: weed-sway 5s ease-in-out infinite alternate; }
-  @keyframes weed-sway { to { transform: rotate(6deg); } }
-  .amb { position: absolute; bottom: -30px; border-radius: 50%; pointer-events: none;
-    border: 2px solid rgba(140,200,255,.5); background: rgba(160,210,255,.12);
-    animation: amb-rise linear infinite; }
-  @keyframes amb-rise { to { transform: translateY(-115vh); opacity: 0; } }
 
-  /* ══ Персонаж: режимы движения swim | center | static + масштаб --pet-scale ══ */
-  #fishStage { position: absolute; inset: 0; pointer-events: none; --pet-scale: 1; }
-  #fishWrap { position: absolute; top: 36%; left: 0; width: calc(210px * var(--pet-scale));
+  /* ══ Персонаж: режимы движения drift | bob | static + масштаб --pet-scale ══ */
+  #charStage { position: absolute; inset: 0; pointer-events: none; --pet-scale: 1; }
+  #charWrap { position: absolute; top: 34%; left: 0; width: calc(210px * var(--pet-scale));
     display: flex; justify-content: center; align-items: center; }
-  #fishWrap.mode-swim { animation: swim 14s ease-in-out infinite; }
-  #fishWrap.mode-center { left: 50%; transform: translate(-50%, -20%); animation: center-bob 3.2s ease-in-out infinite; }
-  #fishWrap.mode-static { left: 50%; transform: translate(-50%, -20%); }
-  #fish { width: 100%; height: auto; pointer-events: none;
-    filter: drop-shadow(0 4px 10px rgba(0,0,0,.38)); }
-  #fishWrap.mode-swim #fish { animation: face 14s steps(1) infinite, bob 2.6s ease-in-out infinite; }
-  #fishWrap.excited.mode-swim { animation-duration: 4.5s; }
-  #fishWrap.excited.mode-swim #fish { animation-duration: 4.5s, 1.0s; }
-  #fishWrap.excited.mode-center, #fishWrap.excited.mode-static { animation: pet-jump .55s ease-in-out 4; }
-  #fishWrap.royal #fish { filter: drop-shadow(0 0 16px rgba(255,205,60,.95)); }
-  @keyframes swim {
+  #charWrap.mode-drift { animation: drift 14s ease-in-out infinite; }
+  #charWrap.mode-bob { left: 50%; transform: translate(-50%, -10%); animation: center-bob 3.2s ease-in-out infinite; }
+  #charWrap.mode-static { left: 50%; transform: translate(-50%, -10%); }
+  #char { width: 100%; height: auto; pointer-events: none;
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,.45)); display: none; }
+  #charWrap.mode-drift #char { animation: face 14s steps(1) infinite, bob 2.6s ease-in-out infinite; }
+  #charWrap.excited.mode-drift { animation-duration: 4.5s; }
+  #charWrap.excited.mode-drift #char { animation-duration: 4.5s, 1.0s; }
+  #charWrap.excited.mode-bob, #charWrap.excited.mode-static { animation: pet-jump .55s ease-in-out 4; }
+  #charWrap.royal #char { filter: drop-shadow(0 0 16px rgba(255,205,60,.95)); }
+  @keyframes drift {
     0%, 100% { transform: translateX(6vw) translateY(0); }
     25% { transform: translateX(30vw) translateY(-16px); }
     50% { transform: translateX(56vw) translateY(0); }
     75% { transform: translateX(30vw) translateY(16px); }
   }
   @keyframes center-bob {
-    0%, 100% { transform: translate(-50%, -20%) translateY(0); }
-    50% { transform: translate(-50%, -20%) translateY(-12px); }
+    0%, 100% { transform: translate(-50%, -10%) translateY(0); }
+    50% { transform: translate(-50%, -10%) translateY(-12px); }
   }
   @keyframes pet-jump {
-    0%, 100% { transform: translate(-50%, -20%) scale(1); }
-    50% { transform: translate(-50%, -28%) scale(1.08); }
+    0%, 100% { transform: translate(-50%, -10%) scale(1); }
+    50% { transform: translate(-50%, -18%) scale(1.08); }
   }
   @keyframes face {
     0%, 49.9% { transform: scaleX(1); }
@@ -66,16 +52,27 @@
   }
   @keyframes bob { 50% { translate: 0 -8px; rotate: -2deg; } }
 
+  /* ══ Пустая сцена: подсказка, пока не загружена своя гифка ══ */
+  #emptyHint { position: absolute; top: 30%; left: 50%; transform: translateX(-50%);
+    width: 62%; padding: 26px 18px; text-align: center; pointer-events: none;
+    border: 2px dashed rgba(150,160,255,.4); border-radius: 16px;
+    background: rgba(20,24,52,.55); color: #aeb7e8; }
+  #emptyHint .big { font-size: 40px; display: block; margin-bottom: 8px; }
+  #emptyHint .t1 { font: 700 16px system-ui; color: #dfe4ff; }
+  #emptyHint .t2 { font-size: 12px; margin-top: 5px; line-height: 1.45; }
+  #emptyHint.hidden { display: none; }
+
   /* ══ Эффекты ══ */
   .fx { position: absolute; inset: 0; pointer-events: none; }
-  .pellet { position: absolute; top: 6%; width: 10px; height: 10px; border-radius: 50%;
-    background: radial-gradient(circle at 35% 35%, #ffd27a, #c98a2e);
-    animation: pellet-fall 1.25s ease-in forwards; }
-  @keyframes pellet-fall { to { transform: translateY(38vh); opacity: 0; } }
-  .bub { position: absolute; bottom: 12%; border-radius: 50%;
-    border: 2px solid rgba(150,205,255,.85); background: rgba(160,210,255,.25);
-    animation: bub-rise 1.8s ease-out forwards; }
-  @keyframes bub-rise { to { transform: translateY(-54vh) scale(1.5); opacity: 0; } }
+  .star { position: absolute; top: 6%; width: 12px; height: 12px;
+    background: radial-gradient(circle at 40% 35%, #ffe9a8, #f2a93b);
+    clip-path: polygon(50% 0, 62% 36%, 100% 38%, 70% 60%, 82% 100%, 50% 76%, 18% 100%, 30% 60%, 0 38%, 38% 36%);
+    animation: star-fall 1.25s ease-in forwards; }
+  @keyframes star-fall { to { transform: translateY(38vh) rotate(140deg); opacity: 0; } }
+  .spark { position: absolute; bottom: 12%; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #cfd4ff, #7b83e8 65%, transparent 75%);
+    animation: spark-rise 1.8s ease-out forwards; }
+  @keyframes spark-rise { to { transform: translateY(-54vh) scale(1.5); opacity: 0; } }
   .zap { position: absolute; left: 8%; height: 3px; width: 44%;
     background: linear-gradient(90deg, transparent, #ffe066, transparent);
     animation: zap-flash .8s ease-out forwards; }
@@ -95,23 +92,23 @@
   #cards { position: absolute; top: 46px; right: 10px; display: flex;
     flex-direction: column; gap: 7px; align-items: flex-end; z-index: 15; pointer-events: none; }
   .card { position: relative; display: flex; gap: 8px; align-items: center; padding: 5px 12px 5px 6px;
-    background: rgba(8,20,35,.86); border: 1px solid rgba(120,190,255,.35);
-    border-radius: 999px; color: #dff1ff; font-size: 14px; font-weight: 600;
+    background: rgba(16,18,40,.88); border: 1px solid rgba(140,150,255,.35);
+    border-radius: 999px; color: #e6e9ff; font-size: 14px; font-weight: 600;
     animation: card-in .3s cubic-bezier(.2,1.4,.4,1); transition: opacity .3s, transform .25s; }
   .card.out { opacity: 0; transform: translateX(40px); }
   .card .av { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex: none; }
   .card .av-init { display: grid; place-items: center; font: 700 12px system-ui; color: #fff; }
   .card .gf { width: 22px; height: 22px; object-fit: contain; }
   .card .nm { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .card .act { color: #8fd3ff; font-weight: 500; font-size: 12px; }
+  .card .act { color: #aab4ff; font-weight: 500; font-size: 12px; }
   .card .cb { background: #ffb340; color: #241500; border-radius: 10px; font: 800 11px system-ui; padding: 1px 6px; }
   @keyframes card-in { from { transform: translateX(60px); opacity: 0; } }
 
   /* ══ Статистика и пауза ══ */
   #stats { position: absolute; left: 10px; bottom: 12%; display: flex; flex-wrap: wrap; gap: 6px;
     z-index: 15; pointer-events: none; }
-  .stat { padding: 4px 11px; border-radius: 999px; font-size: 12px; color: #cfe8ff;
-    background: rgba(8,20,35,.72); border: 1px solid rgba(120,190,255,.25); }
+  .stat { padding: 4px 11px; border-radius: 999px; font-size: 12px; color: #d6dbff;
+    background: rgba(16,18,40,.75); border: 1px solid rgba(140,150,255,.28); }
   #pause { position: absolute; inset: 0; display: none; place-items: center; z-index: 25;
     font: 800 42px system-ui; background: rgba(0,0,0,.5); text-shadow: 0 3px 14px #000; pointer-events: none; }
 
@@ -121,51 +118,47 @@
 
   /* ══ Конструктор (Tab/D или кнопка ⚙️) ══ */
   #gearBtn { position: fixed; top: 8px; left: 8px; z-index: 46; width: 32px;
-    height: 32px; border-radius: 8px; border: 1px solid rgba(130,180,255,.45); background: rgba(14,24,46,.82);
-    color: #cfe0ff; font-size: 16px; cursor: pointer; opacity: .52; transition: opacity .2s, background .2s; }
-  #gearBtn:hover, #gearBtn.on { opacity: .98; background: rgba(24,40,74,.96); }
+    height: 32px; border-radius: 8px; border: 1px solid rgba(140,150,255,.45); background: rgba(18,20,44,.82);
+    color: #dfe4ff; font-size: 16px; cursor: pointer; opacity: .52; transition: opacity .2s, background .2s; }
+  #gearBtn:hover, #gearBtn.on { opacity: .98; background: rgba(30,34,70,.96); }
   #panel { position: fixed; top: 44px; left: 8px; right: 8px; max-width: 360px; max-height: calc(100vh - 54px);
-    overflow-y: auto; display: none; background: rgba(10,16,32,.96);
-    border: 1px solid #3a4a6a; border-radius: 12px; padding: 11px;
-    color: #cfe0ff; font-size: 12px; z-index: 45; box-shadow: 0 12px 34px rgba(0,0,0,.55); }
+    overflow-y: auto; display: none; background: rgba(14,16,36,.96);
+    border: 1px solid #40466e; border-radius: 12px; padding: 11px;
+    color: #dfe4ff; font-size: 12px; z-index: 45; box-shadow: 0 12px 34px rgba(0,0,0,.55); }
   #panel.show { display: block; }
-  .sec { padding: 8px; border: 1px solid #263552; border-radius: 9px; background: rgba(255,255,255,.03); margin-bottom: 8px; }
+  .sec { padding: 8px; border: 1px solid #2e3560; border-radius: 9px; background: rgba(255,255,255,.03); margin-bottom: 8px; }
   .sec .t { font-weight: 700; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center; }
-  #panel button { background: #22314e; color: #cfe0ff; border: 1px solid #3a4a6a;
+  #panel button { background: #2a3157; color: #dfe4ff; border: 1px solid #40466e;
     border-radius: 6px; padding: 4px 9px; cursor: pointer; font-size: 12px; }
-  #panel button:hover { background: #2c3f63; }
+  #panel button:hover { background: #353e6e; }
   #panel select, #panel input[type=text], #panel input[type=number] {
-    background: #16223c; color: #cfe0ff; border: 1px solid #3a4a6a;
+    background: #1c2144; color: #dfe4ff; border: 1px solid #40466e;
     border-radius: 5px; padding: 3px 6px; font-size: 12px; }
-  #panel .msg { margin-top: 5px; color: #8fd3ff; font-size: 11px; min-height: 14px; }
-  .prev { max-width: 110px; max-height: 68px; border-radius: 6px; margin-top: 6px; display: none; border: 1px solid #2c3a58; }
+  #panel .msg { margin-top: 5px; color: #aab4ff; font-size: 11px; min-height: 14px; }
+  .prev { max-width: 110px; max-height: 68px; border-radius: 6px; margin-top: 6px; display: none; border: 1px solid #363d68; }
   .ctrl-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 5px; }
-  .ctrl-row input[type=range] { flex: 1; accent-color: #5ec2ff; }
+  .ctrl-row input[type=range] { flex: 1; accent-color: #8b95ff; }
   .test-bar { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
   .test-bar button { padding: 3px 7px; font-size: 11px; }
 
   .rule { display: grid; grid-template-columns: 1fr; gap: 4px; padding: 6px;
-    background: rgba(255,255,255,.04); border: 1px solid #2c3a58; border-radius: 8px; margin-bottom: 6px; }
+    background: rgba(255,255,255,.04); border: 1px solid #363d68; border-radius: 8px; margin-bottom: 6px; }
   .rule .row { display: flex; gap: 4px; align-items: center; }
   .rule input.cond { flex: 1; min-width: 0; }
   .rule .del { margin-left: auto; padding: 2px 8px; }
-  .hint { color: #7f95bd; font-size: 11px; margin-bottom: 6px; line-height: 1.35; }
+  .hint { color: #8890c0; font-size: 11px; margin-bottom: 6px; line-height: 1.35; }
 </style>
 </head>
 <body>
-  <div id="tank">
+  <div id="stage">
     <img id="bgImg" alt="">
-    <div class="ray" style="left:18%"></div>
-    <div class="ray" style="left:46%; animation-delay:-4s"></div>
-    <div class="ray" style="left:74%; animation-delay:-7s"></div>
-    <div id="sand"></div>
-    <div id="ambients"></div>
-    <div class="weed" style="left:7%; height:90px"></div>
-    <div class="weed" style="left:12%; height:64px; animation-delay:-2s"></div>
-    <div class="weed" style="right:9%; height:110px; animation-delay:-3.5s"></div>
-    <div class="weed" style="right:15%; height:70px; animation-delay:-1s"></div>
-    <div id="fishStage">
-      <div id="fishWrap" class="mode-swim"><img id="fish" alt="" draggable="false"></div>
+    <div id="emptyHint">
+      <span class="big">🖼</span>
+      <div class="t1">Загрузите свою гифку</div>
+      <div class="t2">⚙️ в углу → «Выбрать файл…»<br>или перетащите GIF прямо в окно</div>
+    </div>
+    <div id="charStage">
+      <div id="charWrap" class="mode-drift"><img id="char" alt="" draggable="false"></div>
     </div>
     <div id="fxLayer" class="fx"></div>
   </div>
@@ -173,7 +166,7 @@
   <button id="gearBtn" title="Конструктор (Tab/D)" type="button">⚙️</button>
   <div id="cards"></div>
   <div id="stats">
-    <span class="stat" id="stFed">🐟 Корм: 0</span>
+    <span class="stat" id="stFx">⚡ Эффектов: 0</span>
     <span class="stat" id="stTop">👑 —</span>
     <span class="stat" id="stRules" style="display:none">⚙️ свои правила</span>
   </div>
@@ -181,18 +174,18 @@
 
   <div id="panel">
     <div class="sec" id="petDrop">
-      <div class="t"><span>🐟 Своя гифка / персонаж</span></div>
+      <div class="t"><span>� Своя гифка / персонаж</span></div>
       <div>
         <button id="devPick" type="button">Выбрать файл…</button>
-        <button id="devReset" type="button">Стандартная</button>
+        <button id="devReset" type="button">Убрать</button>
       </div>
       <div class="msg" id="devMsg">GIF / WebP / PNG / JPG (можно перетащить файл сюда)</div>
       <img id="devPrev" class="prev" alt="">
       <div class="ctrl-row">
         <span>Движение</span>
         <select id="petMode">
-          <option value="swim">Плавает по сцене</option>
-          <option value="center">Покачивается в центре</option>
+          <option value="drift">Движется по сцене</option>
+          <option value="bob">Покачивается в центре</option>
           <option value="static">Стоит на месте</option>
         </select>
       </div>
@@ -208,7 +201,7 @@
         <button id="bgPick" type="button">Выбрать фон…</button>
         <button id="bgReset" type="button">Стандартный</button>
       </div>
-      <div class="msg" id="bgMsg">PNG / JPG / WebP / GIF — заменяет аквариум</div>
+      <div class="msg" id="bgMsg">PNG / JPG / WebP / GIF — заменяет стандартный фон</div>
       <img id="bgPrev" class="prev" alt="">
     </div>
 
@@ -228,7 +221,7 @@
 
     <div class="sec">
       <div class="t"><span>⚙️ Правила событий</span></div>
-      <div class="hint">Подарок — имена через запятую (Rose, Galaxy) или мин. монеты; комментарий — слово или команда (!корм).</div>
+      <div class="hint">Подарок — имена через запятую (Rose, Galaxy) или мин. монеты; комментарий — слово или команда (!звезды).</div>
       <div id="ruleRows"></div>
       <div>
         <button id="ruleAdd" type="button">+ Правило</button>
@@ -237,9 +230,9 @@
       </div>
       <div class="msg" id="ruleMsg"></div>
       <div class="test-bar">
-        <button type="button" data-test="nudge">1 Покачать</button>
-        <button type="button" data-test="feed">2 Корм</button>
-        <button type="button" data-test="bubble">3 Пузыри</button>
+        <button type="button" data-test="nudge">1 Толчок</button>
+        <button type="button" data-test="feed">2 Звёзды</button>
+        <button type="button" data-test="bubble">3 Частицы</button>
         <button type="button" data-test="zap">4 Молния</button>
         <button type="button" data-test="heart">5 Сердца</button>
         <button type="button" data-test="crown">6 Корона</button>
@@ -253,14 +246,13 @@ const QS = new URLSearchParams(location.search);
 const TOKEN = QS.get('t') || '';
 const WTOKEN = QS.get('w') || '';
 const BG = QS.get('bg') || '';
-const GAME = QS.get('g') || 'aquarium';
-const packDir = 'aquarium';
-const AB = '/games-assets/aquarium';
+const GAME = QS.get('g') || 'gif_constructor';
+const packDir = 'gif_constructor';
+const AB = '/games-assets/gif_constructor';
 
-const tank = document.getElementById('tank');
+const stage = document.getElementById('stage');
 if (BG) {
-  tank.classList.add('chroma');
-  tank.style.background = '#' + BG.replace(/[^0-9a-fA-F]/g, '').slice(0, 6);
+  stage.style.background = '#' + BG.replace(/[^0-9a-fA-F]/g, '').slice(0, 6);
 }
 if (!WTOKEN) {
   document.getElementById('gearBtn').style.display = 'none';
@@ -270,36 +262,33 @@ const PET_EXTS = ['gif', 'webp', 'png', 'jpg', 'jpeg'];
 const BG_EXTS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
 const SFX_EXTS = ['mp3', 'wav', 'ogg'];
 
-const FISH_DEF = `${AB}/sprites/fish.gif?t=${encodeURIComponent(TOKEN)}`;
 const SCENE_URL = `${AB}/scene.json?t=${encodeURIComponent(TOKEN)}`;
 
 const S = {
   cfg: null, defaults: null, eng: null, running: true, startedAt: Date.now(),
-  customRules: false, fed: 0, actionsCount: 0, top: {}, avatars: {}, giftIcons: {},
-  scene: { mode: 'swim', scale: 100 },
-  customSfxUrl: null,
+  customRules: false, actionsCount: 0, top: {}, avatars: {}, giftIcons: {},
+  scene: { mode: 'drift', scale: 100 },
+  customSfxUrl: null, hasPet: false,
 };
 
-const fishStage = document.getElementById('fishStage');
-const fishWrap = document.getElementById('fishWrap');
-const fishImg = document.getElementById('fish');
+const charStage = document.getElementById('charStage');
+const charWrap = document.getElementById('charWrap');
+const charImg = document.getElementById('char');
+const emptyHint = document.getElementById('emptyHint');
 const fxLayer = document.getElementById('fxLayer');
 const cardsBox = document.getElementById('cards');
 const activeCards = new Map();
-
-// Показываем дефолтную гифку сразу, до загрузки конфигов.
-fishImg.src = FISH_DEF;
 
 const EVENTS = [
   ['gift', 'Подарок'], ['like', 'Лайк'], ['comment', 'Комментарий'],
   ['subscribe', 'Подписка'], ['share', 'Репост'], ['follow', 'Подписка на канал'],
 ];
 const ACTIONS = [
-  ['nudge', 'Покачивание'], ['feed', 'Корм'], ['bubble', 'Пузыри'],
+  ['nudge', 'Толчок'], ['feed', 'Звёзды'], ['bubble', 'Частицы'],
   ['zap', 'Молния (разгон)'], ['heart', 'Сердца'], ['crown', 'Корона'],
 ];
 const ACT_LABEL = {
-  nudge: 'подпитал', feed: 'покормил', bubble: 'пузыри',
+  nudge: 'толчок', feed: 'звёзды', bubble: 'частицы',
   zap: 'разогнал', heart: 'любовь', crown: 'корона!',
 };
 const SFX_KIND = {
@@ -313,26 +302,30 @@ function esc(s) {
   );
 }
 
-/* ══ Фоновые пузыри ══ */
-(function ambients() {
-  const box = document.getElementById('ambients');
-  for (let i = 0; i < 10; i++) {
-    const b = document.createElement('span');
-    b.className = 'amb';
-    const s = 5 + Math.random() * 12;
-    b.style.cssText = `left:${5 + Math.random() * 90}%;width:${s}px;height:${s}px;` +
-      `animation-duration:${9 + Math.random() * 8}s;animation-delay:-${Math.random() * 10}s`;
-    box.appendChild(b);
+function setPet(url) {
+  if (url) {
+    charImg.src = url;
+    charImg.style.display = '';
+    emptyHint.classList.add('hidden');
+    S.hasPet = true;
+  } else {
+    charImg.removeAttribute('src');
+    charImg.style.display = 'none';
+    emptyHint.classList.remove('hidden');
+    S.hasPet = false;
   }
-})();
+}
 
 /* ══ Настройки сцены (движение + масштаб) ══ */
 function applyScene() {
-  const mode = ['swim', 'center', 'static'].includes(S.scene.mode) ? S.scene.mode : 'swim';
+  // Legacy scene.json values from the aquarium theme: swim→drift, center→bob.
+  const legacy = { swim: 'drift', center: 'bob' };
+  if (legacy[S.scene.mode]) S.scene.mode = legacy[S.scene.mode];
+  const mode = ['drift', 'bob', 'static'].includes(S.scene.mode) ? S.scene.mode : 'drift';
   const scale = Math.max(40, Math.min(240, Number(S.scene.scale) || 100));
-  fishWrap.classList.remove('mode-swim', 'mode-center', 'mode-static');
-  fishWrap.classList.add('mode-' + mode);
-  fishStage.style.setProperty('--pet-scale', String(scale / 100));
+  charWrap.classList.remove('mode-drift', 'mode-bob', 'mode-static');
+  charWrap.classList.add('mode-' + mode);
+  charStage.style.setProperty('--pet-scale', String(scale / 100));
   document.getElementById('petMode').value = mode;
   document.getElementById('petScale').value = String(scale);
   document.getElementById('petScaleVal').textContent = `${scale}%`;
@@ -366,14 +359,14 @@ const PET_CANDIDATES = [...PET_EXTS.map((e) => `sprites/pet.${e}`), 'sprites/cus
 
 function probeCustomPet(i = 0) {
   if (i >= PET_CANDIDATES.length) {
-    fishImg.src = FISH_DEF;
+    setPet(null);
     devPrev.style.display = 'none';
     return;
   }
   const url = `${AB}/${PET_CANDIDATES[i]}?t=${encodeURIComponent(TOKEN)}&v=${Date.now()}`;
   const im = new Image();
   im.onload = () => {
-    fishImg.src = url;
+    setPet(url);
     devPrev.src = url;
     devPrev.style.display = 'block';
   };
@@ -402,7 +395,6 @@ function probeCustomBg(i = 0) {
   if (BG) return;
   if (i >= BG_EXTS.length) {
     bgImg.style.display = 'none';
-    tank.classList.remove('custombg');
     bgPrev.style.display = 'none';
     return;
   }
@@ -411,7 +403,6 @@ function probeCustomBg(i = 0) {
   im.onload = () => {
     bgImg.src = url;
     bgImg.style.display = 'block';
-    tank.classList.add('custombg');
     bgPrev.src = url;
     bgPrev.style.display = 'block';
   };
@@ -505,13 +496,13 @@ function spawn(cls, style, text = '', ttl = 2200) {
 }
 let excitedTimer = null, royalTimer = null;
 function mood(cls, ms) {
-  fishWrap.classList.add(cls);
+  charWrap.classList.add(cls);
   if (cls === 'excited') {
     clearTimeout(excitedTimer);
-    excitedTimer = setTimeout(() => fishWrap.classList.remove('excited'), ms);
+    excitedTimer = setTimeout(() => charWrap.classList.remove('excited'), ms);
   } else if (cls === 'royal') {
     clearTimeout(royalTimer);
-    royalTimer = setTimeout(() => fishWrap.classList.remove('royal'), ms);
+    royalTimer = setTimeout(() => charWrap.classList.remove('royal'), ms);
   }
 }
 
@@ -519,18 +510,18 @@ const EFFECTS = {
   nudge(mult = 1) {
     const n = Math.min(4, Math.max(1, mult));
     for (let i = 0; i < n; i++)
-      spawn('bub', `left:${25 + Math.random() * 50}%;width:8px;height:8px;animation-delay:${i * 70}ms`, '', 1600);
+      spawn('spark', `left:${25 + Math.random() * 50}%;width:8px;height:8px;animation-delay:${i * 70}ms`, '', 1600);
   },
   feed(mult = 1) {
     const n = Math.min(14, 4 * Math.max(1, mult));
     for (let i = 0; i < n; i++)
-      spawn('pellet', `left:${22 + Math.random() * 56}%;animation-delay:${i * 95}ms`, '', 2000);
+      spawn('star', `left:${22 + Math.random() * 56}%;animation-delay:${i * 95}ms`, '', 2000);
   },
   bubble(mult = 1) {
     const n = Math.min(16, 6 * Math.max(1, mult));
     for (let i = 0; i < n; i++) {
       const s = 8 + Math.random() * 14;
-      spawn('bub', `left:${12 + Math.random() * 76}%;width:${s}px;height:${s}px;animation-delay:${i * 90}ms`);
+      spawn('spark', `left:${12 + Math.random() * 76}%;width:${s}px;height:${s}px;animation-delay:${i * 90}ms`);
     }
   },
   zap() {
@@ -620,7 +611,7 @@ function showCard(user, icon, label, count = 1) {
 }
 
 function stat() {
-  document.getElementById('stFed').textContent = `🐟 Корм: ${S.fed}`;
+  document.getElementById('stFx').textContent = `⚡ Эффектов: ${S.actionsCount}`;
   const top = Object.entries(S.top).sort((a, b) => b[1] - a[1])[0];
   document.getElementById('stTop').textContent = `👑 ${top ? top[0] : '—'}`;
   document.getElementById('stRules').style.display = S.customRules ? '' : 'none';
@@ -642,7 +633,6 @@ function act(a) {
   } else if (u === 'debug') {
     showCard('тест', null, ACT_LABEL[a.type] || a.type, 1);
   }
-  if (a.type === 'feed') S.fed += count;
   stat();
 }
 
@@ -652,7 +642,7 @@ const ruleMsg = document.getElementById('ruleMsg');
 const hasCond = (ev) => ev === 'gift' || ev === 'comment';
 const condPlaceholder = (ev) => ev === 'gift'
   ? 'Подарки через запятую (Rose, Galaxy)'
-  : ev === 'comment' ? 'Слово или команда (!корм)' : '—';
+  : ev === 'comment' ? 'Слово или команда (!звезды)' : '—';
 
 function addRow(r = {}) {
   const ev = r.event || 'gift';
@@ -756,7 +746,7 @@ document.getElementById('devPick').addEventListener('click', () => {
 });
 document.getElementById('devReset').addEventListener('click', () => {
   Promise.all(PET_CANDIDATES.map((p) => GameKit.postAsset(packDir, p, null).catch(() => {})))
-    .then(() => { devMsg.textContent = 'Стандартная гифка'; probeCustomPet(); })
+    .then(() => { devMsg.textContent = 'Гифка убрана — пустая сцена'; probeCustomPet(); })
     .catch((e) => { devMsg.textContent = `Ошибка: ${e.message}`; });
 });
 
@@ -767,7 +757,7 @@ document.getElementById('bgPick').addEventListener('click', () => {
 });
 document.getElementById('bgReset').addEventListener('click', () => {
   Promise.all(BG_EXTS.map((e) => GameKit.postAsset(packDir, `sprites/bg.${e}`, null).catch(() => {})))
-    .then(() => { bgMsg.textContent = 'Стандартный аквариум'; probeCustomBg(); })
+    .then(() => { bgMsg.textContent = 'Стандартный фон'; probeCustomBg(); })
     .catch((e) => { bgMsg.textContent = `Ошибка: ${e.message}`; });
 });
 
@@ -809,7 +799,7 @@ async function main() {
   const HUD = GameKit.hud();
   if (WTOKEN) {
     GameKit.bindDrop(document.getElementById('petDrop'), PET_EXTS, savePetFile, (m) => { devMsg.textContent = m; });
-    GameKit.bindDrop(tank, PET_EXTS, savePetFile, (m) => { devMsg.textContent = m; });
+    GameKit.bindDrop(stage, PET_EXTS, savePetFile, (m) => { devMsg.textContent = m; });
     GameKit.bindDrop(document.getElementById('bgDrop'), BG_EXTS, saveBgFile, (m) => { bgMsg.textContent = m; });
     GameKit.bindDrop(document.getElementById('sfxDrop'), SFX_EXTS, saveSfxFile, (m) => { sfxMsg.textContent = m; });
   }
@@ -862,9 +852,9 @@ async function main() {
     return {
       duration_s: Math.max(1, Math.round((Date.now() - S.startedAt) / 1000)),
       winner: topList[0] ? topList[0].user : '—',
-      score: S.fed,
+      score: S.actionsCount,
       top: topList,
-      stats: { fed: S.fed, actions: S.actionsCount, donors: Object.keys(S.top).length },
+      stats: { actions: S.actionsCount, donors: Object.keys(S.top).length },
     };
   });
 

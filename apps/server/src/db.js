@@ -264,7 +264,7 @@ const MIGRATIONS = [
       earn_limit_coins_month: 5000,
       paid_games: false,
       mc_premium_plugins: false,
-      interactive_games: ['patrick_cabbage', 'aquarium'],
+      interactive_games: ['patrick_cabbage', 'gif_constructor'],
     }), 1, 0);
     seed.run('pro', 'Pro', 240000, JSON.stringify({
       max_presets: 100,
@@ -277,7 +277,7 @@ const MIGRATIONS = [
       earn_limit_coins_month: null,
       paid_games: true,
       mc_premium_plugins: true,
-      interactive_games: ['patrick_cabbage', 'aquarium'],
+      interactive_games: ['patrick_cabbage', 'gif_constructor'],
     }), 1, 1);
     seed.run('expert', 'Expert', 59900, JSON.stringify({
       max_presets: 100,
@@ -290,7 +290,7 @@ const MIGRATIONS = [
       earn_limit_coins_month: null,
       paid_games: true,
       mc_premium_plugins: true,
-      interactive_games: ['patrick_cabbage', 'aquarium'],
+      interactive_games: ['patrick_cabbage', 'gif_constructor'],
     }), 0, 2);
   },
   // v6 → v7: Minecraft plugin catalog (parity spec §9.4). Rows are
@@ -664,6 +664,28 @@ const MIGRATIONS = [
         updated_at TEXT NOT NULL
       );
     `);
+  },
+  // v19 → v20: the constructor pack was renamed aquarium → gif_constructor
+  // (aquarium was its prototype theme; the shipped game is a neutral GIF
+  // stage). Follow the rename in plan allow-lists and owner pack overrides.
+  (db) => {
+    const rows = db.prepare('SELECT code, entitlements FROM plans').all();
+    const upd = db.prepare('UPDATE plans SET entitlements = ? WHERE code = ?');
+    for (const r of rows) {
+      let ent;
+      try { ent = JSON.parse(r.entitlements || '{}'); } catch { continue; }
+      const list = Array.isArray(ent.interactive_games) ? ent.interactive_games : [];
+      const i = list.indexOf('aquarium');
+      if (i === -1) continue;
+      list[i] = 'gif_constructor';
+      ent.interactive_games = list;
+      upd.run(JSON.stringify(ent), r.code);
+    }
+    try {
+      db.prepare(
+        "UPDATE pack_overrides SET game_id = 'gif_constructor' WHERE game_id = 'aquarium'"
+      ).run();
+    } catch { /* table may be absent on DBs that skipped v19 */ }
   },
 ];
 

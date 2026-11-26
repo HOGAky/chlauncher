@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#3b3f8f"/><stop offset="1" stop-color="#191c47"/>
+  </linearGradient></defs>
+  <rect width="64" height="64" rx="12" fill="url(#g)"/>
+  <rect x="10" y="14" width="44" height="36" rx="6" fill="none" stroke="#9aa4ff" stroke-width="2.5"/>
+  <rect x="10" y="14" width="44" height="8" rx="4" fill="#9aa4ff" opacity=".35"/>
+  <path d="M24 40 l8-9 6 6 6-8" fill="none" stroke="#ffb340" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="46" cy="24" r="3" fill="#ffb340"/>
+  <text x="32" y="58" text-anchor="middle" font-family="system-ui" font-size="8" font-weight="800" fill="#dfe4ff">GIF</text>
+</svg>

@@ -409,7 +409,7 @@ mod tests {
             .map(|e| e.id)
             .collect();
         assert!(bundled.contains(&"patrick_cabbage".to_string()));
-        assert!(bundled.contains(&"aquarium".to_string()));
+        assert!(bundled.contains(&"gif_constructor".to_string()));
         let mut ent = Entitlements {
             paid_games: false,
             interactive_games: Some(vec!["patrick_cabbage".into()]),
@@ -417,8 +417,8 @@ mod tests {
         };
         let allowed = allowed_games(&ent, &empty);
         assert!(allowed.contains(&"patrick_cabbage".to_string()));
-        // aquarium ships with `free: true` → allowed even when omitted from list.
-        assert!(allowed.contains(&"aquarium".to_string()));
+        // gif_constructor ships with `free: true` → allowed even when omitted from list.
+        assert!(allowed.contains(&"gif_constructor".to_string()));
         // roblox_sts is remote without `free: true` → gated by `paid_games`.
         assert!(!allowed.contains(&"roblox_sts".to_string()));
         ent.paid_games = true;
@@ -430,10 +430,10 @@ mod tests {
         assert!(allowed_games(&ent, &empty).contains(&"roblox_sts".to_string()));
         ent.paid_games = false;
         ent.interactive_games = Some(vec![]);
-        // Empty list on free plan: `free:true` (aquarium) stays, plan-gated
+        // Empty list on free plan: `free:true` (gif_constructor) stays, plan-gated
         // bundled (patrick_cabbage) and paid remote (roblox_sts) vanish.
         let allowed = allowed_games(&ent, &empty);
-        assert!(allowed.contains(&"aquarium".to_string()));
+        assert!(allowed.contains(&"gif_constructor".to_string()));
         assert!(!allowed.contains(&"patrick_cabbage".to_string()));
         assert!(!allowed.contains(&"roblox_sts".to_string()));
         let _ = std::fs::remove_dir_all(&empty);

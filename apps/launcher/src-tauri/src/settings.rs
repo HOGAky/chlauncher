@@ -119,7 +119,7 @@ pub struct Settings {
     #[serde(default)]
     pub shop_items: Vec<crate::types::ShopItem>,
     /// Built-in interactive games keyed by id (`patrick_cabbage`,
-    /// `aquarium`) — per-game rules/round/antiflood
+    /// `gif_constructor`) — per-game rules/round/antiflood
     /// config, applied by the overlay game pages via gamekit.js.
     #[serde(default)]
     pub builtin_games: HashMap<String, crate::types::BuiltinGameCfg>,
@@ -531,6 +531,18 @@ impl SettingsStore {
             )
         };
         let mut dirty = false;
+        // Renamed pack ids (game_packs::RENAMED_PACKS): per-game cfg and
+        // cached host overrides follow the new key instead of being lost.
+        for (old, new) in crate::game_packs::RENAMED_PACKS {
+            if let Some(v) = data.builtin_games.remove(*old) {
+                data.builtin_games.entry(new.to_string()).or_insert(v);
+                dirty = true;
+            }
+            if let Some(v) = data.pack_overrides.remove(*old) {
+                data.pack_overrides.entry(new.to_string()).or_insert(v);
+                dirty = true;
+            }
+        }
         if data.overlay_token.is_empty() {
             data.overlay_token = gen();
             dirty = true;

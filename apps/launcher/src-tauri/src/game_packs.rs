@@ -347,6 +347,43 @@ pub fn user_dir(data_dir: &Path) -> PathBuf {
     data_dir.join("games")
 }
 
+/// Pack ids that were renamed between releases — `(old_id, new_id)`.
+/// `aquarium` was the working title of the GIF-конструктор pack; its
+/// underwater theme was dropped in favour of a neutral stage.
+pub const RENAMED_PACKS: &[(&str, &str)] = &[("aquarium", "gif_constructor")];
+
+/// Migrates `<user_games>/<old_id>` → `<new_id>` for every entry in
+/// [`RENAMED_PACKS`]: the whole folder moves (custom sprites, scene.json,
+/// rules patches survive), and a stale `"id": "<old>"` inside the moved
+/// `game.json` is rewritten so the patch keeps merging over the bundled
+/// pack instead of registering as a separate dead game.
+/// Skipped silently when the new dir already exists (never clobbers).
+pub fn migrate_legacy_dirs(user_root: &Path) {
+    for (old, new) in RENAMED_PACKS {
+        let from = user_root.join(old);
+        let to = user_root.join(new);
+        if !from.is_dir() || to.exists() {
+            continue;
+        }
+        if std::fs::rename(&from, &to).is_err() {
+            tracing::warn!(from = %from.display(), "legacy pack dir rename failed");
+            continue;
+        }
+        let manifest = to.join("game.json");
+        if let Ok(text) = std::fs::read_to_string(&manifest) {
+            if let Ok(mut v) = serde_json::from_str::<serde_json::Value>(&text) {
+                if v["id"].as_str() == Some(*old) {
+                    v["id"] = serde_json::Value::String(new.to_string());
+                    if let Ok(fixed) = serde_json::to_string_pretty(&v) {
+                        let _ = std::fs::write(&manifest, fixed);
+                    }
+                }
+            }
+        }
+        tracing::info!(from = %old, to = %new, "legacy pack dir migrated");
+    }
+}
+
 fn parse_manifest(text: &str) -> PackManifest {
     match serde_json::from_str::<serde_json::Value>(text) {
         Ok(v) => {
@@ -796,6 +833,38 @@ mod tests {
         assert!(find("patrick_cabbage", &base).is_none());
         let hidden = find_any("patrick_cabbage", &base).unwrap();
         assert!(hidden.is_hidden() && hidden.overridden && !hidden.user);
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn legacy_pack_dir_is_migrated() {
+        let base = tmp_root("legacymove");
+        let uroot = base.join("games");
+        let old = uroot.join("aquarium");
+        std::fs::create_dir_all(old.join("sprites")).unwrap();
+        std::fs::write(old.join("sprites").join("pet.gif"), "GIF89a").unwrap();
+        std::fs::write(
+            old.join("game.json"),
+            r#"{"id":"aquarium","section":"Мои"}"#,
+        )
+        .unwrap();
+        migrate_legacy_dirs(&uroot);
+        let new = uroot.join("gif_constructor");
+        assert!(!old.exists() && new.is_dir());
+        assert_eq!(
+            std::fs::read_to_string(new.join("sprites").join("pet.gif")).unwrap(),
+            "GIF89a"
+        );
+        let v: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(new.join("game.json")).unwrap())
+                .unwrap();
+        assert_eq!(v["id"], "gif_constructor");
+        assert_eq!(v["section"], "Мои");
+        // Second run: existing new dir is never clobbered.
+        std::fs::create_dir_all(&old).unwrap();
+        std::fs::write(old.join("game.json"), r#"{"id":"aquarium"}"#).unwrap();
+        migrate_legacy_dirs(&uroot);
+        assert!(old.is_dir() && new.join("sprites").join("pet.gif").is_file());
         std::fs::remove_dir_all(&base).ok();
     }
 

@@ -123,6 +123,9 @@ pub fn run() {
             // picked up by the registry without a rebuild.
             let user_games = game_packs::user_dir(&data_dir);
             std::fs::create_dir_all(&user_games).ok();
+            // Renamed bundled packs (aquarium → gif_constructor): move the
+            // user's drop-in dir so custom assets keep applying.
+            game_packs::migrate_legacy_dirs(&user_games);
             if let Ok(s) = settings.try_lock() {
                 game_packs::set_server_overrides(s.data.pack_overrides.clone());
             }

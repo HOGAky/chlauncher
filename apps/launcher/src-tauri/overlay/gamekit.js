@@ -588,7 +588,7 @@
   .gkdp-hint{color:#7f95bd;font-size:11px;margin-bottom:6px}`;
 
   /**
-   * Generic rules constructor — same panel the aquarium ships, shared by
+   * Generic rules constructor — same panel the gif_constructor pack ships, shared by
    * every game page: gear button (or Tab/D) opens an editor for
    * event → condition → action rules; saved as `custom_rules.json` in
    * the pack's USER dir via POST /games/asset (raw-b64).

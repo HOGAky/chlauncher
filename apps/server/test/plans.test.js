@@ -333,7 +333,7 @@ test('pack overrides: owner distributes sections on host, all users receive them
   // Non-admin rejected with 403.
   const denied = await app.inject({
     method: 'PUT',
-    url: '/api/admin/packs/aquarium',
+    url: '/api/admin/packs/gif_constructor',
     headers: auth(userTok),
     payload: { free: true },
   });
@@ -349,7 +349,7 @@ test('pack overrides: owner distributes sections on host, all users receive them
   });
   const staffDenied = await app.inject({
     method: 'PUT',
-    url: '/api/admin/packs/aquarium',
+    url: '/api/admin/packs/gif_constructor',
     headers: auth(staffLogin.json().token),
     payload: { section: 'Хиты', afk: false, free: false },
   });
@@ -359,12 +359,12 @@ test('pack overrides: owner distributes sections on host, all users receive them
   // Owner saves explicit false flags + custom section.
   const setRes = await app.inject({
     method: 'PUT',
-    url: '/api/admin/packs/aquarium',
+    url: '/api/admin/packs/gif_constructor',
     headers: auth(adminToken),
     payload: { section: 'Мемы', afk: false, free: false, hidden: false },
   });
   assert.equal(setRes.statusCode, 200);
-  assert.deepEqual(setRes.json().overrides.aquarium, {
+  assert.deepEqual(setRes.json().overrides.gif_constructor, {
     section: 'Мемы',
     afk: false,
     free: false,
@@ -373,7 +373,7 @@ test('pack overrides: owner distributes sections on host, all users receive them
 
   // Regular user gets host overrides in GET /api/account/entitlements.
   const ent = await entitlements(userTok);
-  assert.deepEqual(ent.body.pack_overrides.aquarium, {
+  assert.deepEqual(ent.body.pack_overrides.gif_constructor, {
     section: 'Мемы',
     afk: false,
     free: false,

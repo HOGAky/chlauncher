@@ -167,13 +167,17 @@ share|subscribe`, поля `vip|fan_level|is_moderator|is_superfan|gift_id|coins
   «Бесплатные»; без флага гейтится тарифом → «По тарифу»),
   `section` (имя своей вкладки-раздела в Библиотеке — каждое уникальное
   значение = новая вкладка после «АФК-стримы»).
-- Пакет `aquarium` — «GIF-конструктор»: своя гифка/картинка (`sprites/pet.<gif|webp|png|jpg>`),
+- Пакет `gif_constructor` — «GIF-конструктор»: своя гифка/картинка (`sprites/pet.<gif|webp|png|jpg>`),
   свой фон (`sprites/bg.<ext>`), свой звук (`sfx/custom.<mp3|wav|ogg>`), настройки движения/размера
-  (`scene.json`) и конструктор правил (`POST/DELETE /games/cfg/aquarium?w=`).
+  (`scene.json`) и конструктор правил (`POST/DELETE /games/cfg/gif_constructor?w=`).
+  Ранее пакет назывался `aquarium` — переименование покрыто миграциями:
+  `game_packs::RENAMED_PACKS` + `migrate_legacy_dirs` (перенос user-папки и правка
+  `game.json.id`), ключи `settings.builtin_games`/`pack_overrides` в `settings.rs::load`,
+  серверная миграция v20 (`plans.entitlements` + `pack_overrides`).
   Выбор файлов в оверлей-окнах идёт через `POST /games/pick-file?w=` (`GameKit.pickFile`,
   временно снимает `always_on_top` и привязывает системный диалог к окну) + HTML5 Drag & Drop
   (`.disable_drag_drop_handler()` на `WebviewWindowBuilder`), лимит ассетов — 20 MiB.
-  Каталог bundled-пакетов: `aquarium` (`free: true`), `patrick`, `roblox_sts`.
+  Каталог bundled-пакетов: `gif_constructor` (`free: true`), `patrick`, `roblox_sts`.
 - Синхронизация разделов каталога через хост: таблица `pack_overrides` на сервере
   (`PUT/DELETE /api/admin/packs/:id` под `ownerOnly` — TG id владельца), раздаётся
   всем клиентам в `GET /api/account/entitlements` (`pack_overrides`), кэшируется в
