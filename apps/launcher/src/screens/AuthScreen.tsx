@@ -9,7 +9,7 @@ import { useApp } from '../App';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { humanError } from '../errorMessages';
+import { humanError, parseError } from '../errorMessages';
 import QrPair from '../components/QrPair';
 
 export default function AuthScreen() {
@@ -22,6 +22,9 @@ export default function AuthScreen() {
   const [serverUrl, setServerUrl] = useState('');
   const [showServer, setShowServer] = useState(false);
   const [serverSaved, setServerSaved] = useState(false);
+  // Debug binaries honor set_server_url even when the bundled frontend is
+  // not vite-DEV — ask Rust instead of trusting import.meta.env.
+  const [serverEditable, setServerEditable] = useState(import.meta.env.DEV);
   const [tgWaiting, setTgWaiting] = useState(false);
   const [ttWaiting, setTtWaiting] = useState(false);
   const [showQr, setShowQr] = useState(false);
@@ -61,6 +64,7 @@ export default function AuthScreen() {
   /** Prefills the backend URL field on mount. */
   useEffect(() => {
     api.getServerUrl().then(setServerUrl).catch(() => {});
+    api.devBuild().then(setServerEditable).catch(() => {});
   }, []);
 
   /**
@@ -116,7 +120,13 @@ export default function AuthScreen() {
       const userEmail = email;
       setSession(userEmail, res.subscription);
     } catch (e) {
-      setError(humanError(e));
+      // Connection refused on a tester's debug build usually means the
+      // launcher still points at 127.0.0.1 — point them at the switcher.
+      const hint =
+        parseError(e).code === 'NETWORK_ERROR' && serverEditable
+          ? ' Проверьте адрес сервера (⚙ внизу экрана).'
+          : '';
+      setError(humanError(e) + hint);
     } finally {
       setBusy(false);
     }
@@ -224,7 +234,7 @@ export default function AuthScreen() {
               </form>
             </details>
           </div>
-          {import.meta.env.DEV && (
+          {serverEditable && (
           <div className="mt-4 border-t border-border/40 pt-3">
             <button
               type="button"

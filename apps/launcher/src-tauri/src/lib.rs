@@ -756,6 +756,7 @@ pub fn run() {
             commands::media_rename,
             commands::get_hwid,
             commands::get_server_url,
+            commands::dev_build,
             commands::set_server_url,
             commands::set_forward_config,
             commands::regenerate_stream_key,

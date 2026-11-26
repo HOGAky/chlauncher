@@ -49,6 +49,8 @@ export const ERROR_MESSAGES: Record<string, string> = {
   FILE_OPEN_FAILED: 'Не удалось открыть файл.',
   FILE_STAT_FAILED: 'Не удалось прочитать файл.',
   MALFORMED_RESPONSE: 'Некорректный ответ сервера.',
+  DESKTOP_REQUIRED:
+    'Интерфейс работает только внутри приложения chlauncher — запустите chlauncher.exe. Страница, открытая в браузере, не подключена к системе.',
   BAD_REQUEST: 'Некорректный запрос.',
   NOT_FOUND: 'Ресурс не найден.',
   UNKNOWN: 'Произошла непредвиденная ошибка. Подробности в логах.',

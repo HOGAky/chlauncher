@@ -47,10 +47,19 @@ import type {
 
 /** Generic invoke helper. */
 async function cmd<T>(name: string, args?: Record<string, unknown>): Promise<T> {
+  // Plain browser (opened the web bundle outside the desktop shell):
+  // invoke() would die on a TypeError → INTERNAL_ERROR → cryptic
+  // "непредвиденная ошибка". Surface an actionable code instead.
+  if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) {
+    throw 'DESKTOP_REQUIRED';
+  }
   return invoke<T>(name, args);
 }
 
 // ---- session ---------------------------------------------------------------
+
+/** Debug-build marker — whether the server-URL switcher actually applies. */
+export const devBuild = () => cmd<boolean>('dev_build');
 
 /** Fetches the boot snapshot (auth, integrations, options). */
 export const getBootstrap = () => cmd<Bootstrap>('get_bootstrap');

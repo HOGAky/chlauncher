@@ -2,3 +2,11 @@
 # .exe so clean Windows 10/11 machines don't need VC++ Redistributable.
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-C", "target-feature=+crt-static"]
+
+# C toolchain for windows-gnu deps (ring, aws-lc-sys via cc-rs): pin the
+# real w64devkit tools. `C:\Users\hoga8\bin\gcc.exe` is an earlier PATH
+# entry that runs but produces no objects — cc-rs then fails at `ar` with
+# ".o: No such file or directory".
+[env]
+CC = { value = "C:/w64devkit/bin/gcc.exe", force = true }
+AR = { value = "C:/w64devkit/bin/ar.exe", force = true }

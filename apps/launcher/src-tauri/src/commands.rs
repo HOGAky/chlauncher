@@ -3218,6 +3218,14 @@ pub async fn get_server_url(state: State<'_, AppState>) -> Result<String, String
     Ok(state.api.base())
 }
 
+/// Whether this binary honors `set_server_url` — debug builds only, so the
+/// auth screen can show the "⚙ Сервер" switcher even in a bundled
+/// (import.meta.env.DEV=false) debug package handed to testers.
+#[tauri::command]
+pub async fn dev_build() -> Result<bool, String> {
+    Ok(cfg!(debug_assertions))
+}
+
 /// Points the launcher at another backend and persists the choice.
 /// Accepts `http(s)://host[:port]`; trailing slashes are stripped.
 /// Dev builds only — release binaries pin the prod endpoint at compile

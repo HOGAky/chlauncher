@@ -7,14 +7,17 @@ Rust SDK (`packages/game-sdk`), тест-игра (`apps/mock-game`), TikTok-с�
 ## Сборка на этой машине (Windows)
 
 - Тулчейн: `stable-x86_64-pc-windows-gnu` (directory override).
-- `windres` нужен `tauri-winres` — лежит в `D:\DEVIN PROJECT\w64devkit\w64devkit\bin`
-  (в PATH не прописан; добавлять в PATH вручную).
-- ВАЖНО: путь проекта содержит пробел (`D:\DEVIN PROJECT\OZVYCHA CHAT`) —
-  `windres` ломается на препроцессинге, если `OUT_DIR` тоже с пробелами.
-  Поэтому собирать всегда с `CARGO_TARGET_DIR=D:\cargo-target\chlauncher`.
+- `windres`/`gcc`/`ar` — реальный w64devkit лежит в `C:\w64devkit\bin`
+  (в системном PATH уже есть, но ПОЗЖЕ `C:\Users\hoga8\bin`).
+- ЛОВУШКА: `C:\Users\hoga8\bin\gcc.exe` — битый шим (запускается, но не
+  производит .o) — cc-rs падает на `ar` с ".o: No such file". CC/AR уже
+  запинены на `C:/w64devkit/bin/*` в `.cargo/config.toml` (`[env]`).
+- ВАЖНО: `windres` (tauri-winres) ломается на препроцессинге, если
+  `OUT_DIR` содержит пробелы. Поэтому собирать всегда с
+  `CARGO_TARGET_DIR=D:\cargo-target\chlauncher`.
 
 ```powershell
-$env:PATH = "D:\DEVIN PROJECT\w64devkit\w64devkit\bin;$env:PATH"
+$env:PATH = "C:\w64devkit\bin;$env:PATH"   # для windres, если понадобится
 $env:CARGO_TARGET_DIR = "D:\cargo-target\chlauncher"
 cargo check/test/build --manifest-path apps/launcher/src-tauri/Cargo.toml
 ```
